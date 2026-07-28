@@ -1,0 +1,25 @@
+node_modules/
+lib/
+lib-test/
+*.js.map
+*.tsbuildinfo
+.DS_Store
+coverage/
+package-lock.json
+npm-debug.log*
+pnpm-debug.log*
+
+# Salesforce CLI local state
+.sfdx/
+.sf/
+
+# Report artefacts written during development
+orgintel-*.html
+orgintel-*.json
+coupling-graph.json
+landscape-manifest.json
+
+# Internal docs — kept locally, never published
+CLAUDE.md
+DESIGN_BRIEF.md
+/docs/superpowers/
