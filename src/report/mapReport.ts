@@ -16,7 +16,8 @@ export interface MapReportInput {
   clusters: Cluster[];
   layout: Map<string, Point>;
   anchors?: MapAnchorRow[];
-  evidenceTier: string;
+  /** Null when unmeasured; the report says so rather than showing a grade. */
+  evidenceTier: string | null;
   flowsAnalyzed: number;
   apexClassesAnalyzed: number;
   apexTriggersAnalyzed: number;
@@ -46,7 +47,7 @@ export function renderMapHtml(input: MapReportInput): string {
 
 function summarySection(i: MapReportInput): string {
   const rows: Array<[string, string]> = [
-    ['Evidence tier', i.evidenceTier],
+    ['Evidence tier', i.evidenceTier ?? 'Not measured — run `sf intel probe`'],
     ['Objects', String(i.couplingGraph.nodes.length)],
     ['Coupled pairs', String(i.couplingGraph.edges.length)],
     ['Domains (clusters)', String(i.clusters.length)],

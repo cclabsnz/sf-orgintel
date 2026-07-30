@@ -17,7 +17,8 @@ export interface MapProvenanceInput {
   generatedAt: string;
   toolVersion: string;
   orgId: string;
-  evidenceTier: EvidenceTier;
+  /** Null when no `intel probe` has graded this org — never defaulted. */
+  evidenceTier: EvidenceTier | null;
 }
 
 export interface MapOptions {

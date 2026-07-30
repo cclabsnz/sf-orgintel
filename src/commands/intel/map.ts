@@ -7,6 +7,7 @@ import { resolveOrgInfo, buildIntelContext } from '../../lib/wire.js';
 import { runMap } from '../../map/runMap.js';
 import { renderMapHtml, type MapAnchorRow } from '../../report/mapReport.js';
 import { OrgIntelCache } from '../../lib/cache.js';
+import { resolveEvidence } from '../../map/evidence.js';
 import { TOOL_VERSION, API_VERSION } from '../../version.js';
 
 interface MapCommandResult {
@@ -76,7 +77,9 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
     const ctx = buildIntelContext(conn, orgInfo, namespace, API_VERSION);
     const cache = new OrgIntelCache(orgInfo.id);
 
-    const { evidenceTier, anchors } = this.readCached(cache);
+    const evidence = resolveEvidence(cache);
+    const { evidenceTier, anchors } = evidence;
+    if (!evidence.measured) this.warn(evidence.note!);
 
     this.log(`Mapping cross-object couplings for org: ${orgInfo.name} (${orgInfo.id})`);
     const result = await runMap(
@@ -134,21 +137,11 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
     };
   }
 
-  /** Read the evidence tier from a cached probe and anchors from a cached discover, if present. */
-  private readCached(cache: OrgIntelCache): { evidenceTier: EvidenceTier; anchors?: MapAnchorRow[] } {
-    const probe = cache.get<{ evidenceTier: EvidenceTier }>('probe', 'latest');
-    const discover = cache.get<{ anchors: Array<{ object: string; label: string; score: number }> }>('discover', 'latest');
-    return {
-      evidenceTier: probe?.evidenceTier ?? 'C',
-      anchors: discover?.anchors?.map((a) => ({ object: a.object, label: a.label, score: a.score })),
-    };
-  }
-
-  private printSummary(result: { couplingGraph: CouplingGraph; clusters: unknown[] }, tier: EvidenceTier): void {
+  private printSummary(result: { couplingGraph: CouplingGraph; clusters: unknown[] }, tier: EvidenceTier | null): void {
     const g = result.couplingGraph;
     this.log('');
     this.log('─────────────────────────────────────────');
-    this.log(`  Evidence tier: ${tier}`);
+    this.log(`  Evidence tier: ${tier ?? 'not measured (run `sf intel probe`)'}`);
     this.log(`  Objects: ${g.nodes.length}   Coupled pairs: ${g.edges.length}   Domains: ${result.clusters.length}`);
     this.log('─────────────────────────────────────────');
     this.log('  Top process backbones:');
