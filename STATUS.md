@@ -6,15 +6,15 @@ Working repo: `cclabsnz/sf-orgintel`. Depends on `@cclabsnz/sf-core` from npm (^
 | --- | --- |
 | 1. Cluster degeneration | done — density gate + Louvain modularity |
 | 2. Manifest layout complete | done — L0/L1 laid out independently of the report |
-| 3. Schema tests on real pipeline output | **next** — `schema.test.ts` still validates hand-written literals |
+| 3. Schema tests on real pipeline output | done — fixtures driven through the real pipeline, JSON round-tripped |
 | 4. Evidence tier honesty | done — unmeasured is null, needs core ^0.1.1 |
-| 5. Cache versioning + `--refresh` | open — no TOOL_VERSION in the key; Apex uncached |
+| 5. Cache versioning + `--refresh` | done — version-namespaced, `--refresh` on all commands, Apex memoised |
 | 6. Tuning knobs | done — `--domain-size`, `--top-layout`, `--max-node-counts` |
-| 7. Packaging / README / validation worksheet | partial — PERMISSIONS.md written; README needs a per-command reference |
+| 7. Packaging / README / validation worksheet | done — PERMISSIONS.md + per-command reference; worksheet remains operator-run |
 
 ## Beyond the plan (found on a real org)
 
-- **Layer view** — strata (business / security / observability / integration) instead of one
+- **Layer view (next)** — strata (business / security / observability / integration) instead of one
   cloud. Prototyped only; the cross-layer matrix surfaced `business ↔ security` at 310
   couplings, invisible in the flat graph.
 - **Evidence quality not surfaced graph-level** — ~2/3 of components are regex-approximate and

@@ -21,6 +21,95 @@ no analytics. Same org in, same findings out.
 Every command supports `--json` (machine output) and `--target-org` per `sf` convention, and
 is strictly read-only against the org (SOQL / Tooling / Metadata reads and describes only).
 
+## Command reference
+
+Every command is read-only, supports `--json`, and takes `--target-org` per `sf` convention.
+Anything the authenticated user cannot read is reported as a note rather than failing the run,
+so a low-privilege user still gets a partial, clearly-labelled result. See
+[PERMISSIONS.md](PERMISSIONS.md) for the minimum access each command needs.
+
+### `sf intel probe`
+
+*What can this org tell us about itself?* Grades the org's **evidence tier** — how much of its
+own behaviour it can actually evidence — from Event Monitoring availability, field-history
+tracking and the standard behavioural tables.
+
+| Flag | Purpose |
+| --- | --- |
+| `--html` | Also write a branded HTML report |
+| `--output <dir>` | Where to write the report (default `.`) |
+| `--branding <file>` | `report-branding.json` overriding the defaults |
+| `--prepared-for <name>` | Client name for the report cover line |
+| `--refresh` | Ignore cached analysis and recompute |
+
+| Tier | Meaning |
+| --- | --- |
+| A | Full Event Monitoring **and** Field Audit Trail |
+| B | Standard behavioural tables readable, with data |
+| C | Metadata and snapshots only |
+| D | Not even describable — prospective collection recommended |
+
+Run this first: `intel map` reports the tier it measured, and without a probe it reports
+`not measured` rather than inventing one.
+
+### `sf intel discover`
+
+*Where do this org's business processes live?* Ranks **anchor objects** — those carrying real
+process — and builds a domain fingerprint (installed packages, record types, automation
+density). Each candidate carries its score, per-signal contributions and human-readable
+evidence, so a ranking can be defended rather than just quoted.
+
+| Flag | Purpose |
+| --- | --- |
+| `--top <n>` | Anchors to report |
+| `--max-objects <n>` | Objects to consider |
+| `--output <dir>` | Where to write the fingerprint |
+| `--no-fingerprint-file` | Skip writing the fingerprint JSON |
+| `--refresh` | Ignore cached analysis and recompute |
+
+### `sf intel map`
+
+*Which objects are coupled into cross-cutting processes, and by what automation?* Parses active
+Flows (via `FlowDefinitionView` + `Flow.Metadata`) and Apex (`SymbolTable`, with a body-regex
+fallback) into an object-pair coupling graph, then partitions it into domains.
+
+| Flag | Purpose |
+| --- | --- |
+| `--include-inactive` | Analyse inactive flows too (default: active only) |
+| `--domain-size <n>` | Largest domain to report; clustering resolution tunes to fit (default 25) |
+| `--top-layout <n>` | Objects drawn in the HTML picture (default 20) |
+| `--max-node-counts <n>` | Objects to fetch 90-day record counts for (default 100) |
+| `--html` | Also write a branded HTML coupling report |
+| `--output <dir>` | Where to write the IR and report |
+| `--branding <file>` / `--prepared-for <name>` | Report branding |
+| `--refresh` | Ignore cached analysis and recompute |
+
+Emits two versioned IR contracts, validated against the JSON Schemas published in
+`@cclabsnz/sf-core`:
+
+| File | Contents |
+| --- | --- |
+| `coupling-graph.json` | Objects with automation counts and 90-day volumes; coupled pairs with weight, operations, contributing components and confidence |
+| `landscape-manifest.json` | Semantic-zoom navigation: L0 domains positioned against each other, L1 objects positioned within each domain |
+
+**Clustering picks its algorithm by graph density.** A sparse org is often a tree, where
+modularity has no community structure to find and shatters a chain into pairs; a mature org has
+thousands of couplings and almost no bridges, where bridge-cutting returns one blob. Below an
+average degree of 2 the graph is a forest and is split structurally; above it, Louvain
+modularity runs with its resolution tuned to `--domain-size`.
+
+**Evidence quality is reported, not assumed.** Each contributing component is marked `high`
+(parsed structure) or `approximate` (regex fallback), and any source that could not be read —
+an unqueryable object, a managed-package flow, a capped record-count sweep — appears in the
+run's notes rather than being silently dropped.
+
+## Caching
+
+Analysis is memoised under `~/.orgintel/cache/<orgId>/v<toolVersion>/`, keyed by a hash of the
+content analysed. The cache is a pure memo: cold, warm and `--refresh` runs produce identical
+output. It is namespaced by tool version so a result computed by older analysis logic is never
+served after an upgrade, and `--refresh` recomputes on demand. Delete the directory to clear it.
+
 ## Install (local dev)
 
 ```
