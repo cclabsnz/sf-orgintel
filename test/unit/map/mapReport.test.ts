@@ -63,3 +63,65 @@ describe('renderMapHtml', () => {
     expect(html).toContain('0.910');
   });
 });
+
+describe('layer section', () => {
+  /** A graph spanning several layers, as a real org's does. */
+  const layered = {
+    version: 1 as const,
+    provenance: {
+      tool: 'orgintel' as const, toolVersion: '0.1.0', generatedAt: '2026-07-30T00:00:00.000Z',
+      orgId: '00Dxx0000000000EAA', evidenceTier: 'B' as const,
+    },
+    nodes: [
+      { object: 'Account', custom: false, automationCounts: { flows: 3, triggers: 1, approvals: 0 }, recordCount90d: 100, layer: 'business' as const },
+      { object: 'Case', custom: false, automationCounts: { flows: 2, triggers: 0, approvals: 0 }, recordCount90d: 50, layer: 'business' as const },
+      { object: 'User', custom: false, automationCounts: { flows: 0, triggers: 0, approvals: 0 }, recordCount90d: 10, layer: 'security' as const },
+      { object: 'LogEntry__c', custom: true, automationCounts: { flows: 0, triggers: 0, approvals: 0 }, recordCount90d: 900, layer: 'observability' as const },
+    ],
+    edges: [
+      { from: 'Account', to: 'Case', weight: 8, operations: ['update' as const], components: [{ type: 'Flow', name: 'F1', confidence: 'high' as const }] },
+      { from: 'Account', to: 'User', weight: 12, operations: ['read' as const], components: [{ type: 'ApexClass', name: 'C1', confidence: 'approximate' as const }] },
+      { from: 'LogEntry__c', to: 'User', weight: 5, operations: ['create' as const], components: [{ type: 'ApexClass', name: 'C2', confidence: 'approximate' as const }] },
+    ],
+  };
+
+  const html = renderMapHtml({
+    orgName: 'Test Org',
+    couplingGraph: layered,
+    clusters: [{ id: 'cluster-1', objects: ['Account', 'Case'], anchorObject: 'Account' }],
+    layout: new Map([['Account', { x: 10, y: 10 }], ['Case', { x: 50, y: 50 }]]),
+    evidenceTier: 'B',
+    flowsAnalyzed: 1,
+    apexClassesAnalyzed: 2,
+    apexTriggersAnalyzed: 0,
+    generatedAt: '2026-07-30T00:00:00.000Z',
+    branding: DEFAULT_BRANDING,
+  });
+
+  it('reports every layer present with its object count', () => {
+    expect(html).toContain('business');
+    expect(html).toContain('security');
+    expect(html).toContain('observability');
+  });
+
+  it('shows the cross-layer relationships, heaviest first', () => {
+    // business↔security (weight 12) must be reported above business-internal (8) — the
+    // ordering is the finding, not decoration.
+    const cross = html.indexOf('business ↔ security');
+    const internal = html.indexOf('business (internal)');
+    expect(cross).toBeGreaterThan(-1);
+    expect(internal).toBeGreaterThan(-1);
+    expect(cross).toBeLessThan(internal);
+  });
+
+  it('does not hide infrastructure objects from the reader', () => {
+    // The whole point of classifying rather than filtering.
+    expect(html).toContain('User');
+    expect(html).toContain('LogEntry__c');
+  });
+
+  it('stays self-contained — no remote assets', () => {
+    expect(html).not.toMatch(/<script[^>]+\ssrc=/i);
+    expect(html).not.toMatch(/<link[^>]+\srel=["']?stylesheet/i);
+  });
+});

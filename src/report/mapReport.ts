@@ -1,6 +1,7 @@
 import { esc, type Branding } from '@cclabsnz/sf-core';
 import type { CouplingGraph, CouplingGraphEdge } from '@cclabsnz/sf-core';
 import type { Cluster } from '../map/graph/clusters.js';
+import { summariseLayers, crossLayerCoupling, LAYER_DESCRIPTIONS } from '../map/graph/layers.js';
 import type { Point } from '../map/graph/layout.js';
 import { htmlDocument } from './shell.js';
 
@@ -31,6 +32,7 @@ export function renderMapHtml(input: MapReportInput): string {
   const body = [
     summarySection(input),
     graphSection(input),
+    layerSection(input.couplingGraph),
     couplingTableSection(input.couplingGraph.edges),
     anchorSection(input.anchors),
     clusterSection(input.clusters, input.couplingGraph),
@@ -95,6 +97,49 @@ function graphSection(i: MapReportInput): string {
 ${lines}
 ${nodes}
 </svg>`;
+}
+
+/**
+ * Architectural layers and how heavily they couple to one another.
+ *
+ * The instinct on a real org is to filter identity, logging and metadata objects out of the
+ * graph — they are most of it, and none of them carry business process. Doing so deletes the
+ * strongest finding the graph contains: on a production org the business layer coupled to the
+ * security layer more heavily than to anything except itself, which says the business model is
+ * wired into the permission model. Layers keep those objects and make that legible.
+ */
+function layerSection(graph: CouplingGraph): string {
+  const objects = graph.nodes.map((n) => n.object);
+  if (objects.length === 0) return '';
+
+  const layers = summariseLayers(objects);
+  const pairs = crossLayerCoupling(graph.edges).slice(0, 8);
+  const heaviest = pairs[0]?.weight ?? 1;
+
+  const layerRows = layers
+    .map(
+      (l) => `<tr><td><strong>${esc(l.layer)}</strong></td><td class="num">${l.count}</td>` +
+        `<td class="muted">${esc(LAYER_DESCRIPTIONS[l.layer])}</td></tr>`,
+    )
+    .join('');
+
+  const pairRows = pairs
+    .map((p) => {
+      const label = p.from === p.to ? `${esc(p.from)} (internal)` : `${esc(p.from)} ↔ ${esc(p.to)}`;
+      const bar = Math.max(2, Math.round((p.weight / heaviest) * 100));
+      return `<tr><td>${label}</td><td class="num">${p.couplings}</td><td class="num">${p.weight}</td>` +
+        `<td><span style="display:inline-block;height:7px;width:${bar}%;background:#3c3c3c"></span></td></tr>`;
+    })
+    .join('');
+
+  return `<h2>Architectural layers</h2>
+<p class="muted">Every object is classified, none are hidden. Infrastructure objects carry no
+business process but reveal how the business model is wired to identity, logging and configuration.</p>
+<table><thead><tr><th>Layer</th><th class="num">Objects</th><th>What it holds</th></tr></thead>
+<tbody>${layerRows}</tbody></table>
+<h3 style="font-size:15px;margin-top:22px">Cross-layer coupling</h3>
+<table><thead><tr><th>Relationship</th><th class="num">Pairs</th><th class="num">Weight</th><th></th></tr></thead>
+<tbody>${pairRows}</tbody></table>`;
 }
 
 function couplingTableSection(edges: CouplingGraphEdge[]): string {
