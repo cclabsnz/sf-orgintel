@@ -1,6 +1,6 @@
-import type { CouplingOperation, CouplingConfidence } from '@cclabsnz/sf-core';
+import type { CouplingOperation, CouplingConfidence, CouplingDirection } from '@cclabsnz/sf-core';
 
-export type { CouplingOperation, CouplingConfidence };
+export type { CouplingOperation, CouplingConfidence, CouplingDirection };
 
 export interface ComponentRef {
   type: 'Flow' | 'ApexClass' | 'ApexTrigger';
@@ -15,4 +15,10 @@ export interface RawEdge {
   b: string;
   operations: CouplingOperation[];
   component: ComponentRef;
+  /**
+   * True when `a` acts on `b` — a record-triggered flow or an Apex trigger, where `a` is the
+   * trigger object. This is process order, and it is the only signal in the graph that
+   * distinguishes "these are coupled" from "this happens, then that happens".
+   */
+  directed?: boolean;
 }
