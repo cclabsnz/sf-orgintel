@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import { clusterGraph, type GraphEdgeLite } from '../../../src/map/graph/clusters.js';
+import { clusterGraph, isolatedObjectShare, MAX_ISOLATED_SHARE, type GraphEdgeLite } from '../../../src/map/graph/clusters.js';
 
 /**
  * Domain clustering must survive the topologies real Salesforce orgs actually have — both the
@@ -163,40 +163,70 @@ describe('clusterGraph', () => {
  * requested target, which silently made `--domain-size` do nothing at all.
  */
 describe('resolution auto-tuning', () => {
-  /** Hierarchical: 4 super-domains of 3 sub-domains each. */
-  function nested(): { nodes: string[]; edges: GraphEdgeLite[] } {
+  /**
+   * Four groups of 15, densely cross-linked: modularity merges each group at its natural
+   * resolution and subdivides them under pressure. A fixture whose natural resolution already
+   * satisfies the target cannot detect a broken tuner — the previous version of this test used
+   * one and passed with the fragmentation bug fully reintroduced.
+   */
+  function crossLinked(): { nodes: string[]; edges: GraphEdgeLite[] } {
     const nodes: string[] = [];
     const edges: GraphEdgeLite[] = [];
-    for (let s = 0; s < 4; s++) {
-      for (let sub = 0; sub < 3; sub++) {
-        const c = core(`N${s}_${sub}_`, 7, 30);
-        nodes.push(...c.nodes);
-        edges.push(...c.edges);
-        if (sub > 0) edges.push(e(`N${s}_${sub - 1}_1`, `N${s}_${sub}_1`, 12), e(`N${s}_${sub - 1}_2`, `N${s}_${sub}_2`, 12));
-      }
-      if (s > 0) edges.push(e(`N${s - 1}_0_1`, `N${s}_0_1`, 4), e(`N${s - 1}_0_2`, `N${s}_0_2`, 4));
+    const groups: string[][] = [];
+    for (let g = 0; g < 4; g++) {
+      const c = core(`G${g}_`, 15, 1);
+      groups.push(c.nodes);
+      nodes.push(...c.nodes);
+      edges.push(...c.edges);
     }
+    for (let a = 0; a < 4; a++)
+      for (let b = a + 1; b < 4; b++)
+        for (let k = 0; k < 12; k++) edges.push(e(groups[a][k % 15], groups[b][k % 15], 2));
     return { nodes, edges };
   }
 
-  it('never returns larger or fewer domains for a tighter ceiling', () => {
-    // Engagement itself needs genuinely hierarchical density, which is verified against a
-    // production org rather than synthesised here; this is the invariant that always holds.
-    const { nodes, edges } = nested();
+  it('keeps tightening while isolated objects stay a small share of the graph', () => {
+    // The bug: fragmentation was measured as a share of *clusters*, so on a real 200-object
+    // graph 12 isolated objects read as 26% (of 46 clusters) rather than 6% (of objects), and
+    // the tuner stopped early — identically for every target, making --domain-size inert.
+    const { nodes, edges } = crossLinked();
 
-    const loose = clusterGraph(nodes, edges, flat, { targetDomainSize: 60 });
-    const tight = clusterGraph(nodes, edges, flat, { targetDomainSize: 8 });
+    const natural = clusterGraph(nodes, edges, flat, { targetDomainSize: 15 });
+    const tight = clusterGraph(nodes, edges, flat, { targetDomainSize: 4 });
 
-    expect(sizes(tight)[0]).toBeLessThanOrEqual(sizes(loose)[0]);
-    expect(tight.length).toBeGreaterThanOrEqual(loose.length);
+    expect(sizes(natural)[0]).toBe(15);
+    expect(sizes(tight)[0]).toBeLessThan(10);
+    expect(tight.length).toBeGreaterThan(natural.length);
   });
 
   it('does not shred the graph into isolated objects chasing an impossible target', () => {
-    const { nodes, edges } = nested();
+    const { nodes, edges } = crossLinked();
 
     const absurd = clusterGraph(nodes, edges, flat, { targetDomainSize: 2 });
 
     const isolated = absurd.filter((c) => c.objects.length === 1).length;
     expect(isolated / nodes.length).toBeLessThan(0.2);
+  });
+});
+
+describe('isolatedObjectShare', () => {
+  // The defect was the denominator: groups vs objects. They only diverge at scale, so this
+  // asserts the real-org numbers directly rather than hoping a fixture reproduces them.
+  it('measures against object count, not group count', () => {
+    // 46 groups over 200 objects, 12 of them singletons: 6% of objects, but 26% of groups.
+    const groups = [
+      ...Array.from({ length: 12 }, (_, i) => [`solo${i}`]),
+      ...Array.from({ length: 34 }, (_, g) => Array.from({ length: 5 }, (_, i) => `g${g}_${i}`)),
+    ];
+
+    expect(isolatedObjectShare(groups, 200)).toBeCloseTo(0.06, 2);
+    // The buggy denominator would have produced ~0.26 and tripped the 15% guard.
+    expect(isolatedObjectShare(groups, 200)).toBeLessThan(MAX_ISOLATED_SHARE);
+    expect(12 / groups.length).toBeGreaterThan(MAX_ISOLATED_SHARE);
+  });
+
+  it('is zero for an empty graph and 1 when everything is isolated', () => {
+    expect(isolatedObjectShare([], 0)).toBe(0);
+    expect(isolatedObjectShare([['a'], ['b']], 2)).toBe(1);
   });
 });

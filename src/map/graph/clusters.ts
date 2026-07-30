@@ -85,14 +85,11 @@ function modularityCommunities(
   edges: GraphEdgeLite[],
   targetDomainSize: number,
 ): string[][] {
-  const isolatedShare = (groups: string[][]): number =>
-    nodes.length === 0 ? 0 : groups.filter((g) => g.length === 1).length / nodes.length;
-
   let best = louvainCommunities(nodes, edges, 1);
   for (const resolution of RESOLUTION_LADDER) {
     if (best[0] !== undefined && best[0].length <= targetDomainSize) break;
     const attempt = louvainCommunities(nodes, edges, resolution);
-    if (isolatedShare(attempt) > MAX_ISOLATED_SHARE) break;
+    if (isolatedObjectShare(attempt, nodes.length) > MAX_ISOLATED_SHARE) break;
     // Modularity can plateau or briefly regress; only keep a strictly better split.
     if (attempt[0] !== undefined && best[0] !== undefined && attempt[0].length >= best[0].length) continue;
     best = attempt;
@@ -104,7 +101,20 @@ function modularityCommunities(
 const RESOLUTION_LADDER = [1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 16] as const;
 
 /** Never leave more than this share of the graph as one-object domains. */
-const MAX_ISOLATED_SHARE = 0.15;
+export const MAX_ISOLATED_SHARE = 0.15;
+
+/**
+ * Share of the graph's OBJECTS sitting alone in a one-object domain.
+ *
+ * Exported because the denominator is the whole defect: dividing by the number of groups
+ * instead of the number of objects made 12 isolated objects on a 200-object graph read as
+ * 26% rather than 6%, so the tuner stopped at the same resolution for every requested target.
+ * The two denominators only diverge at scale, which is why only a direct test catches it.
+ */
+export function isolatedObjectShare(groups: readonly string[][], objectCount: number): number {
+  if (objectCount <= 0) return 0;
+  return groups.filter((g) => g.length === 1).length / objectCount;
+}
 
 /** Connected components after cutting bridges that are weak relative to both sides. */
 function structuralComponents(nodes: string[], edges: GraphEdgeLite[]): string[][] {

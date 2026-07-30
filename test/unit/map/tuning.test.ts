@@ -24,29 +24,32 @@ function flow(apiName: string, trigger: string, updates: string[]): FlowSummary 
 const PROV = { tool: 'orgintel' as const, toolVersion: '0.1.0', generatedAt: '2026-07-30T00:00:00.000Z', orgId: '00Dxx0000000000EAA' };
 
 /**
- * Nested structure: `k` super-domains, each of 3 tightly-knit sub-domains, cross-linked so the
- * graph has no bridges — the real-org shape. Nesting matters: a complete clique has no internal
- * structure, so no resolution can subdivide it and the target would look ignored.
+ * Four groups of 15, densely cross-linked. Modularity merges each group at its natural
+ * resolution (largest 15) and subdivides them under pressure (largest ~4), so a target below
+ * 15 forces the tuner to act. Fixtures where the natural resolution already satisfies any
+ * plausible target cannot detect an unplumbed option — an earlier version of this test used
+ * one and passed against code where targetDomainSize was never wired to clusterGraph at all.
  */
-function denseGraph(k: number, subSize: number) {
+function denseGraph() {
   const flows: FlowSummary[] = [];
   const objects: string[] = [];
-  for (let c = 0; c < k; c++) {
-    for (let s = 0; s < 3; s++) {
-      const members = Array.from({ length: subSize }, (_, i) => `D${c}_${s}_${i}__c`);
-      objects.push(...members);
-      for (let i = 0; i < subSize; i++)
-        for (let j = i + 1; j < subSize; j++) flows.push(flow(`F${c}${s}_${i}_${j}`, members[i], [members[j]]));
-      // Bind sub-domains into a super-domain with a few links.
-      if (s > 0) for (let l = 0; l < 2; l++) flows.push(flow(`B${c}${s}_${l}`, `D${c}_${s - 1}_${l}__c`, [`D${c}_${s}_${l}__c`]));
-    }
-    if (c > 0) for (let l = 0; l < 3; l++) flows.push(flow(`X${c}_${l}`, `D${c - 1}_0_${l}__c`, [`D${c}_0_${l}__c`]));
+  const groups: string[][] = [];
+  for (let g = 0; g < 4; g++) {
+    const members = Array.from({ length: 15 }, (_, i) => `G${g}_${i}__c`);
+    groups.push(members);
+    objects.push(...members);
+    for (let i = 0; i < 15; i++)
+      for (let j = i + 1; j < 15; j++) flows.push(flow(`F${g}_${i}_${j}`, members[i], [members[j]]));
   }
+  for (let a = 0; a < 4; a++)
+    for (let b = a + 1; b < 4; b++)
+      for (let k = 0; k < 12; k++)
+        flows.push(flow(`X${a}${b}_${k}`, groups[a][k % 15], [groups[b][k % 15]]), flow(`Y${a}${b}_${k}`, groups[a][k % 15], [groups[b][k % 15]]));
   return { flows, objects };
 }
 
 function build(opts: { topLayout?: number; targetDomainSize?: number }) {
-  const { flows, objects } = denseGraph(3, 6);
+  const { flows, objects } = denseGraph();
   return assembleCouplingArtifacts({
     flowSummaries: flows, apexClasses: [], apexTriggers: [], knownObjects: new Set(objects),
     nodeInfo: () => ({ custom: true, automationCounts: { flows: 1, triggers: 0, approvals: 0 }, recordCount90d: 10 }),
@@ -63,20 +66,17 @@ describe('map tuning options', () => {
     expect(build({ topLayout: 25 }).layout.size).toBe(25);
   });
 
-  it('threads targetDomainSize through to clustering as a ceiling', () => {
-    // The option only *engages* when modularity's natural resolution overshoots the target —
-    // on a real 200-object org that happens (a 42-object domain at resolution 1.0). On a clean
-    // synthetic graph the natural communities already fit, so the contract to assert here is
-    // the invariant: a tighter ceiling never yields larger or fewer domains.
-    const coarse = build({ targetDomainSize: 40 });
+  it('threads targetDomainSize through to clustering', () => {
+    // A target the natural resolution already satisfies must leave it alone; a tighter one
+    // must visibly subdivide. If the option were not plumbed, both calls would return the
+    // default clustering and the second assertion would fail.
+    const natural = build({ targetDomainSize: 15 });
     const tight = build({ targetDomainSize: 4 });
 
-    const largest = (a: typeof coarse) => Math.max(...a.clusters.map((c) => c.objects.length));
-    expect(largest(tight)).toBeLessThanOrEqual(largest(coarse));
-    expect(tight.clusters.length).toBeGreaterThanOrEqual(coarse.clusters.length);
-    // And the option is genuinely wired — an unplumbed option would leave clustering at its
-    // default, which this fixture resolves to 6-object domains.
-    expect(largest(coarse)).toBeLessThanOrEqual(40);
+    const largest = (a: typeof natural) => Math.max(...a.clusters.map((c) => c.objects.length));
+    expect(largest(natural)).toBe(15);
+    expect(largest(tight)).toBeLessThan(10);
+    expect(tight.clusters.length).toBeGreaterThan(natural.clusters.length);
   });
 });
 
