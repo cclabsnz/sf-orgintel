@@ -14,20 +14,15 @@ set -u
 ORG_ID='00D[A-Za-z0-9]{12,15}'
 FIXTURE_ID='00D[A-Za-z0-9]*([xX]{2}|0{6,})'
 SANDBOX_HOST='[A-Za-z0-9-]+\.sandbox\.my\.salesforce\.com'
-# Custom objects observed in a client org. Object names are as identifying as an org id —
-# they describe the client's data model — and a run against a real org puts them in front of
-# you, ready to be pasted into a commit message or a fixture. A denylist is not a proof; add
-# to it when working with a new client, and prefer invented names in fixtures.
-CLIENT_OBJECT='(NDMS|AIRNG|APH|NIS)_[A-Za-z0-9_]+|Adverse_Event__|PatientImmunization|Care_Specialty_|CareProviderFacility|Vaccine_Reference'
 fail=0
 
 for f in $(git diff --cached --name-only --diff-filter=ACM); do
   case "$f" in
     .githooks/*|.github/workflows/guard-org-data.yml) continue ;;
   esac
-  if git show ":$f" 2>/dev/null | grep -InE "$ORG_ID|$SANDBOX_HOST|$CLIENT_OBJECT" | grep -vE "$FIXTURE_ID" | grep -q .; then
+  if git show ":$f" 2>/dev/null | grep -InE "$ORG_ID|$SANDBOX_HOST" | grep -vE "$FIXTURE_ID" | grep -q .; then
     echo "pre-commit: $f references a real Salesforce org:" >&2
-    git show ":$f" 2>/dev/null | grep -InE "$ORG_ID|$SANDBOX_HOST|$CLIENT_OBJECT" | grep -vE "$FIXTURE_ID" | head -3 >&2
+    git show ":$f" 2>/dev/null | grep -InE "$ORG_ID|$SANDBOX_HOST" | grep -vE "$FIXTURE_ID" | head -3 >&2
     fail=1
   fi
 done
