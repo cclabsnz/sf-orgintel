@@ -13,7 +13,7 @@ describe('layerOf', () => {
     ['User', 'security'], ['Profile', 'security'], ['PermissionSetAssignment', 'security'],
     ['LoginHistory', 'security'], ['StaticResource', 'security'],
     ['LogEntry__c', 'observability'], ['LoggerSettings__c', 'observability'],
-    ['NDMS_Mapping__mdt', 'configuration'],
+    ['Region_Mapping__mdt', 'configuration'],
     ['Order_Event__e', 'integration'],
     ['AccountShare', 'sharing'], ['CaseHistory', 'sharing'], ['OpportunityFeed', 'sharing'],
     ['ContentDocument', 'content'], ['EmailMessage', 'content'],

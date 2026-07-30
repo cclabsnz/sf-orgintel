@@ -20,6 +20,7 @@ env:
   ORG_ID: '00D[A-Za-z0-9]{12,15}'
   SANDBOX: '[A-Za-z0-9-]+\.sandbox\.my\.salesforce\.com'
   FIXTURE: '00D[A-Za-z0-9]*([xX]{2}|0{6,})'
+  CLIENT: '(NDMS|AIRNG|APH|NIS)_[A-Za-z0-9_]+|Adverse_Event__|PatientImmunization|Care_Specialty_|CareProviderFacility|Vaccine_Reference'
 
 jobs:
   guard:
@@ -32,9 +33,9 @@ jobs:
       - name: Scan tracked content
         run: |
           set -uo pipefail
-          if git grep -InE "$ORG_ID|$SANDBOX" -- . ':!.github/workflows/guard-org-data.yml' ':!.githooks/*' \
+          if git grep -InE "$ORG_ID|$SANDBOX|$CLIENT" -- . ':!.github/workflows/guard-org-data.yml' ':!.githooks/*' \
             | grep -vE "$FIXTURE" | grep -q . ; then
-            git grep -InE "$ORG_ID|$SANDBOX" -- . ':!.github/workflows/guard-org-data.yml' ':!.githooks/*' \
+            git grep -InE "$ORG_ID|$SANDBOX|$CLIENT" -- . ':!.github/workflows/guard-org-data.yml' ':!.githooks/*' \
               | grep -vE "$FIXTURE" | head -10
             echo "::error::Content references a real Salesforce org."
             exit 1
@@ -54,8 +55,8 @@ jobs:
       - name: Scan commit messages
         run: |
           set -uo pipefail
-          if git log --format='%H%n%s%n%b' | grep -InE "$ORG_ID|$SANDBOX" | grep -vE "$FIXTURE" | grep -q . ; then
-            git log --format='%H%n%s%n%b' | grep -InE "$ORG_ID|$SANDBOX" | grep -vE "$FIXTURE" | head -10
+          if git log --format='%H%n%s%n%b' | grep -InE "$ORG_ID|$SANDBOX|$CLIENT" | grep -vE "$FIXTURE" | grep -q . ; then
+            git log --format='%H%n%s%n%b' | grep -InE "$ORG_ID|$SANDBOX|$CLIENT" | grep -vE "$FIXTURE" | head -10
             echo "::error::A commit message references a real Salesforce org."
             exit 1
           fi
