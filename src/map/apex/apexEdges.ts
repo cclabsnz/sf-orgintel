@@ -57,7 +57,8 @@ export function deriveApexEdges(
     const component: ComponentRef = { type: 'ApexTrigger', name: trig.name, confidence, namespace: trig.namespace };
     for (const [obj, ops] of objects) {
       if (obj === trig.object) continue;
-      edges.push({ a: trig.object, b: obj, operations: [...ops].sort(), component });
+      // Apex trigger: its object acts on the touched object.
+      edges.push({ a: trig.object, b: obj, operations: [...ops].sort(), component, directed: true });
     }
   }
 

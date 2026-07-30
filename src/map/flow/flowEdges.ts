@@ -72,7 +72,8 @@ function edgesForFlow(flow: FlowSummary, touches: TouchMap, component: Component
   if (trigger) {
     for (const [obj, ops] of touches) {
       if (obj === trigger) continue;
-      edges.push({ a: trigger, b: obj, operations: [...ops].sort(), component });
+      // Record-triggered: the trigger object acts on the touched object.
+      edges.push({ a: trigger, b: obj, operations: [...ops].sort(), component, directed: true });
     }
     return edges;
   }
