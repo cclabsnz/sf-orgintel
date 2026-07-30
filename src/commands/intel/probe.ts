@@ -25,6 +25,10 @@ export default class IntelProbeCommand extends SfCommand<ProbeResult> {
 
   public static flags = {
     'target-org': Flags.requiredOrg(),
+    refresh: Flags.boolean({
+      summary: 'Ignore cached analysis and recompute, refreshing the cache as it goes.',
+      default: false,
+    }),
     html: Flags.boolean({
       summary: 'Also write a branded HTML evidence-coverage report.',
       default: false,
@@ -66,7 +70,7 @@ export default class IntelProbeCommand extends SfCommand<ProbeResult> {
     };
 
     // Cache the result so `intel map`/`discover` can reuse the evidence tier.
-    new OrgIntelCache(orgInfo.id).set('probe', 'latest', result);
+    new OrgIntelCache(orgInfo.id, undefined, { refresh: flags.refresh }).set('probe', 'latest', result);
 
     if (flags.html) {
       const overrides = flags.branding

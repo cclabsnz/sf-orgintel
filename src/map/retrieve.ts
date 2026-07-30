@@ -84,18 +84,29 @@ export async function retrieveApex(
   ctx: IntelContext,
   resolver: ObjectResolver,
   notes: string[],
+  cache?: OrgIntelCache,
 ): Promise<{ classes: ApexClassInput[]; triggers: ApexTriggerInput[] }> {
   const apex = new ApexRepository(ctx.tooling);
   let classes: ApexClassInput[] = [];
   let triggers: ApexTriggerInput[] = [];
 
   try {
-    classes = (await apex.listClasses()).map((c) => ({
-      name: c.name,
-      namespace: c.namespace,
-      body: c.body,
-      symbolTable: (c.symbolTable as SymbolTableLike | null) ?? null,
-    }));
+    // Bodies are cheap to fetch but not to analyse, so the derived shape is memoised by a
+    // hash of the source. A class whose body is withheld (managed package) is keyed by its
+    // SymbolTable instead; one with neither is not cacheable and is passed through.
+    classes = await Promise.all(
+      (await apex.listClasses()).map(async (c) => {
+        const input: ApexClassInput = {
+          name: c.name,
+          namespace: c.namespace,
+          body: c.body,
+          symbolTable: (c.symbolTable as SymbolTableLike | null) ?? null,
+        };
+        const key = c.body ?? (c.symbolTable ? JSON.stringify(c.symbolTable) : null);
+        if (!cache || key === null) return input;
+        return cache.memoize('apex', key, () => input);
+      }),
+    );
   } catch (e) {
     notes.push(`ApexClass is not queryable; class coupling skipped. (${describeSalesforceError(e)})`);
   }

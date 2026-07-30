@@ -62,7 +62,7 @@ export async function runMap(
   notes.push(...automation.notes);
 
   const flows = await retrieveFlows(ctx, { includeInactive: opts.includeInactive }, notes, opts.cache);
-  const apex = await retrieveApex(ctx, resolver, notes);
+  const apex = await retrieveApex(ctx, resolver, notes, opts.cache);
 
   // Determine the object set that will appear in the graph, then fetch 90-day counts for it.
   const preEdges = mergeEdges([

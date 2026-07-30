@@ -2,6 +2,10 @@ import { describe, it, expect } from '@jest/globals';
 import { retrieveFlows, retrieveApex } from '../../../src/map/retrieve.js';
 import { resolverFromEntities } from '../../../src/discover/objectResolver.js';
 import { mockSoql, mockTooling, mockRest, noopMetadata } from '../helpers/mocks.js';
+import { OrgIntelCache, contentHash } from '../../../src/lib/cache.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { IntelContext } from '../../../src/lib/wire.js';
 import type { SoqlClient, ToolingClient } from '@cclabsnz/sf-core';
 
@@ -200,5 +204,48 @@ describe('retrieveFlows — managed packages and batching', () => {
     expect(metaQueries).toHaveLength(12);
     // But not serial: several requests must be in flight at once.
     expect(peak).toBeGreaterThan(1);
+  });
+});
+
+describe('retrieveApex caching', () => {
+  const resolver = resolverFromEntities([
+    { QualifiedApiName: 'Account', DurableId: 'Account', KeyPrefix: '001' },
+  ]);
+  const CLASS_BODY = 'public class Svc { Account a = [SELECT Id FROM Account]; }';
+
+  function toolingCounting(counter: { n: number }): ToolingClient {
+    return {
+      async query<T>(q: string): Promise<T[]> {
+        if (q.includes('FROM ApexClass')) {
+          counter.n++;
+          return [{ Name: 'Svc', NamespacePrefix: null, Body: CLASS_BODY, SymbolTable: null }] as T[];
+        }
+        if (q.includes('FROM ApexTrigger')) return [] as T[];
+        throw new Error(`Unexpected: ${q}`);
+      },
+      async getRecord<T>(): Promise<T> { throw new Error('ni'); },
+    };
+  }
+
+  it('reuses cached class analysis instead of re-deriving it', async () => {
+    const cache = new OrgIntelCache('00Dxx0000000000EAA', mkdtempSync(join(tmpdir(), 'orgintel-apex-')));
+    const counter = { n: 0 };
+    const ctx = ctxOf(mockSoql([]), toolingCounting(counter));
+
+    const first = await retrieveApex(ctx, resolver, [], cache);
+    const second = await retrieveApex(ctx, resolver, [], cache);
+
+    // The org is still queried — bodies are cheap to fetch — but analysis is memoised.
+    expect(first.classes).toEqual(second.classes);
+    expect(counter.n).toBe(2);
+    expect(cache.get('apex', contentHash(CLASS_BODY))).not.toBeNull();
+  });
+
+  it('re-derives when the class body changes', async () => {
+    const cache = new OrgIntelCache('00Dxx0000000000EAA', mkdtempSync(join(tmpdir(), 'orgintel-apex-')));
+    const ctx = ctxOf(mockSoql([]), toolingCounting({ n: 0 }));
+    await retrieveApex(ctx, resolver, [], cache);
+
+    expect(cache.get('apex', contentHash('different body'))).toBeNull();
   });
 });

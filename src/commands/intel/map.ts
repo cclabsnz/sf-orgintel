@@ -49,6 +49,10 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
       helpValue: './report-branding.json',
     }),
     'prepared-for': Flags.string({ summary: 'Client name for the HTML report cover line.' }),
+    refresh: Flags.boolean({
+      summary: 'Ignore cached analysis and recompute, refreshing the cache as it goes.',
+      default: false,
+    }),
     'domain-size': Flags.integer({
       summary: 'Largest domain to report; clustering resolution is tuned to fit (default 25).',
       description:
@@ -75,7 +79,7 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
     const conn = flags['target-org'].getConnection(API_VERSION) as any;
     const { orgInfo, namespace } = await resolveOrgInfo(conn);
     const ctx = buildIntelContext(conn, orgInfo, namespace, API_VERSION);
-    const cache = new OrgIntelCache(orgInfo.id);
+    const cache = new OrgIntelCache(orgInfo.id, undefined, { refresh: flags.refresh });
 
     const evidence = resolveEvidence(cache);
     const { evidenceTier, anchors } = evidence;

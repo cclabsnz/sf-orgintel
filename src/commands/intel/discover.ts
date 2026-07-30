@@ -23,6 +23,10 @@ export default class IntelDiscoverCommand extends SfCommand<DiscoverResult> {
 
   public static flags = {
     'target-org': Flags.requiredOrg(),
+    refresh: Flags.boolean({
+      summary: 'Ignore cached analysis and recompute, refreshing the cache as it goes.',
+      default: false,
+    }),
     top: Flags.integer({
       summary: 'Number of top anchor candidates to report.',
       default: 10,
@@ -65,7 +69,7 @@ export default class IntelDiscoverCommand extends SfCommand<DiscoverResult> {
     };
 
     // Cache so `intel map` can show ranked anchors alongside the coupling graph.
-    new OrgIntelCache(orgInfo.id).set('discover', 'latest', result);
+    new OrgIntelCache(orgInfo.id, undefined, { refresh: flags.refresh }).set('discover', 'latest', result);
 
     if (!flags['no-fingerprint-file']) {
       fs.mkdirSync(flags.output, { recursive: true });
