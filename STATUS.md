@@ -14,9 +14,10 @@ Working repo: `cclabsnz/sf-orgintel`. Depends on `@cclabsnz/sf-core` from npm (^
 
 ## Beyond the plan (found on a real org)
 
-- **Layer view (next)** — strata (business / security / observability / integration) instead of one
-  cloud. Prototyped only; the cross-layer matrix surfaced `business ↔ security` at 310
-  couplings, invisible in the flat graph.
+- **Layer view** — done. Objects classified into seven layers, carried on each coupling-graph
+  node (`@cclabsnz/sf-core@^0.1.2`) and reported as a cross-layer coupling table. On a real org
+  `business ↔ security` is the second-heaviest relationship in the graph (1709 weight / 361
+  couplings), which filtering infrastructure out would have deleted entirely.
 - **Evidence quality not surfaced graph-level** — ~2/3 of components are regex-approximate and
   nothing says so outside a per-edge field.
 - **110 managed-package flows skipped** — correct, but belongs in the report, not a note.

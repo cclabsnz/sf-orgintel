@@ -15,7 +15,7 @@
     "prepare": "git config core.hooksPath .githooks 2>/dev/null || true"
   },
   "dependencies": {
-    "@cclabsnz/sf-core": "^0.1.1",
+    "@cclabsnz/sf-core": "^0.1.2",
     "@oclif/core": "^4",
     "@salesforce/core": "^8",
     "@salesforce/sf-plugins-core": "^12"

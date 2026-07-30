@@ -102,6 +102,17 @@ describe('emitted IR validates against the published contracts', () => {
     for (const c of l1) expect(Object.keys(c.layout).length).toBeGreaterThan(0);
   });
 
+  it('every emitted node carries its architectural layer', () => {
+    // Optional in the contract for back-compatibility, but the emitter must always set it —
+    // otherwise consumers reimplement the classifier or filter infrastructure out and lose
+    // the business-to-security finding entirely.
+    const layers = new Set(['integration', 'configuration', 'business', 'content', 'sharing', 'security', 'observability']);
+    for (const node of emitted.couplingGraph.nodes) {
+      expect(node.layer).toBeDefined();
+      expect(layers.has(node.layer as string)).toBe(true);
+    }
+  });
+
   it('every emitted edge carries the fields consumers rely on', () => {
     for (const edge of emitted.couplingGraph.edges) {
       expect(edge.weight).toBeGreaterThan(0);
