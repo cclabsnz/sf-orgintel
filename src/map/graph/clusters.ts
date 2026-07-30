@@ -72,25 +72,39 @@ export function clusterGraph(
 }
 
 /**
- * Raise resolution until the largest community fits the target, stopping early if the graph
- * is only fragmenting (singletons appearing) rather than resolving real structure.
+ * Raise resolution until the largest community fits the target, stopping when tightening
+ * further would only isolate objects rather than reveal structure.
+ *
+ * Fragmentation is measured as the share of *objects* left alone, not the share of clusters.
+ * Those differ wildly: on a real 200-object graph, 12 isolated objects is 6% of the graph but
+ * 26% of the clusters. Measuring clusters made the guard trip at the same resolution
+ * regardless of the requested target, silently making `--domain-size` do nothing.
  */
 function modularityCommunities(
   nodes: string[],
   edges: GraphEdgeLite[],
   targetDomainSize: number,
 ): string[][] {
+  const isolatedShare = (groups: string[][]): number =>
+    nodes.length === 0 ? 0 : groups.filter((g) => g.length === 1).length / nodes.length;
+
   let best = louvainCommunities(nodes, edges, 1);
-  for (const resolution of [1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) {
+  for (const resolution of RESOLUTION_LADDER) {
     if (best[0] !== undefined && best[0].length <= targetDomainSize) break;
     const attempt = louvainCommunities(nodes, edges, resolution);
-    const singletons = attempt.filter((c) => c.length === 1).length;
-    // Fragmenting more than a fifth of the graph into singletons is not structure.
-    if (singletons > Math.max(2, attempt.length / 5)) break;
+    if (isolatedShare(attempt) > MAX_ISOLATED_SHARE) break;
+    // Modularity can plateau or briefly regress; only keep a strictly better split.
+    if (attempt[0] !== undefined && best[0] !== undefined && attempt[0].length >= best[0].length) continue;
     best = attempt;
   }
   return best;
 }
+
+/** Resolutions tried in order when the natural clustering overshoots the target. */
+const RESOLUTION_LADDER = [1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 16] as const;
+
+/** Never leave more than this share of the graph as one-object domains. */
+const MAX_ISOLATED_SHARE = 0.15;
 
 /** Connected components after cutting bridges that are weak relative to both sides. */
 function structuralComponents(nodes: string[], edges: GraphEdgeLite[]): string[][] {

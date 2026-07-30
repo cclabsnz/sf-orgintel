@@ -25,6 +25,8 @@ export interface AssembleInput {
   manifestProvenance: LandscapeManifestProvenance;
   /** Number of top-ranked nodes to lay out for the visual (default 20). */
   topLayout?: number;
+  /** Largest domain to hand a consultant; clustering resolution tunes to fit (default 25). */
+  targetDomainSize?: number;
   notes?: string[];
 }
 
@@ -62,7 +64,7 @@ export function assembleCouplingArtifacts(input: AssembleInput): MapArtifacts {
   };
 
   const nodeNames = nodes.map((n) => n.object);
-  const clusters = clusterGraph(nodeNames, edges, score);
+  const clusters = clusterGraph(nodeNames, edges, score, { targetDomainSize: input.targetDomainSize });
 
   // Lay out the top-ranked nodes for the report picture only. The manifest lays itself out
   // completely and separately (see buildManifest) — a viewer must be able to zoom to every

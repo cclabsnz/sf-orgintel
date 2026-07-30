@@ -23,6 +23,7 @@ export interface MapProvenanceInput {
 export interface MapOptions {
   includeInactive?: boolean;
   topLayout?: number;
+  targetDomainSize?: number;
   cache?: OrgIntelCache;
   maxNodeCounts?: number;
 }
@@ -92,6 +93,7 @@ export async function runMap(
     nodeInfo,
     labelOf,
     topLayout: opts.topLayout,
+    targetDomainSize: opts.targetDomainSize,
     notes,
     couplingProvenance: {
       tool: 'orgintel',

@@ -48,6 +48,23 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
       helpValue: './report-branding.json',
     }),
     'prepared-for': Flags.string({ summary: 'Client name for the HTML report cover line.' }),
+    'domain-size': Flags.integer({
+      summary: 'Largest domain to report; clustering resolution is tuned to fit (default 25).',
+      description:
+        'Lower values resolve finer domains. Tuning stops early if tightening further would ' +
+        'only isolate objects rather than reveal structure.',
+      min: 2,
+    }),
+    'top-layout': Flags.integer({
+      summary: 'Objects to draw in the HTML coupling picture (default 20).',
+      description: 'Affects the report visual only — the landscape manifest lays out every object.',
+      min: 2,
+    }),
+    'max-node-counts': Flags.integer({
+      summary: 'Objects to fetch 90-day record counts for (default 100).',
+      description: 'Each count is a separate SOQL query; objects beyond the cap appear in the notes.',
+      min: 1,
+    }),
   };
 
   public async run(): Promise<MapCommandResult> {
@@ -65,7 +82,13 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
     const result = await runMap(
       ctx,
       { generatedAt: new Date().toISOString(), toolVersion: TOOL_VERSION, orgId: orgInfo.id, evidenceTier },
-      { includeInactive: flags['include-inactive'], cache },
+      {
+        includeInactive: flags['include-inactive'],
+        cache,
+        targetDomainSize: flags['domain-size'],
+        topLayout: flags['top-layout'],
+        maxNodeCounts: flags['max-node-counts'],
+      },
     );
 
     fs.mkdirSync(flags.output, { recursive: true });
