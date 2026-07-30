@@ -2,6 +2,7 @@ import { esc, type Branding } from '@cclabsnz/sf-core';
 import type { CouplingGraph, CouplingGraphEdge } from '@cclabsnz/sf-core';
 import type { Cluster } from '../map/graph/clusters.js';
 import { summariseLayers, crossLayerCoupling, LAYER_DESCRIPTIONS } from '../map/graph/layers.js';
+import { extractProcessChains } from '../map/graph/chains.js';
 import type { Point } from '../map/graph/layout.js';
 import { htmlDocument } from './shell.js';
 
@@ -32,6 +33,7 @@ export function renderMapHtml(input: MapReportInput): string {
   const body = [
     summarySection(input),
     graphSection(input),
+    processSection(input.couplingGraph),
     layerSection(input.couplingGraph),
     couplingTableSection(input.couplingGraph.edges),
     anchorSection(input.anchors),
@@ -108,6 +110,39 @@ ${nodes}
  * security layer more heavily than to anything except itself, which says the business model is
  * wired into the permission model. Layers keep those objects and make that legible.
  */
+/**
+ * Candidate business processes, chained from directional couplings.
+ *
+ * Everything else in this report describes association — these objects are touched together.
+ * Only a record-triggered flow or an Apex trigger says *order*: when a Case changes, an
+ * Account is updated. Chaining those is the one output here shaped like a process.
+ */
+function processSection(graph: CouplingGraph): string {
+  const chains = extractProcessChains(graph.edges).slice(0, 10);
+  const directional = graph.edges.filter((e) => e.direction).length;
+
+  if (chains.length === 0) {
+    return `<h2>Candidate processes</h2>
+<p class="muted">No directional couplings were found. Process order comes from record-triggered
+flows and Apex triggers; without those, the graph shows association only.</p>`;
+  }
+
+  const rows = chains
+    .map((c) => {
+      const steps = c.steps.map((s) => esc(s)).join(' <span class="muted">&rarr;</span> ');
+      return `<tr><td>${steps}</td><td class="num">${c.steps.length}</td>` +
+        `<td class="num">${c.weight}</td><td>${chip(c.confidence)}</td></tr>`;
+    })
+    .join('');
+
+  return `<h2>Candidate processes <span class="muted" style="font-size:13px">(from directional automation)</span></h2>
+<p class="muted">Order comes only from record-triggered flows and Apex triggers &mdash;
+${directional} of ${graph.edges.length} couplings carry it. Undirected couplings are excluded
+rather than guessed at, so these are candidates to confirm, not a mined process model.</p>
+<table><thead><tr><th>Process</th><th class="num">Steps</th><th class="num">Weight</th><th>Confidence</th></tr></thead>
+<tbody>${rows}</tbody></table>`;
+}
+
 function layerSection(graph: CouplingGraph): string {
   const objects = graph.nodes.map((n) => n.object);
   if (objects.length === 0) return '';
