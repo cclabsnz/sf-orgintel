@@ -67,10 +67,29 @@ in. Click an object to isolate what it couples to.</p>
 <div class="viewer" data-orgintel-viewer>
   <div class="viewer-bar">
     <span class="viewer-tier" data-tier>layers and their sizes</span>
+    <span class="viewer-legend">
+      <span class="k k-out"></span>flows out
+      <span class="k k-in"></span>flows in
+      <span class="k k-undir"></span>order unknown
+    </span>
     <span class="viewer-sel muted" data-selection>nothing selected</span>
     <button type="button" data-reset>Reset</button>
   </div>
   <svg viewBox="0 0 ${WIDTH} ${HEIGHT}" data-canvas>
+    <defs>
+      <marker id="oi-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7"
+              orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+        <path d="M0,0 L8,4 L0,8 z" fill="#6e6a63"/>
+      </marker>
+      <marker id="oi-arrow-out" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8"
+              orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+        <path d="M0,0 L8,4 L0,8 z" fill="#b3261e"/>
+      </marker>
+      <marker id="oi-arrow-in" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8"
+              orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+        <path d="M0,0 L8,4 L0,8 z" fill="#1d6fa5"/>
+      </marker>
+    </defs>
     <g data-scene></g>
   </svg>
   <script type="application/json" data-strata>${payload}</script>
@@ -92,6 +111,14 @@ in. Click an object to isolate what it couples to.</p>
 .v-edge { fill:none; stroke:#8d8880; opacity:.45; transition:opacity .14s cubic-bezier(.7,0,.2,1); }
 .v-edge.dim { opacity:.05; }
 .v-edge.on { stroke:#b3261e; opacity:.95; }
+.v-edge.out { stroke:#b3261e; opacity:.95; }
+.v-edge.in { stroke:#1d6fa5; opacity:.95; }
+.v-edge.undirected { stroke-dasharray:3 3; }
+.viewer-legend { display:flex; align-items:center; gap:6px; text-transform:none; letter-spacing:0; color:#5e5a53; }
+.viewer-legend .k { display:inline-block; width:14px; height:0; border-top:2px solid; margin-left:10px; }
+.viewer-legend .k-out { border-color:#b3261e; }
+.viewer-legend .k-in { border-color:#1d6fa5; }
+.viewer-legend .k-undir { border-color:#8d8880; border-top-style:dashed; }
 .v-node { fill:#4a4a4a; transition:fill .14s cubic-bezier(.7,0,.2,1), opacity .14s cubic-bezier(.7,0,.2,1); cursor:pointer; }
 .v-node.dim { opacity:.2; }
 .v-node.sel { fill:#f2c200; stroke:#111; stroke-width:1.5; }
@@ -163,15 +190,28 @@ function viewerScript(): string {
     if (d.edges) {
       data.edges.forEach(function (e) {
         if (!shown[e.from] || !shown[e.to]) return;
-        var a = pos[e.from], b = pos[e.to];
-        var on = selected && (e.from === selected || e.to === selected);
-        var dim = selected && !on;
+        // Draw along the direction the process actually runs, so the arrowhead means something.
+        var srcName = e.direction === 'to-from' ? e.to : e.from;
+        var dstName = e.direction === 'to-from' ? e.from : e.to;
+        var a = pos[srcName], b = pos[dstName];
+        var cls = 'v-edge', marker = '';
+        if (selected) {
+          if (srcName === selected && e.direction) { cls += ' out'; marker = 'url(#oi-arrow-out)'; }
+          else if (dstName === selected && e.direction) { cls += ' in'; marker = 'url(#oi-arrow-in)'; }
+          else if (e.from === selected || e.to === selected) { cls += ' on'; }
+          else { cls += ' dim'; }
+        } else if (e.direction) {
+          marker = 'url(#oi-arrow)';
+        }
+        if (!e.direction) cls += ' undirected';
         var mid = (a.y + b.y) / 2;
         var path = Math.abs(a.y - b.y) < 1
           ? 'M ' + a.x + ' ' + a.y + ' Q ' + ((a.x + b.x) / 2) + ' ' + (a.y - 26) + ' ' + b.x + ' ' + b.y
           : 'M ' + a.x + ' ' + a.y + ' C ' + a.x + ' ' + mid + ' ' + b.x + ' ' + mid + ' ' + b.x + ' ' + b.y;
-        parts.push('<path class="v-edge' + (on ? ' on' : dim ? ' dim' : '') + '" d="' + path +
-          '" stroke-width="' + (0.4 + (e.weight / maxW) * 2.4) + '"/>');
+        parts.push('<path class="' + cls + '" d="' + path + '" stroke-width="' +
+          (0.4 + (e.weight / maxW) * 2.4) + '"' +
+          (marker ? ' marker-end="' + marker + '"' : '') +
+          (e.direction === 'both' && marker ? ' marker-start="' + marker + '"' : '') + '/>');
       });
     }
 
@@ -191,7 +231,20 @@ function viewerScript(): string {
     scene.innerHTML = parts.join('');
     scene.setAttribute('transform', 'translate(' + view.x + ' ' + view.y + ') scale(' + view.zoom + ')');
     tierEl.textContent = TIERS[d.tier];
-    selEl.textContent = selected ? selected + ' \\u2014 click again to clear' : 'nothing selected';
+    if (selected) {
+      var into = 0, outOf = 0, undir = 0;
+      data.edges.forEach(function (e) {
+        if (e.from !== selected && e.to !== selected) return;
+        if (!e.direction) { undir++; return; }
+        var src = e.direction === 'to-from' ? e.to : e.from;
+        if (e.direction === 'both') { into++; outOf++; }
+        else if (src === selected) outOf++;
+        else into++;
+      });
+      selEl.textContent = selected + ' \\u2014 ' + outOf + ' out, ' + into + ' in, ' + undir + ' unordered';
+    } else {
+      selEl.textContent = 'nothing selected';
+    }
   }
 
   // A collapsed or not-yet-laid-out element reports a zero-width rect; dividing by it yields
