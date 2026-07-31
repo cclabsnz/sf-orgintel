@@ -10,7 +10,8 @@ import type { ApexClassInput, ApexTriggerInput } from './apex/apexTypes.js';
 import { deriveFlowEdges } from './flow/flowEdges.js';
 import { deriveApexEdges } from './apex/apexEdges.js';
 import { mergeEdges, buildNodes, type NodeInfo } from './graph/couplingGraph.js';
-import { clusterGraph, type Cluster } from './graph/clusters.js';
+import { clusterByLayer, type LayerCluster } from './graph/clusters.js';
+import { layerOf } from './graph/layers.js';
 import { computeLayout, type Point } from './graph/layout.js';
 import { buildManifest } from './graph/manifest.js';
 
@@ -33,7 +34,7 @@ export interface AssembleInput {
 export interface MapArtifacts {
   couplingGraph: CouplingGraph;
   manifest: LandscapeManifest;
-  clusters: Cluster[];
+  clusters: LayerCluster[];
   layout: Map<string, Point>;
   notes: string[];
 }
@@ -64,7 +65,16 @@ export function assembleCouplingArtifacts(input: AssembleInput): MapArtifacts {
   };
 
   const nodeNames = nodes.map((n) => n.object);
-  const clusters = clusterGraph(nodeNames, edges, score, { targetDomainSize: input.targetDomainSize });
+  // Cluster within each architectural layer. Clustering the whole graph at once produces
+  // domains that mix a business object with a logger table, because infrastructure couples to
+  // almost everything — and worse, it fuses genuinely separate business groups by routing them
+  // through a shared identity object.
+  const clusters = clusterByLayer(
+    nodes.map((n) => ({ object: n.object, layer: n.layer ?? layerOf(n.object) })),
+    edges,
+    score,
+    { targetDomainSize: input.targetDomainSize },
+  );
 
   // Lay out the top-ranked nodes for the report picture only. The manifest lays itself out
   // completely and separately (see buildManifest) — a viewer must be able to zoom to every
