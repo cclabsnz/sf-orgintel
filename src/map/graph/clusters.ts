@@ -1,4 +1,5 @@
 import { louvainCommunities } from './louvain.js';
+import { LAYERS, type Layer } from './layers.js';
 export interface GraphEdgeLite {
   from: string;
   to: string;
@@ -304,4 +305,66 @@ function connectedComponents(nodes: string[], edges: GraphEdgeLite[]): string[][
 
 function edgeKey(a: number, b: number): string {
   return a < b ? `${a}-${b}` : `${b}-${a}`;
+}
+
+
+/** A domain, and the architectural layer all of its objects belong to. */
+export interface LayerCluster extends Cluster {
+  layer: Layer;
+}
+
+export interface LayeredObject {
+  object: string;
+  layer: Layer;
+}
+
+/**
+ * Cluster within each architectural layer independently.
+ *
+ * Clustering the whole graph at once produces domains that mix a business object with a logger
+ * table and a permission record, because infrastructure objects are referenced by almost
+ * everything and so couple to almost everything. A domain like that describes nothing anyone
+ * can act on, and it also fuses genuinely separate business groups by routing them through a
+ * shared identity or logging object.
+ *
+ * Clustering per layer keeps every object — this is not filtering — while ensuring a domain is
+ * a set of objects that are the same kind of thing. Only couplings internal to a layer inform
+ * its clustering; cross-layer coupling is reported separately, where it is the finding rather
+ * than noise.
+ */
+export function clusterByLayer(
+  objects: readonly LayeredObject[],
+  edges: readonly GraphEdgeLite[],
+  score: (object: string) => number,
+  opts: ClusterOptions = {},
+): LayerCluster[] {
+  if (objects.length === 0) return [];
+
+  const layerOfObject = new Map(objects.map((o) => [o.object, o.layer]));
+  const byLayer = new Map<Layer, string[]>();
+  for (const o of objects) {
+    if (!byLayer.has(o.layer)) byLayer.set(o.layer, []);
+    byLayer.get(o.layer)!.push(o.object);
+  }
+
+  const out: LayerCluster[] = [];
+  for (const layer of LAYERS) {
+    const members = byLayer.get(layer);
+    if (!members) continue;
+    const within = new Set(members);
+    // clusterGraph already ignores edges whose endpoints are not in its node list, so this
+    // filter is for clarity rather than correctness — the guarantee comes from passing only
+    // this layer's members. Stated plainly because a test cannot distinguish the two.
+    const internal = edges.filter((e) => within.has(e.from) && within.has(e.to));
+    for (const c of clusterGraph([...members].sort(), internal, score, opts)) {
+      out.push({ ...c, layer });
+    }
+  }
+
+  // Largest first across all layers, then renumber so ids are unique in the combined list.
+  return out
+    .sort((a, b) => b.objects.length - a.objects.length
+      || LAYERS.indexOf(a.layer) - LAYERS.indexOf(b.layer)
+      || a.anchorObject.localeCompare(b.anchorObject))
+    .map((c, i) => ({ ...c, id: `cluster-${i + 1}`, layer: layerOfObject.get(c.objects[0])! }));
 }
