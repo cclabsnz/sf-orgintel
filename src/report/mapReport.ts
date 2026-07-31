@@ -3,6 +3,8 @@ import type { CouplingGraph, CouplingGraphEdge } from '@cclabsnz/sf-core';
 import type { Cluster } from '../map/graph/clusters.js';
 import { summariseLayers, crossLayerCoupling, LAYER_DESCRIPTIONS } from '../map/graph/layers.js';
 import { extractProcessChains } from '../map/graph/chains.js';
+import { computeStrataLayout } from '../map/graph/strata.js';
+import { layerOf } from '../map/graph/layers.js';
 import type { Point } from '../map/graph/layout.js';
 import { htmlDocument } from './shell.js';
 
@@ -62,43 +64,57 @@ function summarySection(i: MapReportInput): string {
 }
 
 function graphSection(i: MapReportInput): string {
-  const clusterOf = new Map<string, number>();
-  i.clusters.forEach((c, idx) => c.objects.forEach((o) => clusterOf.set(o, idx)));
+  const drawn = new Set(i.layout.keys());
+  const nodes = i.couplingGraph.nodes
+    .filter((n) => drawn.has(n.object))
+    .map((n) => ({ object: n.object, layer: n.layer ?? layerOf(n.object) }));
 
-  const degree = new Map<string, number>();
-  for (const e of i.couplingGraph.edges) {
-    degree.set(e.from, (degree.get(e.from) ?? 0) + e.weight);
-    degree.set(e.to, (degree.get(e.to) ?? 0) + e.weight);
-  }
-
-  const laidOut = new Set(i.layout.keys());
-  const lines = i.couplingGraph.edges
-    .filter((e) => laidOut.has(e.from) && laidOut.has(e.to))
-    .map((e) => {
-      const a = i.layout.get(e.from)!;
-      const b = i.layout.get(e.to)!;
-      const w = Math.min(6, 0.6 + e.weight * 0.6);
-      return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="var(--border)" stroke-width="${w.toFixed(1)}" stroke-opacity="0.7"/>`;
-    })
-    .join('');
-
-  const nodes = [...i.layout.entries()]
-    .map(([obj, p]) => {
-      const r = Math.min(26, 8 + (degree.get(obj) ?? 0) * 1.5);
-      const color = CLUSTER_COLORS[(clusterOf.get(obj) ?? 0) % CLUSTER_COLORS.length];
-      return `<g><circle cx="${p.x}" cy="${p.y}" r="${r.toFixed(1)}" fill="${color}" fill-opacity="0.85"/>` +
-        `<text x="${p.x}" y="${(p.y + r + 12).toFixed(1)}" text-anchor="middle" font-size="11" fill="var(--ink)">${esc(obj)}</text></g>`;
-    })
-    .join('');
-
-  if (i.layout.size === 0) {
+  if (nodes.length === 0) {
     return `<h2>Coupling graph</h2><p class="muted">No coupled objects were found to visualise.</p>`;
   }
-  return `<h2>Coupling graph <span class="muted" style="font-size:13px">(top ${i.layout.size} objects)</span></h2>
-<svg viewBox="0 0 960 600" width="100%" style="border:1px solid var(--border);border-radius:8px;background:var(--bgAlt)" role="img" aria-label="Cross-object coupling graph">
-${lines}
-${nodes}
-</svg>`;
+
+  const edges = i.couplingGraph.edges.filter((e) => drawn.has(e.from) && drawn.has(e.to));
+  const strata = computeStrataLayout(nodes, edges, { width: 1000, height: 620 });
+  const maxWeight = Math.max(...edges.map((e) => e.weight), 1);
+  const r = (n: number): number => Math.round(n * 10) / 10;
+
+  const bandHeight = (strata.height - 88) / strata.bands.length;
+  const bands = strata.bands
+    .map((b, idx) => {
+      const y = 44 + bandHeight * idx;
+      return `<rect x="0" y="${r(y)}" width="${strata.width}" height="${r(bandHeight)}" fill="${idx % 2 ? '#efece5' : '#f4f1ea'}"/>` +
+        `<text x="10" y="${r(y + 15)}" font-size="10" fill="#7a766d" letter-spacing="1.2">${esc(b.layer.toUpperCase())} &middot; ${b.count}</text>`;
+    })
+    .join('');
+
+  const wires = edges
+    .map((e) => {
+      const a = strata.positions.get(e.from)!;
+      const b = strata.positions.get(e.to)!;
+      const mid = (a.y + b.y) / 2;
+      const d = Math.abs(a.y - b.y) < 1
+        ? `M ${a.x} ${a.y} Q ${r((a.x + b.x) / 2)} ${r(a.y - 26)} ${b.x} ${b.y}`
+        : `M ${a.x} ${a.y} C ${a.x} ${r(mid)} ${b.x} ${r(mid)} ${b.x} ${b.y}`;
+      return `<path d="${d}" fill="none" stroke="#8d8880" stroke-width="${r(0.4 + (e.weight / maxWeight) * 2.4)}" opacity="0.5"/>`;
+    })
+    .join('');
+
+  const marks = nodes
+    .map((n) => {
+      const p2 = strata.positions.get(n.object)!;
+      return `<rect x="${r(p2.x - 4)}" y="${r(p2.y - 4)}" width="8" height="8" fill="#4a4a4a"/>` +
+        `<text x="${r(p2.x + 2)}" y="${r(p2.y - 9)}" font-size="8" fill="#2b2823" ` +
+        `transform="rotate(-32 ${r(p2.x + 2)} ${r(p2.y - 9)})">${esc(n.object)}</text>`;
+    })
+    .join('');
+
+  return `<h2>Coupling graph <span class="muted" style="font-size:13px">(top ${nodes.length} objects, by layer)</span></h2>
+<p class="muted">Each band is an architectural layer: vertical position is the layer, horizontal
+position is chosen to reduce crossings, and line thickness is coupling weight.</p>
+<div style="border:1px solid var(--rule);background:#f4f1ea">
+<svg viewBox="0 0 ${strata.width} ${strata.height}" style="display:block;width:100%;height:auto">
+${bands}${wires}${marks}
+</svg></div>`;
 }
 
 /**
