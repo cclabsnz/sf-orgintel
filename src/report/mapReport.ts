@@ -4,6 +4,7 @@ import type { Cluster } from '../map/graph/clusters.js';
 import { summariseLayers, crossLayerCoupling, LAYER_DESCRIPTIONS } from '../map/graph/layers.js';
 import { extractProcessChains } from '../map/graph/chains.js';
 import { computeStrataLayout } from '../map/graph/strata.js';
+import { renderStrataViewer } from './strataViewer.js';
 import { layerOf } from '../map/graph/layers.js';
 import type { Point } from '../map/graph/layout.js';
 import { htmlDocument } from './shell.js';
@@ -35,6 +36,7 @@ export function renderMapHtml(input: MapReportInput): string {
   const body = [
     summarySection(input),
     graphSection(input),
+    renderStrataViewer({ couplingGraph: input.couplingGraph, objects: [...input.layout.keys()] }),
     processSection(input.couplingGraph),
     layerSection(input.couplingGraph),
     couplingTableSection(input.couplingGraph.edges),
