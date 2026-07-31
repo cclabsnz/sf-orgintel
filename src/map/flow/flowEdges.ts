@@ -1,4 +1,5 @@
 import type { FlowSummary, FlowOperation } from './flowTypes.js';
+import { dataFlowBetween } from '../graph/dataFlow.js';
 import type { RawEdge, ComponentRef, CouplingOperation } from '../types.js';
 
 export interface FlowEdgeResult {
@@ -78,12 +79,22 @@ function edgesForFlow(flow: FlowSummary, touches: TouchMap, component: Component
     return edges;
   }
 
-  // No trigger object: couple touched objects pairwise (co-occurrence in one flow).
+  // No trigger object — a screen or autolaunched flow. There is still order to recover: a flow
+  // that looks up one object and creates another is stating that data moves between them. This
+  // is where a user journey lives, so leaving it undirected discards the most human-readable
+  // process evidence in the org.
   const objects = [...touches.keys()].sort();
   for (let i = 0; i < objects.length; i++) {
     for (let j = i + 1; j < objects.length; j++) {
-      const ops = new Set<CouplingOperation>([...touches.get(objects[i])!, ...touches.get(objects[j])!]);
-      edges.push({ a: objects[i], b: objects[j], operations: [...ops].sort(), component });
+      const left = touches.get(objects[i])!;
+      const right = touches.get(objects[j])!;
+      const ops = new Set<CouplingOperation>([...left, ...right]);
+      const flow = dataFlowBetween(objects[i], left, objects[j], right);
+      edges.push(
+        flow
+          ? { a: flow.from, b: flow.to, operations: [...ops].sort(), component, directed: true }
+          : { a: objects[i], b: objects[j], operations: [...ops].sort(), component },
+      );
     }
   }
   return edges;

@@ -1,3 +1,4 @@
+import { dataFlowBetween } from '../graph/dataFlow.js';
 import type { CouplingOperation, RawEdge, ComponentRef } from '../types.js';
 import type { ApexClassInput, ApexTriggerInput, ApexAnalysis, SymbolTableLike } from './apexTypes.js';
 import { regexAnalyze } from './apexRegex.js';
@@ -31,34 +32,6 @@ export function analyzeApex(
   return { objects: regex, confidence: 'approximate' };
 }
 
-const WRITES: ReadonlySet<CouplingOperation> = new Set(['create', 'update', 'delete']);
-
-/** True when the object is only queried, never modified. */
-function readOnly(ops: ReadonlySet<CouplingOperation>): boolean {
-  return ops.size > 0 && ![...ops].some((o) => WRITES.has(o));
-}
-
-/** True when the object is modified at all. */
-function written(ops: ReadonlySet<CouplingOperation>): boolean {
-  return [...ops].some((o) => WRITES.has(o));
-}
-
-/**
- * Direction implied by one object being read and the other written. Two reads give no order,
- * and two writes give no order either — nothing in the source says which happened first — so
- * both stay undirected rather than being guessed at.
- */
-function dataFlow(
-  a: string,
-  aOps: ReadonlySet<CouplingOperation>,
-  b: string,
-  bOps: ReadonlySet<CouplingOperation>,
-): { from: string; to: string } | null {
-  if (readOnly(aOps) && written(bOps)) return { from: a, to: b };
-  if (readOnly(bOps) && written(aOps)) return { from: b, to: a };
-  return null;
-}
-
 export function deriveApexEdges(
   classes: ApexClassInput[],
   triggers: ApexTriggerInput[],
@@ -81,7 +54,7 @@ export function deriveApexEdges(
         // operation sets before building the edge throws that away — and since triggers and
         // record-triggered flows are a small minority of the evidence, throwing it away leaves
         // almost every coupling with its order reported as unknown.
-        const flow = dataFlow(objs[i], left, objs[j], right);
+        const flow = dataFlowBetween(objs[i], left, objs[j], right);
         edges.push(
           flow
             ? { a: flow.from, b: flow.to, operations: [...ops].sort(), component, directed: true }
