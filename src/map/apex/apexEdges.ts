@@ -31,6 +31,34 @@ export function analyzeApex(
   return { objects: regex, confidence: 'approximate' };
 }
 
+const WRITES: ReadonlySet<CouplingOperation> = new Set(['create', 'update', 'delete']);
+
+/** True when the object is only queried, never modified. */
+function readOnly(ops: ReadonlySet<CouplingOperation>): boolean {
+  return ops.size > 0 && ![...ops].some((o) => WRITES.has(o));
+}
+
+/** True when the object is modified at all. */
+function written(ops: ReadonlySet<CouplingOperation>): boolean {
+  return [...ops].some((o) => WRITES.has(o));
+}
+
+/**
+ * Direction implied by one object being read and the other written. Two reads give no order,
+ * and two writes give no order either — nothing in the source says which happened first — so
+ * both stay undirected rather than being guessed at.
+ */
+function dataFlow(
+  a: string,
+  aOps: ReadonlySet<CouplingOperation>,
+  b: string,
+  bOps: ReadonlySet<CouplingOperation>,
+): { from: string; to: string } | null {
+  if (readOnly(aOps) && written(bOps)) return { from: a, to: b };
+  if (readOnly(bOps) && written(aOps)) return { from: b, to: a };
+  return null;
+}
+
 export function deriveApexEdges(
   classes: ApexClassInput[],
   triggers: ApexTriggerInput[],
@@ -45,8 +73,20 @@ export function deriveApexEdges(
     const objs = [...objects.keys()].sort();
     for (let i = 0; i < objs.length; i++) {
       for (let j = i + 1; j < objs.length; j++) {
-        const ops = new Set<CouplingOperation>([...objects.get(objs[i])!, ...objects.get(objs[j])!]);
-        edges.push({ a: objs[i], b: objs[j], operations: [...ops].sort(), component });
+        const left = objects.get(objs[i])!;
+        const right = objects.get(objs[j])!;
+        const ops = new Set<CouplingOperation>([...left, ...right]);
+        // A class that reads one object and writes another is describing a data flow: values
+        // come from what it queries and land in what it inserts or updates. Unioning the two
+        // operation sets before building the edge throws that away — and since triggers and
+        // record-triggered flows are a small minority of the evidence, throwing it away leaves
+        // almost every coupling with its order reported as unknown.
+        const flow = dataFlow(objs[i], left, objs[j], right);
+        edges.push(
+          flow
+            ? { a: flow.from, b: flow.to, operations: [...ops].sort(), component, directed: true }
+            : { a: objs[i], b: objs[j], operations: [...ops].sort(), component },
+        );
       }
     }
   }
