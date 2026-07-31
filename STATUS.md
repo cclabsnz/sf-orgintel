@@ -10,6 +10,7 @@ Working repo: `cclabsnz/sf-orgintel`. Depends on `@cclabsnz/sf-core` from npm (^
 | 4. Evidence tier honesty | done — unmeasured is null, needs core ^0.1.1 |
 | 5. Cache versioning + `--refresh` | done — version-namespaced, `--refresh` on all commands, Apex memoised |
 | 6. Tuning knobs | done — `--domain-size`, `--top-layout`, `--max-node-counts` |
+| Interactive strata viewer | done — semantic zoom, pan, selection; self-contained |
 | Strata rendering | done — coupling graph drawn as layered bands, Sugiyama-style |
 | 7. Packaging / README / validation worksheet | done — PERMISSIONS.md + per-command reference; worksheet remains operator-run |
 
