@@ -12,6 +12,7 @@ import { deriveFlowEdges } from './flow/flowEdges.js';
 import { deriveApexEdges } from './apex/apexEdges.js';
 import { mergeEdges, type NodeInfo } from './graph/couplingGraph.js';
 import { assembleCouplingArtifacts } from './assemble.js';
+import type { ObjectTimeline } from './graph/timeline.js';
 
 export interface MapProvenanceInput {
   generatedAt: string;
@@ -34,6 +35,8 @@ export interface MapRunResult {
   manifest: LandscapeManifest;
   clusters: Cluster[];
   layout: Map<string, Point>;
+  /** Per-object save sequences, ordered by Salesforce's documented order of execution. */
+  timelines: ObjectTimeline[];
   flowsAnalyzed: number;
   apexClassesAnalyzed: number;
   apexTriggersAnalyzed: number;
@@ -116,6 +119,7 @@ export async function runMap(
     manifest: artifacts.manifest,
     clusters: artifacts.clusters,
     layout: artifacts.layout,
+    timelines: artifacts.timelines,
     flowsAnalyzed: flows.length,
     apexClassesAnalyzed: apex.classes.length,
     apexTriggersAnalyzed: apex.triggers.length,

@@ -14,6 +14,7 @@ import { clusterByLayer, type LayerCluster } from './graph/clusters.js';
 import { layerOf } from './graph/layers.js';
 import { computeLayout, type Point } from './graph/layout.js';
 import { buildManifest } from './graph/manifest.js';
+import { objectTimelines, type ObjectTimeline } from './graph/timeline.js';
 
 export interface AssembleInput {
   flowSummaries: FlowSummary[];
@@ -36,6 +37,8 @@ export interface MapArtifacts {
   manifest: LandscapeManifest;
   clusters: LayerCluster[];
   layout: Map<string, Point>;
+  /** Per-object save sequences, ordered by Salesforce's documented order of execution. */
+  timelines: ObjectTimeline[];
   notes: string[];
 }
 
@@ -94,7 +97,17 @@ export function assembleCouplingArtifacts(input: AssembleInput): MapArtifacts {
 
   const manifest = buildManifest(input.manifestProvenance, clusters, edges, nodes, input.labelOf);
 
-  return { couplingGraph, manifest, clusters, layout, notes };
+  // What runs on each object when it saves, in the order the platform guarantees. This is the one
+  // piece of sequencing in the whole map that is documented rather than inferred.
+  const timelines = objectTimelines({ triggers: input.apexTriggers, flows: input.flowSummaries });
+  const contended = timelines.filter((t) => t.unorderedPhases > 0).length;
+  if (contended > 0) {
+    notes.push(
+      `${contended} object(s) run more than one automation in the same execution phase; Salesforce does not define which goes first.`,
+    );
+  }
+
+  return { couplingGraph, manifest, clusters, layout, timelines, notes };
 }
 
 /** Top coupled object pairs (the org's process backbones). */
