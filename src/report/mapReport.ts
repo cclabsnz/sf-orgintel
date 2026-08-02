@@ -5,8 +5,10 @@ import { summariseLayers, crossLayerCoupling, LAYER_DESCRIPTIONS } from '../map/
 import { extractProcessChains } from '../map/graph/chains.js';
 import { computeStrataLayout } from '../map/graph/strata.js';
 import { renderStrataViewer } from './strataViewer.js';
+import { renderExecutionFlow } from './executionFlow.js';
 import { layerOf } from '../map/graph/layers.js';
 import type { Point } from '../map/graph/layout.js';
+import type { ObjectTimeline } from '../map/graph/timeline.js';
 import { htmlDocument } from './shell.js';
 
 export interface MapAnchorRow {
@@ -20,6 +22,8 @@ export interface MapReportInput {
   couplingGraph: CouplingGraph;
   clusters: Cluster[];
   layout: Map<string, Point>;
+  /** Per-object save sequences; the only guaranteed ordering in the report. */
+  timelines?: readonly ObjectTimeline[];
   anchors?: MapAnchorRow[];
   /** Null when unmeasured; the report says so rather than showing a grade. */
   evidenceTier: string | null;
@@ -38,6 +42,7 @@ export function renderMapHtml(input: MapReportInput): string {
     graphSection(input),
     renderStrataViewer({ couplingGraph: input.couplingGraph, objects: [...input.layout.keys()] }),
     processSection(input.couplingGraph),
+    timelineSection(input.timelines ?? []),
     layerSection(input.couplingGraph),
     couplingTableSection(input.couplingGraph.edges),
     anchorSection(input.anchors),
@@ -159,6 +164,54 @@ ${directional} of ${graph.edges.length} couplings carry it. Undirected couplings
 rather than guessed at, so these are candidates to confirm, not a mined process model.</p>
 <table><thead><tr><th>Process</th><th class="num">Steps</th><th class="num">Weight</th><th>Confidence</th></tr></thead>
 <tbody>${rows}</tbody></table>`;
+}
+
+/**
+ * What runs when a record saves, in the order the platform runs it.
+ *
+ * Every other sequence in this report is inferred from evidence and labelled as a candidate. This
+ * one is not: Salesforce documents the order of execution and guarantees it, so the ladder below
+ * is what happens, not what probably happens. The distinction is worth making loudly, because a
+ * reader has no way to tell a guaranteed sequence from an inferred one by looking at it.
+ *
+ * Where the platform guarantees nothing — two automations in the same phase on the same object —
+ * that is called out rather than hidden behind an arbitrary order.
+ */
+function timelineSection(timelines: readonly ObjectTimeline[]): string {
+  if (timelines.length === 0) {
+    return `<h2>Order of execution</h2>
+<p class="muted">No record-triggered automation was found, so no object has a save sequence.</p>`;
+  }
+
+  const shown = timelines.slice(0, 12);
+  const contended = timelines.filter((t) => t.unorderedPhases > 0).length;
+
+  // Drawn as a flow rather than tabulated. A table states the same facts, but a reader has to
+  // already know the order of execution to see that the rows are a sequence at all.
+  const flows = shown
+    .map(
+      (t) =>
+        `<h3 style="margin-bottom:6px">${esc(t.object)} <span class="muted" style="font-size:13px">` +
+        `(${t.componentCount} automations, ${t.entries.length} phases` +
+        `${t.unorderedPhases > 0 ? `, ${t.unorderedPhases} unordered` : ''})</span></h3>
+<div style="border:1px solid var(--rule);background:#f4f1ea;margin-bottom:26px">
+${renderExecutionFlow(t)}
+</div>`,
+    )
+    .join('\n');
+
+  const more = timelines.length > shown.length
+    ? `<p class="muted">${timelines.length - shown.length} further object(s) with automation are not shown.</p>`
+    : '';
+
+  return `<h2>Order of execution <span class="muted" style="font-size:13px">(guaranteed by the platform)</span></h2>
+<p class="muted">Unlike the candidate processes above, this sequence is not inferred. Salesforce
+documents the order of execution and runs every save through it, so these steps happen in this
+order every time. Each stage flows into the next. ${contended} of ${timelines.length} object(s)
+run more than one automation inside a single stage, where the platform defines no order between
+them at all &mdash; those stages are bracketed in amber.</p>
+${flows}
+${more}`;
 }
 
 function layerSection(graph: CouplingGraph): string {
