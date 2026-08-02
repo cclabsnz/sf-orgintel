@@ -116,6 +116,7 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
         couplingGraph: result.couplingGraph,
         clusters: result.clusters,
         layout: result.layout,
+        timelines: result.timelines,
         anchors,
         evidenceTier,
         flowsAnalyzed: result.flowsAnalyzed,
