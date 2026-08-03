@@ -1,0 +1,32 @@
+# Socket.dev configuration — https://docs.socket.dev/docs/socket-yml
+#
+# Triage for the supply-chain alerts Socket raises against this package. Each is inherent to
+# what a local-first org-analysis CLI does; none is a vulnerability. They are acknowledged
+# here rather than silently ignored.
+version: 2
+
+projectIgnorePaths:
+  # Fixtures carry synthetic org metadata — flow definitions, Apex bodies, object graphs —
+  # shaped to exercise parsing and clustering. None of it comes from a real org.
+  - "test/**"
+
+issueRules:
+  # "Filesystem access" — expected and required; it is most of what this tool does.
+  #
+  #   src/lib/cache.ts             the ~/.orgintel analysis cache, so a re-run does not
+  #                                re-query the org
+  #   src/commands/intel/*.ts      writes coupling-graph.json, landscape-manifest.json and
+  #                                the HTML report into the --output directory the operator
+  #                                names
+  #
+  # Every write is to a path the operator supplied or to the tool's own dot-directory.
+  # Nothing is written to the org: the read-only posture is enforced by tests.
+  filesystemAccess: false
+
+  # "Network access" — one destination, supplied by the operator.
+  #
+  # The only outbound traffic is SOQL, Tooling and REST reads against the Salesforce org the
+  # operator targets, over a Connection the sf CLI already authenticated. There is no
+  # telemetry, no analytics, no LLM call, and generated reports are self-contained — they
+  # embed their own styles and scripts rather than fetching from a CDN.
+  networkAccess: false
