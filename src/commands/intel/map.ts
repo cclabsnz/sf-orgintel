@@ -119,6 +119,8 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
         timelines: result.timelines,
         anchors,
         evidenceTier,
+        // The same notes the terminal prints. A report read a week later has no terminal.
+        notes: result.notes,
         flowsAnalyzed: result.flowsAnalyzed,
         apexClassesAnalyzed: result.apexClassesAnalyzed,
         apexTriggersAnalyzed: result.apexTriggersAnalyzed,
