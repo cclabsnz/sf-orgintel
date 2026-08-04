@@ -3,6 +3,7 @@ import type { CouplingGraph, CouplingGraphEdge } from '@cclabsnz/sf-core';
 import type { Cluster } from '../map/graph/clusters.js';
 import { summariseLayers, crossLayerCoupling, LAYER_DESCRIPTIONS } from '../map/graph/layers.js';
 import { extractProcessChains } from '../map/graph/chains.js';
+import { summariseCoverage, coverageHeadline, edgeConfidence } from '../map/graph/coverage.js';
 import { computeStrataLayout } from '../map/graph/strata.js';
 import { renderStrataViewer } from './strataViewer.js';
 import { renderExecutionFlow } from './executionFlow.js';
@@ -27,6 +28,12 @@ export interface MapReportInput {
   anchors?: MapAnchorRow[];
   /** Null when unmeasured; the report says so rather than showing a grade. */
   evidenceTier: string | null;
+  /**
+   * What the run could not analyse — unreadable managed-package metadata, unqueryable
+   * objects, flows that failed to parse. Previously logged to the terminal and lost, which
+   * left the HTML silently overstating its own coverage to anyone reading it later.
+   */
+  notes?: readonly string[];
   flowsAnalyzed: number;
   apexClassesAnalyzed: number;
   apexTriggersAnalyzed: number;
@@ -39,6 +46,7 @@ const CLUSTER_COLORS = ['#3a5a82', '#7a5c3e', '#4f7a52', '#82406a', '#5a6b8a', '
 export function renderMapHtml(input: MapReportInput): string {
   const body = [
     summarySection(input),
+    coverageSection(input),
     graphSection(input),
     renderStrataViewer({ couplingGraph: input.couplingGraph, objects: [...input.layout.keys()] }),
     processSection(input.couplingGraph),
@@ -68,6 +76,49 @@ function summarySection(i: MapReportInput): string {
     ['Apex classes / triggers', `${i.apexClassesAnalyzed} / ${i.apexTriggersAnalyzed}`],
   ];
   return `<dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
+}
+
+/**
+ * Placed second, directly under the summary and above the graph, because it qualifies
+ * everything below it. A reader who scrolls past the picture and never reaches a caveat has
+ * been misled by the layout, however accurate the caveat is.
+ */
+function coverageSection(i: MapReportInput): string {
+  const s = summariseCoverage(i.couplingGraph);
+  const notes = i.notes ?? [];
+  const pct = Math.round(s.approximateShare * 100);
+  const tone = pct >= 50 ? 'partial' : 'full';
+
+  const bars = (
+    [
+      ['Exact', s.edgesByConfidence.high, 'full'],
+      ['Mixed', s.edgesByConfidence.mixed, 'partial'],
+      ['Approximate', s.edgesByConfidence.approximate, 'partial'],
+    ] as Array<[string, number, string]>
+  )
+    .map(
+      ([label, n, cls]) =>
+        `<tr><td>${esc(label)}</td><td class="num">${n}</td><td class="muted">${
+          s.totalEdges === 0 ? '—' : `${Math.round((n / s.totalEdges) * 100)}%`
+        }</td><td>${chip(cls === 'full' ? 'high' : 'approximate')}</td></tr>`,
+    )
+    .join('');
+
+  const notesHtml =
+    notes.length === 0
+      ? '<p class="muted">Nothing was skipped: every flow and Apex component in scope was analysed.</p>'
+      : `<ul>${notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>`;
+
+  return `<h2>Coverage and confidence</h2>
+<p class="chip ${tone}" style="display:inline-block">${esc(coverageHeadline(s))}</p>
+<p class="muted">Exact evidence means an Apex SymbolTable or parsed Flow XML named the object.
+Approximate means it was matched by regex in an Apex body with no SymbolTable — a real signal,
+but one that can miss references and invent them. An edge counts as exact only when every
+contributing component is exact.</p>
+<table><thead><tr><th>Coupled pairs by evidence</th><th class="num">Count</th><th>Share</th><th></th></tr></thead>
+<tbody>${bars}</tbody></table>
+<h3 style="font-size:15px;margin-top:22px">Not analysed</h3>
+${notesHtml}`;
 }
 
 function graphSection(i: MapReportInput): string {
@@ -252,7 +303,7 @@ function couplingTableSection(edges: CouplingGraphEdge[]): string {
   const top = edges.slice(0, 25);
   const rows = top
     .map((e) => {
-      const conf = e.components.some((c) => c.confidence === 'high') ? 'high' : 'approximate';
+      const conf = edgeConfidence(e);
       const comps = e.components.map((c) => `${c.type}:${c.name}`).slice(0, 3).join(', ') + (e.components.length > 3 ? ` +${e.components.length - 3}` : '');
       return `<tr><td>${esc(e.from)} ↔ ${esc(e.to)}</td><td class="num">${e.weight}</td><td>${esc(e.operations.join(', '))}</td><td class="muted">${esc(comps)}</td><td>${chip(conf)}</td></tr>`;
     })

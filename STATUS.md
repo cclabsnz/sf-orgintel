@@ -1,6 +1,6 @@
 # OrgIntel M5 — hardening status
 
-Working repo: `cclabsnz/sf-orgintel`. Depends on `@cclabsnz/sf-core` from npm (^0.1.1).
+Working repo: `cclabsnz/sf-orgintel`. Depends on `@cclabsnz/sf-core` from npm (^0.3.0).
 
 | Task | State |
 | --- | --- |
@@ -20,9 +20,14 @@ Working repo: `cclabsnz/sf-orgintel`. Depends on `@cclabsnz/sf-core` from npm (^
   node (`@cclabsnz/sf-core@^0.1.2`) and reported as a cross-layer coupling table. On a real org
   `business ↔ security` is the second-heaviest relationship in the graph (1709 weight / 361
   couplings), which filtering infrastructure out would have deleted entirely.
-- **Evidence quality not surfaced graph-level** — ~2/3 of components are regex-approximate and
-  nothing says so outside a per-edge field.
-- **110 managed-package flows skipped** — correct, but belongs in the report, not a note.
+- **Evidence quality not surfaced graph-level** — done. A "Coverage and confidence" section
+  sits directly under the summary and above the graph, stating the approximate share in
+  words and breaking the coupled pairs down by evidence. Fixing this exposed a second
+  problem: an edge was labelled `high` when *any* component was exact, so nine regex guesses
+  and one SymbolTable hit read as fact. An edge is now `high` only when every component is,
+  with `mixed` named rather than rounded away.
+- **110 managed-package flows skipped** — done. Run notes are rendered in the report under
+  "Not analysed" instead of being printed to a terminal nobody has a week later.
 
 ## Verified on a real org
 
