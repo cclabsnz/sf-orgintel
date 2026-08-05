@@ -89,18 +89,21 @@ function coverageSection(i: MapReportInput): string {
   const pct = Math.round(s.approximateShare * 100);
   const tone = pct >= 50 ? 'partial' : 'full';
 
+  // The chip carries the same value as the row label. Anything else contradicts it: the
+  // first cut mapped every non-exact row to an 'approximate' chip, so the Mixed row read
+  // "Mixed … approximate" and told a reader two different things about one number.
   const bars = (
     [
-      ['Exact', s.edgesByConfidence.high, 'full'],
-      ['Mixed', s.edgesByConfidence.mixed, 'partial'],
-      ['Approximate', s.edgesByConfidence.approximate, 'partial'],
+      ['Exact', s.edgesByConfidence.high, 'high'],
+      ['Mixed', s.edgesByConfidence.mixed, 'mixed'],
+      ['Approximate', s.edgesByConfidence.approximate, 'approximate'],
     ] as Array<[string, number, string]>
   )
     .map(
-      ([label, n, cls]) =>
+      ([label, n, status]) =>
         `<tr><td>${esc(label)}</td><td class="num">${n}</td><td class="muted">${
           s.totalEdges === 0 ? '—' : `${Math.round((n / s.totalEdges) * 100)}%`
-        }</td><td>${chip(cls === 'full' ? 'high' : 'approximate')}</td></tr>`,
+        }</td><td>${chip(status)}</td></tr>`,
     )
     .join('');
 
