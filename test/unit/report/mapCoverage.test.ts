@@ -72,3 +72,21 @@ describe('map report — coverage and confidence', () => {
     expect(html).toContain('mixed');
   });
 });
+
+describe('map report — coverage table chips', () => {
+  // Caught by reading a real report, not by a unit test: every non-exact row mapped to an
+  // 'approximate' chip, so the Mixed row rendered "Mixed … approximate" and asserted two
+  // different things about the same number.
+  it('labels each row with its own confidence, not a collapsed one', () => {
+    const html = render([
+      edge('A', 'B', ['high']),
+      edge('C', 'D', ['high', 'approximate']),
+      edge('E', 'F', ['approximate']),
+    ]);
+    const rows = html.slice(html.indexOf('Coupled pairs by evidence'), html.indexOf('Not analysed'));
+
+    expect(rows).toMatch(/Mixed<\/td>[\s\S]*?chip[^>]*>mixed</);
+    expect(rows).toMatch(/Exact<\/td>[\s\S]*?chip[^>]*>high</);
+    expect(rows).toMatch(/Approximate<\/td>[\s\S]*?chip[^>]*>approximate</);
+  });
+});
