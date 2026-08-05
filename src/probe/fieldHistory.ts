@@ -57,7 +57,7 @@ export async function probeFieldHistory(
   const trackedObjectCount = objects.filter((o) => o.historyTrackingEnabled).length;
 
   let note = fieldAuditTrail
-    ? 'Field Audit Trail (FieldHistoryArchive) is present — history is retained beyond the standard window.'
+    ? 'Field Audit Trail (FieldHistoryArchive) is present: history is retained beyond the standard window.'
     : 'Field Audit Trail (Shield) not detected; standard field history retention applies.';
   if (droppedCustoms > 0) {
     note += ` Inspected ${MAX_CUSTOM_OBJECTS} of ${customs.length} custom objects; ${droppedCustoms} not shown.`;

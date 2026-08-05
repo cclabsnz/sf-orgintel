@@ -11,10 +11,10 @@ export default class IntelDiscoverCommand extends SfCommand<DiscoverResult> {
   public static summary = 'Discover where an org\'s business processes live (anchor ranking + domain fingerprint)';
   public static description =
     'Ranks the org\'s objects as likely business-process anchors using six deterministic, evidence-backed ' +
-    'signals — automation density, a status/lifecycle-shaped field, record volume & velocity, relationship ' +
+    'signals: automation density, a status/lifecycle-shaped field, record volume & velocity, relationship ' +
     'centrality, activity attach rate, and existing history tracking (weights live in one documented config). ' +
     'Also emits a domain-fingerprint JSON artifact (installed packages/clouds, object inventory, status ' +
-    'picklists, record types, app names) — the input a future classifier will consume. Read-only and local.';
+    'picklists, record types, app names), the input a future classifier will consume. Read-only and local.';
   public static examples = [
     '<%= config.bin %> <%= command.id %> --target-org myOrg',
     '<%= config.bin %> <%= command.id %> --target-org myOrg --top 15 --json',

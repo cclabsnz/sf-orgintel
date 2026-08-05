@@ -38,7 +38,7 @@ export async function retrieveFlows(
 
   const { versions, managedSkipped } = FlowRepository.selectVersions(definitions, opts);
   if (managedSkipped > 0) {
-    notes.push(`${managedSkipped} managed-package flow(s) skipped — metadata is not readable for managed flows.`);
+    notes.push(`${managedSkipped} managed-package flow(s) skipped: metadata is not readable for managed flows.`);
   }
 
   // Serve cache hits first, then fetch only the misses. `Flow.Metadata` cannot be batched,

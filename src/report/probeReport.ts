@@ -4,7 +4,7 @@ import { htmlDocument } from './shell.js';
 
 const TIER_BLURB: Record<string, string> = {
   A: 'Richest evidence: full Event Monitoring and Field Audit Trail. Process behaviour is highly observable.',
-  B: 'Standard behavioural tables are readable with data — history and process rows are queryable.',
+  B: 'Standard behavioural tables are readable with data: history and process rows are queryable.',
   C: 'Metadata and snapshots only. The org is describable, but little behavioural data is readable.',
   D: 'No evidence is currently readable. Prospective collection is recommended to build a baseline.',
 };
@@ -119,7 +119,7 @@ function behavioralSection(r: ProbeResult): string {
 
 function recommendationsSection(recs: Recommendation[]): string {
   if (recs.length === 0) {
-    return `<h2>Recommendations</h2><p class="muted">No coverage gaps detected — this org already exposes strong process evidence.</p>`;
+    return `<h2>Recommendations</h2><p class="muted">No coverage gaps detected. This org already exposes strong process evidence.</p>`;
   }
   const items = recs
     .map(
@@ -128,7 +128,7 @@ function recommendationsSection(recs: Recommendation[]): string {
       )}</div><div>${esc(rec.detail)}</div></div>`,
     )
     .join('');
-  return `<h2>Recommendations — flip these switches to see more</h2>${items}`;
+  return `<h2>Recommendations: flip these switches to see more</h2>${items}`;
 }
 
 function chip(status: string): string {

@@ -45,7 +45,7 @@ const SPECS: Readonly<Record<Phase, PhaseSpec>> = {
   workflow: { ordinal: 60, description: 'Workflow rules and field updates' },
   'after-save-flow': { ordinal: 70, description: 'After-save record-triggered flow' },
   rollup: { ordinal: 80, description: 'Roll-up summary and criteria-based sharing' },
-  async: { ordinal: 90, description: 'After commit — async, scheduled and platform-event work' },
+  async: { ordinal: 90, description: 'After commit: async, scheduled and platform-event work' },
   'user-initiated': { ordinal: null, description: 'Run by a person, outside any save' },
   invocable: { ordinal: null, description: 'Called by other automation; inherits its caller phase' },
 };
