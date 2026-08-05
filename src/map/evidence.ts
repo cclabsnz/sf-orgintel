@@ -45,7 +45,7 @@ export function resolveEvidence(cache: OrgIntelCache): ResolvedEvidence {
     measured,
     note: measured
       ? undefined
-      : 'Evidence tier not measured — run `sf intel probe` first to grade what this org can evidence.',
+      : 'Evidence tier not measured: run `sf intel probe` first to grade what this org can evidence.',
     anchors: discover?.anchors?.map((a) => ({ object: a.object, label: a.label, score: a.score })),
   };
 }

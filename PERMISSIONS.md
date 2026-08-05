@@ -1,7 +1,7 @@
 # Permissions
 
 `sf intel` is **strictly read-only**. It issues SOQL queries, Tooling queries, REST **GET**s and
-Metadata reads only — no DML, no deploys, no writes of any kind. That is enforced as a test
+Metadata reads only: no DML, no deploys, no writes of any kind. That is enforced as a test
 (`test/unit/invariants/readonly-invariant.test.ts`), not just stated here.
 
 It runs under the permissions of the authenticated `sf` user. Anything that user cannot read is
@@ -20,25 +20,25 @@ a partial, clearly-labelled result.
 
 ## Per-command detail
 
-**`sf intel probe`** — org capability and evidence coverage.
+**`sf intel probe`:** org capability and evidence coverage.
 `Organization`, the global describe (`/sobjects/`), `EventLogFile` (presence only), field-history
 settings, and read probes against the standard behavioural tables. Needs *View Setup and
-Configuration*; **View Event Log Files** improves the evidence tier but is not required — its
+Configuration*; **View Event Log Files** improves the evidence tier but is not required. Its
 absence lowers the tier rather than failing.
 
-**`sf intel discover`** — anchor ranking and domain fingerprint.
+**`sf intel discover`:** anchor ranking and domain fingerprint.
 Adds `EntityDefinition`, `RecordType`, `AppMenuItem`, `InstalledSubscriberPackage`,
 `ProcessDefinition`, `WorkflowRule`, `ApexTrigger`, `FlowDefinitionView`, plus `COUNT()` queries
 and `Task`/`Event`/`EmailMessage` activity counts per candidate object.
 
-**`sf intel map`** — cross-object coupling graph.
+**`sf intel map`:** cross-object coupling graph.
 Adds `ApexClass` (`Body`, `SymbolTable`) and `Flow.Metadata` per active flow version.
 This is the command most sensitive to permissions: without Apex or Flow read the graph is built
 from whatever remains, and every gap is reported in `notes`.
 
 ## What it never needs
 
-- **No write permission of any kind** — not Modify All Data, not Customize Application for
+- **No write permission of any kind**: not Modify All Data, not Customize Application for
   deployment, not Author Apex for saving code.
 - **No Shield or Event Monitoring licence.** Their absence lowers the reported evidence tier
   (A → B/C); it does not block any command.
@@ -53,8 +53,8 @@ A dedicated read-only integration user is the safest way to run this. Grant:
 - `PermissionsApiEnabled`
 - `PermissionsViewSetup`
 - `PermissionsViewAllData` (or object-level Read on the objects in scope)
-- `PermissionsAuthorApex` — required by the platform for Tooling reads of Apex
-- `PermissionsManageFlow` — required for Flow metadata reads
+- `PermissionsAuthorApex`: required by the platform for Tooling reads of Apex
+- `PermissionsManageFlow`: required for Flow metadata reads
 
 If your policy forbids `Author Apex` or `Manage Flow` on an integration user, the tool still
 runs; it reports reduced coverage instead of failing.
@@ -62,6 +62,6 @@ runs; it reports reduced coverage instead of failing.
 ## Data handling
 
 Generated reports contain your org's object names, automation names and record volumes. They are
-written only to the `--output` directory you specify and are **fully self-contained** — opening
+written only to the `--output` directory you specify and are **fully self-contained**. Opening
 one makes no network request. Analysis is cached locally under `~/.orgintel/cache/<orgId>`, keyed
 by a content hash; delete that directory to clear it.

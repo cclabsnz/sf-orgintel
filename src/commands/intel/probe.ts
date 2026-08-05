@@ -15,7 +15,7 @@ export default class IntelProbeCommand extends SfCommand<ProbeResult> {
     'Runs a read-only capability probe against the target org and prints an evidence-coverage report: ' +
     'org basics, Event Monitoring level, field-history coverage, and the behavioural tables (with 12-month ' +
     'row counts) that reveal how the org is used. Produces an evidence-tier grade (A-D) and concrete ' +
-    '"flip these switches to see more" recommendations. Entirely local and deterministic — the only network ' +
+    '"flip these switches to see more" recommendations. Entirely local and deterministic. The only network ' +
     'calls are read-only queries to the authenticated org.';
   public static examples = [
     '<%= config.bin %> <%= command.id %> --target-org myOrg',

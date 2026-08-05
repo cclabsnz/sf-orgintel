@@ -1,6 +1,6 @@
 # @cclabsnz/sf-orgintel
 
-> Understand how a Salesforce org actually works — its processes, people, and couplings — from metadata and behavioral data, entirely locally.
+> Understand how a Salesforce org actually works (its processes, people, and couplings) from metadata and behavioral data, entirely locally.
 
 A read-only `sf` CLI plugin that analyses an org's metadata and behavioural tables to reveal
 how it is actually used. Where a security audit answers *"how secure is this org,"* OrgIntel
@@ -14,8 +14,8 @@ no analytics. Same org in, same findings out.
 
 | Command | Answers |
 | --- | --- |
-| `sf intel probe` | *What can this org tell us about itself?* — a capability & evidence-coverage probe. |
-| `sf intel discover` | *Where do this org's business processes live?* — anchor-object ranking + domain fingerprint. |
+| `sf intel probe` | *What can this org tell us about itself?* A capability & evidence-coverage probe. |
+| `sf intel discover` | *Where do this org's business processes live?* Anchor-object ranking + domain fingerprint. |
 | `sf intel map` | *Which objects are coupled into cross-cutting processes, and by what automation?* |
 
 Every command supports `--json` (machine output) and `--target-org` per `sf` convention, and
@@ -30,8 +30,8 @@ so a low-privilege user still gets a partial, clearly-labelled result. See
 
 ### `sf intel probe`
 
-*What can this org tell us about itself?* Grades the org's **evidence tier** — how much of its
-own behaviour it can actually evidence — from Event Monitoring availability, field-history
+*What can this org tell us about itself?* Grades the org's **evidence tier**, meaning how much of its
+own behaviour it can actually evidence, from Event Monitoring availability, field-history
 tracking and the standard behavioural tables.
 
 | Flag | Purpose |
@@ -47,15 +47,15 @@ tracking and the standard behavioural tables.
 | A | Full Event Monitoring **and** Field Audit Trail |
 | B | Standard behavioural tables readable, with data |
 | C | Metadata and snapshots only |
-| D | Not even describable — prospective collection recommended |
+| D | Not even describable; prospective collection recommended |
 
 Run this first: `intel map` reports the tier it measured, and without a probe it reports
 `not measured` rather than inventing one.
 
 ### `sf intel discover`
 
-*Where do this org's business processes live?* Ranks **anchor objects** — those carrying real
-process — and builds a domain fingerprint (installed packages, record types, automation
+*Where do this org's business processes live?* Ranks **anchor objects**, those carrying real
+process, and builds a domain fingerprint (installed packages, record types, automation
 density). Each candidate carries its score, per-signal contributions and human-readable
 evidence, so a ranking can be defended rather than just quoted.
 
@@ -99,8 +99,8 @@ average degree of 2 the graph is a forest and is split structurally; above it, L
 modularity runs with its resolution tuned to `--domain-size`.
 
 **Evidence quality is reported, not assumed.** Each contributing component is marked `high`
-(parsed structure) or `approximate` (regex fallback), and any source that could not be read —
-an unqueryable object, a managed-package flow, a capped record-count sweep — appears in the
+(parsed structure) or `approximate` (regex fallback), and any source that could not be read
+(an unqueryable object, a managed-package flow, a capped record-count sweep) appears in the
 run's notes rather than being silently dropped.
 
 ## Caching
@@ -120,7 +120,7 @@ sf intel probe --target-org <alias>
 
 ## Trust & verification
 
-The two claims at the top of this README — strictly read-only, and local-first — are enforced
+The two claims at the top of this README, strictly read-only and local-first, are enforced
 as tests, not asserted in prose:
 
 - **Read-only.** `test/unit/invariants/readonly-invariant.test.ts` statically scans this
@@ -140,6 +140,6 @@ Run both yourself:
 pnpm --filter @cclabsnz/sf-orgintel test test/unit/invariants
 ```
 
-Analysis is also **deterministic** — same org in, same findings out — and cached under
+Analysis is also **deterministic** (same org in, same findings out) and cached under
 `~/.orgintel/cache/<orgId>` keyed by a content hash of the component analysed, so the cache
 is a pure memo and never changes a result.
