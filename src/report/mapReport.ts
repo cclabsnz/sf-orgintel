@@ -68,7 +68,7 @@ export function renderMapHtml(input: MapReportInput): string {
 
 function summarySection(i: MapReportInput): string {
   const rows: Array<[string, string]> = [
-    ['Evidence tier', i.evidenceTier ?? 'Not measured — run `sf intel probe`'],
+    ['Evidence tier', i.evidenceTier ?? 'Not measured: run `sf intel probe`'],
     ['Objects', String(i.couplingGraph.nodes.length)],
     ['Coupled pairs', String(i.couplingGraph.edges.length)],
     ['Domains (clusters)', String(i.clusters.length)],
@@ -112,9 +112,9 @@ function coverageSection(i: MapReportInput): string {
   return `<h2>Coverage and confidence</h2>
 <p class="chip ${tone}" style="display:inline-block">${esc(coverageHeadline(s))}</p>
 <p class="muted">Exact evidence means an Apex SymbolTable or parsed Flow XML named the object.
-Approximate means it was matched by regex in an Apex body with no SymbolTable — a real signal,
-but one that can miss references and invent them. An edge counts as exact only when every
-contributing component is exact.</p>
+Approximate means it was matched by regex in an Apex body with no SymbolTable. That is a real
+signal, but one that can miss references and invent them. An edge counts as exact only when
+every contributing component is exact.</p>
 <table><thead><tr><th>Coupled pairs by evidence</th><th class="num">Count</th><th>Share</th><th></th></tr></thead>
 <tbody>${bars}</tbody></table>
 <h3 style="font-size:15px;margin-top:22px">Not analysed</h3>

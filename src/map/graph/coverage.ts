@@ -78,7 +78,7 @@ export function coverageHeadline(s: CoverageSummary): string {
   const pct = Math.round(s.approximateShare * 100);
   if (pct === 0) return 'Every coupling is backed by exact evidence (Apex SymbolTable or Flow XML).';
   return (
-    `${pct}% of coupling evidence is approximate — inferred by regex from Apex bodies that had ` +
+    `${pct}% of coupling evidence is approximate: inferred by regex from Apex bodies that had ` +
     'no SymbolTable. Treat those couplings as leads, not facts.'
   );
 }

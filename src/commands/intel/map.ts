@@ -25,7 +25,7 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
     'coupling graph: object-pair couplings aggregated across flows, triggers, and classes with weights, ' +
     'operations, contributing components, and confidence. Emits coupling-graph.json and landscape-manifest.json ' +
     '(versioned IR contracts) and, with --html, a branded report with a static coupling graph. Read-only and ' +
-    'deterministic — same org in, same graph out.';
+    'deterministic: same org in, same graph out.';
   public static examples = [
     '<%= config.bin %> <%= command.id %> --target-org myOrg',
     '<%= config.bin %> <%= command.id %> --target-org myOrg --html --output ./reports',
@@ -62,7 +62,7 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
     }),
     'top-layout': Flags.integer({
       summary: 'Objects to draw in the HTML coupling picture (default 20).',
-      description: 'Affects the report visual only — the landscape manifest lays out every object.',
+      description: 'Affects the report visual only. The landscape manifest lays out every object.',
       min: 2,
     }),
     'max-node-counts': Flags.integer({
