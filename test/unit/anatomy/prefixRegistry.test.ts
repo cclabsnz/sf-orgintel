@@ -60,10 +60,10 @@ describe('buildPrefixRegistry', () => {
   });
 
   it('is deterministic and sorted', () => {
-    const src = { apps: ['B_App', 'A_App'], packages: [], recordTypes: [] };
-    const one = buildPrefixRegistry(names({ B: 30, A: 30 }), src);
-    const two = buildPrefixRegistry(names({ A: 30, B: 30 }), src);
-    expect(one.products.map((p) => p.key)).toEqual(['A', 'B']);
+    const src = { apps: ['BBB_App', 'AAA_App'], packages: [], recordTypes: [] };
+    const one = buildPrefixRegistry(names({ BBB: 30, AAA: 30 }), src);
+    const two = buildPrefixRegistry(names({ AAA: 30, BBB: 30 }), src);
+    expect(one.products.map((p) => p.key)).toEqual(['AAA', 'BBB']);
     expect(one).toEqual(two);
   });
 

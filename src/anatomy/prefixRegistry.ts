@@ -26,7 +26,7 @@ const UTILITY = new Set([
 function candidateOf(name: string): string | null {
   const m = /^([A-Za-z][A-Za-z0-9]*?)(?:_|(?=[A-Z][a-z]))/.exec(name);
   const tok = m?.[1];
-  return tok && tok.length >= 1 && tok.length <= 12 ? tok : null;
+  return tok && tok.length >= 2 && tok.length <= 12 ? tok : null;
 }
 
 export function buildPrefixRegistry(
