@@ -12,13 +12,17 @@ describe('collectProducts', () => {
       ctx({
         tooling: mockTooling([
           { test: (s) => s.includes('CustomApplication'), records: [{ DeveloperName: 'ACME_Console' }] },
-          { test: (s) => s.includes('InstalledSubscriberPackage'), records: [] },
+          { test: (s) => s.includes('InstalledSubscriberPackage'), records: [
+            { SubscriberPackage: { NamespacePrefix: 'acme' } },
+            { SubscriberPackage: { NamespacePrefix: null } },
+          ] },
         ]),
         soql: mockSoql([{ test: (s) => s.includes('RecordType'), records: [{ DeveloperName: 'ACME_Request' }] }]),
       }),
       notes,
     );
     expect(out.apps).toEqual(['ACME_Console']);
+    expect(out.packages).toEqual(['acme']);
     expect(out.recordTypes).toEqual(['ACME_Request']);
     expect(notes).toEqual([]);
   });
