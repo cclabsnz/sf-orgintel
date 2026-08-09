@@ -714,16 +714,18 @@ async function safe<T>(label: string, notes: string[], fn: () => Promise<T[]>): 
 }
 
 export async function collectProducts(ctx: IntelContext, notes: string[]): Promise<RegistrySourceNames> {
+  // NOTE: ToolingClient.query resolves to T[] directly. It has no `.records` and no
+  // `.totalSize`, unlike SoqlClient.query which returns a QueryResult.
   const apps = await safe('CustomApplication', notes, async () =>
     (await ctx.tooling.query<{ DeveloperName: string }>(
       'SELECT DeveloperName FROM CustomApplication WHERE NamespacePrefix = null',
-    )).records.map((r) => r.DeveloperName),
+    )).map((r) => r.DeveloperName),
   );
 
   const packages = await safe('InstalledSubscriberPackage', notes, async () =>
     (await ctx.tooling.query<{ SubscriberPackage: { NamespacePrefix: string | null } }>(
       'SELECT SubscriberPackage.NamespacePrefix FROM InstalledSubscriberPackage',
-    )).records.map((r) => r.SubscriberPackage?.NamespacePrefix ?? '').filter((s) => s.length > 0),
+    )).map((r) => r.SubscriberPackage?.NamespacePrefix ?? '').filter((s) => s.length > 0),
   );
 
   const recordTypes = await safe('RecordType', notes, async () =>
@@ -904,9 +906,18 @@ Expected: FAIL, modules not found.
 import type { IntelContext } from '../../lib/wire.js';
 import type { Capabilities } from '../types.js';
 
+/**
+ * Count via a COUNT(Id) aggregate rather than COUNT().
+ *
+ * ToolingClient.query resolves to T[] and drops the QueryResult wrapper, so `totalSize` is
+ * not available through it. COUNT(Id) returns a single row carrying `expr0`, which survives
+ * that. Several of the objects counted here (LightningComponentBundle, AuraDefinitionBundle,
+ * RemoteProxy) are Tooling-only, so the data API is not an alternative.
+ */
 async function count(ctx: IntelContext, notes: string[], label: string, soql: string): Promise<number> {
   try {
-    return (await ctx.tooling.query(soql)).totalSize ?? 0;
+    const rows = await ctx.tooling.query<{ expr0?: number }>(soql);
+    return Number(rows[0]?.expr0 ?? 0);
   } catch (e) {
     notes.push(`${label} count unavailable: ${e instanceof Error ? e.message : String(e)}`);
     return 0;
@@ -935,14 +946,14 @@ export async function collectCapabilities(ctx: IntelContext, notes: string[]): P
   }
 
   return {
-    apexClasses: await count(ctx, notes, 'ApexClass', 'SELECT COUNT() FROM ApexClass'),
-    apexTriggers: await count(ctx, notes, 'ApexTrigger', 'SELECT COUNT() FROM ApexTrigger'),
-    flows: await count(ctx, notes, 'FlowDefinition', 'SELECT COUNT() FROM FlowDefinition'),
-    lwc: await count(ctx, notes, 'LightningComponentBundle', 'SELECT COUNT() FROM LightningComponentBundle'),
-    aura: await count(ctx, notes, 'AuraDefinitionBundle', 'SELECT COUNT() FROM AuraDefinitionBundle'),
-    namedCredentials: await count(ctx, notes, 'NamedCredential', 'SELECT COUNT() FROM NamedCredential'),
-    externalDataSources: await count(ctx, notes, 'ExternalDataSource', 'SELECT COUNT() FROM ExternalDataSource'),
-    remoteSites: await count(ctx, notes, 'RemoteProxy', 'SELECT COUNT() FROM RemoteProxy'),
+    apexClasses: await count(ctx, notes, 'ApexClass', 'SELECT COUNT(Id) FROM ApexClass'),
+    apexTriggers: await count(ctx, notes, 'ApexTrigger', 'SELECT COUNT(Id) FROM ApexTrigger'),
+    flows: await count(ctx, notes, 'FlowDefinition', 'SELECT COUNT(Id) FROM FlowDefinition'),
+    lwc: await count(ctx, notes, 'LightningComponentBundle', 'SELECT COUNT(Id) FROM LightningComponentBundle'),
+    aura: await count(ctx, notes, 'AuraDefinitionBundle', 'SELECT COUNT(Id) FROM AuraDefinitionBundle'),
+    namedCredentials: await count(ctx, notes, 'NamedCredential', 'SELECT COUNT(Id) FROM NamedCredential'),
+    externalDataSources: await count(ctx, notes, 'ExternalDataSource', 'SELECT COUNT(Id) FROM ExternalDataSource'),
+    remoteSites: await count(ctx, notes, 'RemoteProxy', 'SELECT COUNT(Id) FROM RemoteProxy'),
     platformEvents: platformEvents.sort(),
     changeDataCapture: changeDataCapture.sort(),
     eventRelayConfigured,
@@ -962,7 +973,7 @@ export async function collectIdentity(ctx: IntelContext, notes: string[]): Promi
   const ssoConfigs: SsoConfig[] = [];
   try {
     const rows = await ctx.tooling.query<{ Issuer?: string }>('SELECT Issuer FROM SamlSsoConfig');
-    for (const r of rows.records) {
+    for (const r of rows) {
       ssoConfigs.push({ type: 'saml', issuer: r.Issuer ?? null, identityMapping: null, userProvisioning: false });
     }
   } catch (e) {
@@ -1164,10 +1175,11 @@ export async function collectIntegrationEdges(
   let apexBodiesUnreadable = 0;
 
   try {
+    // ToolingClient.query resolves to T[] directly; there is no `.records` wrapper.
     const rows = await ctx.tooling.query<{ Name: string; Body: string | null }>(
       'SELECT Id, Name, Body FROM ApexClass WHERE NamespacePrefix = null ORDER BY Id',
     );
-    for (const r of rows.records) {
+    for (const r of rows) {
       if (typeof r.Body !== 'string' || r.Body.length === 0) {
         apexBodiesUnreadable += 1;
         continue;
