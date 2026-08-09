@@ -54,6 +54,17 @@ describe('resolveChains', () => {
     );
     expect(out.map((e) => e.endpoint)).toEqual(['A_API', 'B_API']);
   });
+
+  it('gives sibling edges their own via array, so mutating one cannot corrupt the others', () => {
+    // A shared array instance across edges emitted for the same class would let a later
+    // enrichment pass that appends a hop to one edge silently rewrite every sibling's chain.
+    const out = resolveChains(
+      [{ omniProcess: 'P', remoteClass: 'C' }],
+      new Map([['C', ['A_API', 'B_API']]]),
+    );
+    expect(out[0].via).not.toBe(out[1].via);
+    expect(out[0].via).toEqual(out[1].via);
+  });
 });
 
 describe('attributeEdges', () => {
@@ -111,5 +122,14 @@ describe('attributeEdges', () => {
     const input = [edge({ via: [{ type: 'ApexClass', name: 'ACME_X' }] })];
     attributeEdges(input, registry([['ACME', 'ACME']]));
     expect(input[0].from).toBeNull();
+  });
+
+  it('does not let output edges alias the via array of their input edge', () => {
+    // A shallow spread of the input edge would otherwise carry the same via array reference
+    // straight into the output, so mutating the output's via would corrupt the input's too.
+    const input = [edge({ via: [{ type: 'ApexClass', name: 'ACME_X' }] })];
+    const [out] = attributeEdges(input, registry([['ACME', 'ACME']]));
+    expect(out.via).not.toBe(input[0].via);
+    expect(out.via).toEqual(input[0].via);
   });
 });

@@ -28,11 +28,13 @@ export function resolveChains(
     const endpoints = apexCallouts.get(ref.remoteClass) ?? [];
     if (endpoints.length === 0) {
       // Unreadable or callout-free class. The procedure still reached out; we cannot say where.
-      out.push({ endpoint: null, from: null, via, detection: 'remoteActionChain', attribution: 'unattributed' });
+      out.push({ endpoint: null, from: null, via: [...via], detection: 'remoteActionChain', attribution: 'unattributed' });
       continue;
     }
     for (const endpoint of endpoints) {
-      out.push({ endpoint, from: null, via, detection: 'remoteActionChain', attribution: 'unattributed' });
+      // Each sibling edge gets its own via array. Sharing one instance across edges emitted
+      // for the same class would let a later mutation on one edge silently corrupt the rest.
+      out.push({ endpoint, from: null, via: [...via], detection: 'remoteActionChain', attribution: 'unattributed' });
     }
   }
   return out;
@@ -60,8 +62,10 @@ export function attributeEdges(
   return edges.map((e) => {
     for (const hop of e.via) {
       const product = productFor(hop.name, registry);
-      if (product) return { ...e, from: product, attribution: 'prefixMatch' };
+      // Clone via so the output never aliases the input's array; a shallow spread of e would
+      // otherwise carry the same array reference straight through.
+      if (product) return { ...e, from: product, attribution: 'prefixMatch', via: [...e.via] };
     }
-    return { ...e, from: null, attribution: 'unattributed' };
+    return { ...e, from: null, attribution: 'unattributed', via: [...e.via] };
   });
 }
