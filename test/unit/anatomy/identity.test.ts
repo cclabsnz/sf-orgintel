@@ -14,9 +14,14 @@ describe('collectIdentity', () => {
       notes,
     );
     expect(out.loginsByType).toHaveLength(2);
-    const serialised = JSON.stringify(out);
-    for (const word of ['risk', 'weak', 'insecure', 'recommend', 'should']) {
-      expect(serialised.toLowerCase()).not.toContain(word);
+
+    // A word-scan for "risk"/"should" etc. is a tautology here: Identity has no free-text
+    // field for such a word to land in, so the scan would pass even if a severity field
+    // were added. Pin the exact shape instead: adding a judgement field to the type or the
+    // collector fails this test, which is the behaviour worth protecting.
+    expect(Object.keys(out).sort()).toEqual(['loginsByType', 'ssoConfigs']);
+    for (const entry of out.loginsByType) {
+      expect(Object.keys(entry).sort()).toEqual(['application', 'count', 'loginType']);
     }
   });
 

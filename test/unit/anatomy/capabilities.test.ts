@@ -27,4 +27,30 @@ describe('collectCapabilities', () => {
     expect(out.platformEvents).toEqual(['Order__e']);
     expect(out.changeDataCapture).toEqual(['AccountChangeEvent']);
   });
+
+  it('reports eventRelayConfigured false with no note when the type is genuinely absent from the org', async () => {
+    const notes: string[] = [];
+    const out = await collectCapabilities(
+      { soql: mockSoql([{ test: (s) => s.includes('EventRelayConfig'),
+          error: new Error("INVALID_TYPE: sObject type 'EventRelayConfig' is not supported.") }]),
+        tooling: mockTooling([{ test: () => true, records: [] }]),
+        rest: mockRest([]) } as any,
+      notes,
+    );
+    expect(out.eventRelayConfigured).toBe(false);
+    expect(notes.some((n) => n.toLowerCase().includes('eventrelay'))).toBe(false);
+  });
+
+  it('reports eventRelayConfigured false with a note when the read is refused, not absent', async () => {
+    const notes: string[] = [];
+    const out = await collectCapabilities(
+      { soql: mockSoql([{ test: (s) => s.includes('EventRelayConfig'),
+          error: new Error('INSUFFICIENT_ACCESS: insufficient access rights on cross-reference id') }]),
+        tooling: mockTooling([{ test: () => true, records: [] }]),
+        rest: mockRest([]) } as any,
+      notes,
+    );
+    expect(out.eventRelayConfigured).toBe(false);
+    expect(notes.some((n) => n.toLowerCase().includes('eventrelay'))).toBe(true);
+  });
 });

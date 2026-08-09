@@ -38,8 +38,15 @@ export async function collectCapabilities(ctx: IntelContext, notes: string[]): P
   let eventRelayConfigured = false;
   try {
     eventRelayConfigured = ((await ctx.soql.query('SELECT Id FROM EventRelayConfig LIMIT 1')).totalSize ?? 0) > 0;
-  } catch {
-    // Not queryable on orgs without the feature. Absence is the finding; no note needed.
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    // A missing sObject type means the feature is genuinely absent on this org. Absence
+    // is the finding there, so no note. Anything else (access or permission errors, for
+    // example) is a failed read, not an absent feature, and must say so: otherwise a
+    // refused read is indistinguishable from a real "there is none" in the artifact.
+    if (!/INVALID_TYPE|not supported/i.test(message)) {
+      notes.push(`EventRelayConfig read unavailable: ${message}`);
+    }
   }
 
   return {
