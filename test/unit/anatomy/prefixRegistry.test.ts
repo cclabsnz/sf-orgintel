@@ -40,6 +40,36 @@ describe('buildPrefixRegistry', () => {
     });
     expect(r.products.map((p) => p.key)).toEqual(['ACME']);
     expect(r.products[0].componentCount).toBe(50);
+    expect(r.products[0].prefixes).toEqual(['ACME', 'ACMEX']);
+    expect(r.byPrefix.get('ACMEX')).toBe('ACME');
+  });
+
+  it('matches a source when the candidate is followed by an underscore', () => {
+    // A boundary check must still recognise the ordinary case: a candidate that is a genuine
+    // leading segment of the source name, separated by an underscore.
+    const r = buildPrefixRegistry(names({ DELTA: 20 }), { apps: ['DELTA_Console'], packages: [], recordTypes: [] });
+    expect(r.products.map((p) => p.key)).toEqual(['DELTA']);
+  });
+
+  it('matches a source that is exactly equal to the candidate', () => {
+    // A boundary check that only looks for a following separator would miss the source name
+    // being nothing but the prefix itself, e.g. a package named identically to its namespace.
+    const r = buildPrefixRegistry(names({ EPSILON: 20 }), { apps: ['EPSILON'], packages: [], recordTypes: [] });
+    expect(r.products.map((p) => p.key)).toEqual(['EPSILON']);
+  });
+
+  it('does not match a source that merely starts with the candidate and continues with alphanumerics', () => {
+    // The failure this guards: 'CONNECT' as a candidate must not spuriously match
+    // 'ConnectedShipping_App', an unrelated application, the same class of bug as 'Log'
+    // matching 'Logistics_App' on a real org. A bare startsWith would resolve this; the
+    // token-boundary check must reject it and leave the candidate unresolved.
+    const r = buildPrefixRegistry(names({ CONNECT: 20 }), {
+      apps: ['ConnectedShipping_App'],
+      packages: [],
+      recordTypes: [],
+    });
+    expect(r.products).toEqual([]);
+    expect(r.unresolved).toEqual(['CONNECT']);
   });
 
   it('accepts a package or a record type as a source, not only an app', () => {

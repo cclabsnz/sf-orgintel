@@ -55,14 +55,33 @@ export function buildPrefixRegistry(
     merged.set(root, (merged.get(root) ?? 0) + n);
   }
 
+  // Track every candidate that was merged into each canonical root, so the product it becomes
+  // can report the full set of prefixes it absorbed.
+  const membersByRoot = new Map<string, string[]>();
+  for (const key of counts.keys()) {
+    const root = canonical.get(key) ?? key;
+    const members = membersByRoot.get(root) ?? [];
+    members.push(key);
+    membersByRoot.set(root, members);
+  }
+
   const total = componentNames.length;
   const floor = Math.max(3, Math.round(total * 0.01));
 
+  // A candidate must match a source at a token boundary: the source name is either exactly the
+  // candidate, or the candidate followed by a non-alphanumeric separator. A bare startsWith
+  // would let 'CONNECT' match 'ConnectedShipping_App', an unrelated application, the same way
+  // 'Log' matched 'Logistics_App' on a real org.
   const matchSource = (key: string): Product['source'] | null => {
-    const starts = (s: string): boolean => s.toUpperCase().startsWith(key);
-    if (sources.apps.some(starts)) return 'app';
-    if (sources.packages.some(starts)) return 'package';
-    if (sources.recordTypes.some(starts)) return 'recordType';
+    const matchesBoundary = (s: string): boolean => {
+      const upper = s.toUpperCase();
+      if (!upper.startsWith(key)) return false;
+      const next = upper.charAt(key.length);
+      return next === '' || !/[A-Z0-9]/.test(next);
+    };
+    if (sources.apps.some(matchesBoundary)) return 'app';
+    if (sources.packages.some(matchesBoundary)) return 'package';
+    if (sources.recordTypes.some(matchesBoundary)) return 'recordType';
     return null;
   };
 
@@ -77,8 +96,9 @@ export function buildPrefixRegistry(
       unresolved.push(key);
       continue;
     }
-    products.push({ key, label: key, source, componentCount: count, prefixes: [key] });
-    byPrefix.set(key, key);
+    const prefixes = (membersByRoot.get(key) ?? [key]).slice().sort();
+    products.push({ key, label: key, source, componentCount: count, prefixes });
+    for (const prefix of prefixes) byPrefix.set(prefix, key);
   }
 
   return { byPrefix, products, unresolved: unresolved.sort() };
