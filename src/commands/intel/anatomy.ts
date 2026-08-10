@@ -26,7 +26,6 @@ export default class IntelAnatomyCommand extends SfCommand<AnatomyArtifact> {
   public static flags = {
     'target-org': Flags.requiredOrg(),
     output: Flags.string({
-      char: 'o',
       summary: 'Directory to write anatomy.json to.',
       default: '.',
     }),
