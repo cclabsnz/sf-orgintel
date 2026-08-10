@@ -4,15 +4,24 @@ import type { IntelContext } from '../../lib/wire.js';
 import type { Persona } from '../types.js';
 
 interface UserRow {
-  Profile?: { Name?: string; UserLicense?: { Name?: string } };
-  expr0?: number;
+  profileName?: string;
+  licenceName?: string;
+  userCount?: number;
 }
 
 export async function collectPersonas(ctx: IntelContext, notes: string[]): Promise<Persona[]> {
   let rows: UserRow[] = [];
   try {
+    // Profile.Name and Profile.UserLicense.Name both terminate in a field literally called
+    // `Name`. Left unaliased, Salesforce assigns each the implicit alias of its last path
+    // segment, so the two collide and the org rejects the query with
+    // "MALFORMED_QUERY: duplicate alias: Name". Aliasing is valid on any field, not only
+    // aggregates, in a query that already has a GROUP BY, so giving each grouped field its own
+    // alias (per Salesforce's "Use Aliases with GROUP BY" reference) resolves the collision.
+    // GROUP BY still names the original field paths, not the aliases.
     rows = await ctx.soql.queryAll<UserRow>(
-      'SELECT Profile.Name, Profile.UserLicense.Name, COUNT(Id) FROM User WHERE IsActive = true GROUP BY Profile.Name, Profile.UserLicense.Name',
+      'SELECT Profile.Name profileName, Profile.UserLicense.Name licenceName, COUNT(Id) userCount ' +
+        'FROM User WHERE IsActive = true GROUP BY Profile.Name, Profile.UserLicense.Name',
     );
   } catch (e) {
     notes.push(`Active user counts could not be read: ${e instanceof Error ? e.message : String(e)}`);
@@ -21,9 +30,9 @@ export async function collectPersonas(ctx: IntelContext, notes: string[]): Promi
 
   return rows
     .map((r) => ({
-      profile: r.Profile?.Name ?? 'unknown',
-      licence: r.Profile?.UserLicense?.Name ?? 'unknown',
-      activeUsers: Number(r.expr0 ?? 0),
+      profile: r.profileName ?? 'unknown',
+      licence: r.licenceName ?? 'unknown',
+      activeUsers: Number(r.userCount ?? 0),
       landingApp: null,
     }))
     .sort((a, b) => a.profile.localeCompare(b.profile));

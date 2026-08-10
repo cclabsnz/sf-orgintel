@@ -17,6 +17,10 @@ export interface IntegrationEdgeInput {
   apexBodiesUnreadable: number;
   omniElementsScanned: number;
   omniProceduresTotal: number;
+  /** DeveloperName of every NamedCredential, sorted. Feeds `endpointOnly` detection. */
+  namedCredentials: string[];
+  /** SiteName of every RemoteProxy (Remote Site Setting), sorted. Feeds `endpointOnly` detection. */
+  remoteProxies: string[];
 }
 
 /** `callout:<name>` is the only confirmed outbound reference obtainable from a body. */
@@ -70,10 +74,53 @@ export async function collectIntegrationEdges(
       }
       apexBodiesScanned += 1;
       const found = extractCallouts(r.Body);
-      if (found.length > 0) apexCallouts.set(r.Name, found);
+      if (found.length > 0) {
+        apexCallouts.set(r.Name, found);
+        // A callout is real evidence of an outbound call on its own: it must not depend on an
+        // OmniStudio Remote Action happening to name this class, or a callout in a class
+        // nobody in OmniStudio calls is found, counted in apexBodiesScanned, and then dropped.
+        for (const endpoint of found) {
+          direct.push({
+            endpoint,
+            from: null,
+            via: [{ type: 'ApexClass', name: r.Name }],
+            detection: 'apexCallout',
+            attribution: 'unattributed',
+          });
+        }
+      }
     }
   } catch (e) {
     notes.push(`Apex bodies could not be read: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  // NamedCredential and RemoteProxy are Tooling-only objects, same as the counts in
+  // collectCapabilities. Read here (not there) because these need the names, not a count, to
+  // find endpoints that exist but that no other edge already reaches.
+  let namedCredentials: string[] = [];
+  try {
+    const rows = await ctx.tooling.query<{ DeveloperName?: string }>(
+      'SELECT DeveloperName FROM NamedCredential ORDER BY DeveloperName',
+    );
+    namedCredentials = rows
+      .map((r) => r.DeveloperName)
+      .filter((n): n is string => typeof n === 'string' && n.length > 0)
+      .sort();
+  } catch (e) {
+    notes.push(`Named credentials could not be read: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  let remoteProxies: string[] = [];
+  try {
+    const rows = await ctx.tooling.query<{ SiteName?: string }>(
+      'SELECT SiteName FROM RemoteProxy ORDER BY SiteName',
+    );
+    remoteProxies = rows
+      .map((r) => r.SiteName)
+      .filter((n): n is string => typeof n === 'string' && n.length > 0)
+      .sort();
+  } catch (e) {
+    notes.push(`Remote site settings could not be read: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   const remoteActions: RemoteActionRef[] = [];
@@ -126,5 +173,7 @@ export async function collectIntegrationEdges(
     apexBodiesUnreadable,
     omniElementsScanned,
     omniProceduresTotal,
+    namedCredentials,
+    remoteProxies,
   };
 }

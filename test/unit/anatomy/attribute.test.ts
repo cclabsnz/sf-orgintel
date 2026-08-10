@@ -1,5 +1,5 @@
 // test/unit/anatomy/attribute.test.ts
-import { attributeEdges, resolveChains } from '../../../src/anatomy/attribute.js';
+import { addEndpointOnlyEdges, attributeEdges, resolveChains } from '../../../src/anatomy/attribute.js';
 import type { IntegrationEdge, PrefixRegistry } from '../../../src/anatomy/types.js';
 
 const registry = (pairs: Array<[string, string]>): PrefixRegistry => ({
@@ -131,5 +131,51 @@ describe('attributeEdges', () => {
     const [out] = attributeEdges(input, registry([['ACME', 'ACME']]));
     expect(out.via).not.toBe(input[0].via);
     expect(out.via).toEqual(input[0].via);
+  });
+});
+
+describe('addEndpointOnlyEdges', () => {
+  it('emits an endpointOnly edge for a named credential referenced by nothing', () => {
+    const out = addEndpointOnlyEdges([], ['Orphan_API'], []);
+    expect(out).toEqual([
+      {
+        endpoint: 'Orphan_API',
+        from: null,
+        via: [{ type: 'NamedCredential', name: 'Orphan_API' }],
+        detection: 'endpointOnly',
+        attribution: 'unattributed',
+      },
+    ]);
+  });
+
+  it('emits an endpointOnly edge for a remote site referenced by nothing', () => {
+    const out = addEndpointOnlyEdges([], [], ['Legacy_Site']);
+    expect(out).toEqual([
+      {
+        endpoint: 'Legacy_Site',
+        from: null,
+        via: [{ type: 'RemoteProxy', name: 'Legacy_Site' }],
+        detection: 'endpointOnly',
+        attribution: 'unattributed',
+      },
+    ]);
+  });
+
+  it('does not duplicate a named credential already referenced by a REST Action', () => {
+    const existing = edge({
+      endpoint: 'Payments_API',
+      via: [{ type: 'OmniProcess', name: 'ACME_GetThing' }],
+      detection: 'namedCredential',
+    });
+    const out = addEndpointOnlyEdges([existing], ['Payments_API'], []);
+    expect(out).toEqual([existing]);
+    expect(out.filter((e) => e.detection === 'endpointOnly')).toHaveLength(0);
+  });
+
+  it('does not duplicate an endpoint already reached by an apexCallout or remoteActionChain edge', () => {
+    const apexEdge = edge({ endpoint: 'Payments_API', detection: 'apexCallout' });
+    const chainEdge = edge({ endpoint: 'Maps_API', detection: 'remoteActionChain' });
+    const out = addEndpointOnlyEdges([apexEdge, chainEdge], ['Payments_API'], ['Maps_API']);
+    expect(out).toEqual([apexEdge, chainEdge]);
   });
 });

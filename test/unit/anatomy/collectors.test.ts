@@ -68,15 +68,34 @@ describe('collectPersonas', () => {
       ctx({
         soql: mockSoql([
           { test: (s) => s.includes('FROM User'), records: [
-            { Profile: { Name: 'Zed' }, Profile_UserLicense: null, expr0: 3 },
-            { Profile: { Name: 'Alpha' }, expr0: 7 },
+            { profileName: 'Zed', licenceName: 'Salesforce', userCount: 3 },
+            { profileName: 'Alpha', licenceName: 'Salesforce Platform', userCount: 7 },
           ] },
         ]),
       }),
       notes,
     );
     expect(out.map((p) => p.profile)).toEqual(['Alpha', 'Zed']);
-    expect(out[0].activeUsers).toBe(7);
+    expect(out[0]).toEqual({ profile: 'Alpha', licence: 'Salesforce Platform', activeUsers: 7, landingApp: null });
+    expect(notes).toEqual([]);
+  });
+
+  it('defaults a row missing its profile or licence rather than dropping it', async () => {
+    const notes: string[] = [];
+    const out = await collectPersonas(
+      ctx({
+        soql: mockSoql([
+          { test: (s) => s.includes('FROM User'), records: [
+            { licenceName: 'Salesforce', userCount: 2 },
+            { profileName: 'Beta', userCount: 5 },
+          ] },
+        ]),
+      }),
+      notes,
+    );
+    expect(out).toHaveLength(2);
+    expect(out).toContainEqual({ profile: 'unknown', licence: 'Salesforce', activeUsers: 2, landingApp: null });
+    expect(out).toContainEqual({ profile: 'Beta', licence: 'unknown', activeUsers: 5, landingApp: null });
   });
 });
 

@@ -40,6 +40,43 @@ export function resolveChains(
   return out;
 }
 
+/**
+ * Endpoints that exist as configuration, a `NamedCredential` or a `RemoteProxy`, that no
+ * detected call already reaches. Per the spec this is `endpointOnly`: the site is configured
+ * with no code path found to it. Skips any name already carried as another edge's `endpoint`,
+ * so a target already proven by a `namedCredential`, `apexCallout` or `remoteActionChain` edge
+ * does not also get a redundant, weaker `endpointOnly` sibling.
+ */
+export function addEndpointOnlyEdges(
+  edges: readonly IntegrationEdge[],
+  namedCredentials: readonly string[],
+  remoteProxies: readonly string[],
+): IntegrationEdge[] {
+  const known = new Set(edges.map((e) => e.endpoint).filter((e): e is string => e !== null));
+  const extra: IntegrationEdge[] = [];
+  for (const name of namedCredentials) {
+    if (known.has(name)) continue;
+    extra.push({
+      endpoint: name,
+      from: null,
+      via: [{ type: 'NamedCredential', name }],
+      detection: 'endpointOnly',
+      attribution: 'unattributed',
+    });
+  }
+  for (const name of remoteProxies) {
+    if (known.has(name)) continue;
+    extra.push({
+      endpoint: name,
+      from: null,
+      via: [{ type: 'RemoteProxy', name }],
+      detection: 'endpointOnly',
+      attribution: 'unattributed',
+    });
+  }
+  return [...edges, ...extra];
+}
+
 /** Longest prefix wins, so ACMEX is not attributed to ACME when both are registered. */
 function productFor(name: string, registry: PrefixRegistry): string | null {
   const upper = name.toUpperCase();

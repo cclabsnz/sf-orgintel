@@ -57,4 +57,57 @@ describe('collectIntegrationEdges', () => {
     expect(out.omniElementsScanned).toBe(0);
     expect(notes.join(' ')).toContain('OmniStudio');
   });
+
+  it('emits an apexCallout edge for a callout with no OmniStudio reference to its class', async () => {
+    const notes: string[] = [];
+    const out = await collectIntegrationEdges(
+      { tooling: mockTooling([
+          { test: (s) => s.includes('FROM ApexClass'), records: [
+            { Id: '01p1', Name: 'OrphanService', Body: 'callout:Payments_API' },
+          ] },
+          { test: () => true, records: [] },
+        ]),
+        soql: mockSoql([{ test: () => true, records: [] }]) } as any,
+      notes,
+    );
+    expect(out.direct).toContainEqual({
+      endpoint: 'Payments_API',
+      from: null,
+      via: [{ type: 'ApexClass', name: 'OrphanService' }],
+      detection: 'apexCallout',
+      attribution: 'unattributed',
+    });
+  });
+
+  it('reads NamedCredential and RemoteProxy names for endpointOnly detection', async () => {
+    const notes: string[] = [];
+    const out = await collectIntegrationEdges(
+      { tooling: mockTooling([
+          { test: (s) => s.includes('FROM ApexClass'), records: [] },
+          { test: (s) => s.includes('FROM NamedCredential'), records: [{ DeveloperName: 'Payments_API' }] },
+          { test: (s) => s.includes('FROM RemoteProxy'), records: [{ SiteName: 'Legacy_Site' }] },
+        ]),
+        soql: mockSoql([{ test: () => true, records: [] }]) } as any,
+      notes,
+    );
+    expect(out.namedCredentials).toEqual(['Payments_API']);
+    expect(out.remoteProxies).toEqual(['Legacy_Site']);
+  });
+
+  it('records a note rather than throwing when NamedCredential or RemoteProxy cannot be read', async () => {
+    const notes: string[] = [];
+    const out = await collectIntegrationEdges(
+      { tooling: mockTooling([
+          { test: (s) => s.includes('FROM ApexClass'), records: [] },
+          { test: (s) => s.includes('FROM NamedCredential'), error: new Error('INSUFFICIENT_ACCESS') },
+          { test: (s) => s.includes('FROM RemoteProxy'), error: new Error('INSUFFICIENT_ACCESS') },
+        ]),
+        soql: mockSoql([{ test: () => true, records: [] }]) } as any,
+      notes,
+    );
+    expect(out.namedCredentials).toEqual([]);
+    expect(out.remoteProxies).toEqual([]);
+    expect(notes.join(' ')).toContain('Named credentials');
+    expect(notes.join(' ')).toContain('Remote site settings');
+  });
 });

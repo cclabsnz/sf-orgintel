@@ -5,7 +5,7 @@
 import type { IntelContext } from '../lib/wire.js';
 import type { AnatomyArtifact } from './types.js';
 import { buildPrefixRegistry } from './prefixRegistry.js';
-import { attributeEdges, resolveChains } from './attribute.js';
+import { addEndpointOnlyEdges, attributeEdges, resolveChains } from './attribute.js';
 import { collectProducts } from './collectors/products.js';
 import { collectPersonas } from './collectors/personas.js';
 import { collectChannels } from './collectors/channels.js';
@@ -40,7 +40,12 @@ export async function runAnatomy(
   const registry = buildPrefixRegistry(sources.componentNames, sources);
 
   const chained = resolveChains(evidence.remoteActions, evidence.apexCallouts);
-  const edges = attributeEdges([...evidence.direct, ...chained], registry).sort(
+  const withEndpoints = addEndpointOnlyEdges(
+    [...evidence.direct, ...chained],
+    evidence.namedCredentials,
+    evidence.remoteProxies,
+  );
+  const edges = attributeEdges(withEndpoints, registry).sort(
     (a, b) =>
       String(a.endpoint).localeCompare(String(b.endpoint)) ||
       String(a.via[0]?.name).localeCompare(String(b.via[0]?.name)) ||
