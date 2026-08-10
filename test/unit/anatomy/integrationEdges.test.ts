@@ -110,4 +110,71 @@ describe('collectIntegrationEdges', () => {
     expect(notes.join(' ')).toContain('Named credentials');
     expect(notes.join(' ')).toContain('Remote site settings');
   });
+
+  it('matches the platform casing "Rest Action" and produces a namedCredential edge', async () => {
+    const notes: string[] = [];
+    const out = await collectIntegrationEdges(
+      { tooling: mockTooling([{ test: () => true, records: [] }]),
+        soql: mockSoql([
+          { test: (s) => s.includes('OmniProcessElement'), records: [
+            {
+              Type: 'Rest Action',
+              PropertySetConfig: JSON.stringify({ namedCredential: 'Payments_API' }),
+              OmniProcess: { Name: 'ACME_GetThing' },
+            },
+          ] },
+          { test: () => true, records: [] },
+        ]) } as any,
+      notes,
+    );
+    expect(out.direct).toContainEqual({
+      endpoint: 'Payments_API',
+      from: null,
+      via: [{ type: 'OmniProcess', name: 'ACME_GetThing' }],
+      detection: 'namedCredential',
+      attribution: 'unattributed',
+    });
+    expect(out.remoteActions).toEqual([]);
+  });
+
+  it('still chains a "Remote Action" element to its class', async () => {
+    const notes: string[] = [];
+    const out = await collectIntegrationEdges(
+      { tooling: mockTooling([{ test: () => true, records: [] }]),
+        soql: mockSoql([
+          { test: (s) => s.includes('OmniProcessElement'), records: [
+            {
+              Type: 'Remote Action',
+              PropertySetConfig: JSON.stringify({ remoteClass: 'ACME_Service' }),
+              OmniProcess: { Name: 'ACME_GetThing' },
+            },
+          ] },
+          { test: () => true, records: [] },
+        ]) } as any,
+      notes,
+    );
+    expect(out.remoteActions).toEqual([{ omniProcess: 'ACME_GetThing', remoteClass: 'ACME_Service' }]);
+  });
+
+  it('records a note and drops the element when Type matches neither branch', async () => {
+    const notes: string[] = [];
+    const out = await collectIntegrationEdges(
+      { tooling: mockTooling([{ test: () => true, records: [] }]),
+        soql: mockSoql([
+          { test: (s) => s.includes('OmniProcessElement'), records: [
+            {
+              Type: 'DataRaptor Post Action',
+              PropertySetConfig: JSON.stringify({ sourceSystem: 'Whatever' }),
+              OmniProcess: { Name: 'ACME_GetThing' },
+            },
+          ] },
+          { test: () => true, records: [] },
+        ]) } as any,
+      notes,
+    );
+    expect(out.direct).toEqual([]);
+    expect(out.remoteActions).toEqual([]);
+    expect(notes.join(' ')).toContain('unexpected Type');
+    expect(notes.join(' ')).toContain('DataRaptor Post Action');
+  });
 });

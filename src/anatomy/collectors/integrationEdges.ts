@@ -141,7 +141,14 @@ export async function collectIntegrationEdges(
     for (const r of rows) {
       const owner = r.OmniProcess?.Name ?? 'unknown';
       procedures.add(owner);
-      if (r.Type === 'REST Action') {
+      // SOQL string comparison is case-insensitive, so the `IN ('REST Action', 'Remote Action')`
+      // filter matches what the platform actually stores: `Rest Action`, not `REST Action`. A
+      // case-sensitive `===` against the literal from the filter is false for every row, so
+      // every REST Action fell into the Remote Action branch, found no remoteClass, and vanished
+      // while still being counted in omniElementsScanned as if it had been examined. Normalise
+      // once and branch on the lowercase form instead of trusting the filter's casing.
+      const type = String(r.Type ?? '').toLowerCase();
+      if (type === 'rest action') {
         const credential = extractRestActionCredential(r.PropertySetConfig);
         if (credential) {
           direct.push({
@@ -152,9 +159,11 @@ export async function collectIntegrationEdges(
             attribution: 'unattributed',
           });
         }
-      } else {
+      } else if (type === 'remote action') {
         const remoteClass = remoteClassOf(r.PropertySetConfig);
         if (remoteClass) remoteActions.push({ omniProcess: owner, remoteClass });
+      } else {
+        notes.push(`OmniProcessElement returned an unexpected Type: ${String(r.Type)}`);
       }
     }
     omniProceduresTotal = procedures.size;
