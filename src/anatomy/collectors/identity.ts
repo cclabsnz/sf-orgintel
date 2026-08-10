@@ -32,5 +32,13 @@ export async function collectIdentity(ctx: IntelContext, notes: string[]): Promi
   }
 
   loginsByType.sort((a, b) => a.application.localeCompare(b.application) || a.loginType.localeCompare(b.loginType));
+  // Null-safe: `SamlSsoConfig` rows without an issuer are legitimate, and a plain
+  // localeCompare on a null would throw. Nulls sort first, then issuers alphabetically.
+  ssoConfigs.sort((a, b) => {
+    if (a.issuer === b.issuer) return 0;
+    if (a.issuer === null) return -1;
+    if (b.issuer === null) return 1;
+    return a.issuer.localeCompare(b.issuer);
+  });
   return { ssoConfigs, loginsByType };
 }

@@ -16,6 +16,8 @@ describe('collectProducts', () => {
             { SubscriberPackage: { NamespacePrefix: 'acme' } },
             { SubscriberPackage: { NamespacePrefix: null } },
           ] },
+          { test: (s) => s.includes('FROM ApexClass'), records: [] },
+          { test: (s) => s.includes('FROM FlowDefinition'), records: [] },
         ]),
         soql: mockSoql([{ test: (s) => s.includes('RecordType'), records: [{ DeveloperName: 'ACME_Request' }] }]),
       }),
@@ -36,9 +38,26 @@ describe('collectProducts', () => {
       }),
       notes,
     );
-    expect(out).toEqual({ apps: [], packages: [], recordTypes: [] });
+    expect(out).toEqual({ apps: [], packages: [], recordTypes: [], componentNames: [] });
     expect(notes.length).toBeGreaterThan(0);
     expect(notes.join(' ')).not.toContain('—');
+  });
+
+  it('feeds componentNames from every Apex class and Flow, sorted, not just callout carriers', async () => {
+    const notes: string[] = [];
+    const out = await collectProducts(
+      ctx({
+        tooling: mockTooling([
+          { test: (s) => s.includes('CustomApplication'), records: [] },
+          { test: (s) => s.includes('InstalledSubscriberPackage'), records: [] },
+          { test: (s) => s.includes('FROM ApexClass'), records: [{ Name: 'ZedService' }, { Name: 'AcmeHelper' }] },
+          { test: (s) => s.includes('FROM FlowDefinition'), records: [{ DeveloperName: 'Acme_Onboarding' }] },
+        ]),
+        soql: mockSoql([{ test: (s) => s.includes('RecordType'), records: [] }]),
+      }),
+      notes,
+    );
+    expect(out.componentNames).toEqual(['AcmeHelper', 'Acme_Onboarding', 'ZedService']);
   });
 });
 

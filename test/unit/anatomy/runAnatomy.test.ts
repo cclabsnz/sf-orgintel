@@ -26,6 +26,41 @@ describe('runAnatomy', () => {
     expect(JSON.stringify(one)).toBe(JSON.stringify(two));
   });
 
+  it('gives a total order to edges tying on endpoint and first hop', async () => {
+    // Two remote-action chains from the same OmniProcess to two different unreadable Apex
+    // classes: both endpoints are null and via[0] is the same OmniProcess, so the sort must
+    // fall through to later tiebreakers (the rest of the via chain) rather than depending on
+    // sort stability and the incidental order these rows arrived in.
+    const ctx: any = {
+      soql: mockSoql([
+        {
+          test: (s: string) => s.includes('OmniProcessElement'),
+          records: [
+            {
+              Type: 'Remote Action',
+              PropertySetConfig: JSON.stringify({ remoteClass: 'ZedUnreadable' }),
+              OmniProcess: { Name: 'Onboarding' },
+            },
+            {
+              Type: 'Remote Action',
+              PropertySetConfig: JSON.stringify({ remoteClass: 'AlphaUnreadable' }),
+              OmniProcess: { Name: 'Onboarding' },
+            },
+          ],
+        },
+        { test: () => true, records: [], totalSize: 0 },
+      ]),
+      tooling: mockTooling([{ test: () => true, records: [] }]),
+      rest: mockRest([]),
+      metadata: { list: async () => [] },
+    };
+    const a = await runAnatomy(ctx, prov);
+    expect(a.edges).toHaveLength(2);
+    expect(a.edges.every((e) => e.endpoint === null)).toBe(true);
+    expect(a.edges.every((e) => e.via[0]?.name === 'Onboarding')).toBe(true);
+    expect(a.edges.map((e) => e.via[1]?.name)).toEqual(['AlphaUnreadable', 'ZedUnreadable']);
+  });
+
   it('never throws when every read fails', async () => {
     const broken = (): any => ({
       soql: mockSoql([{ test: () => true, error: new Error('denied') }]),

@@ -33,15 +33,20 @@ export async function runAnatomy(
   const identity = await collectIdentity(ctx, notes);
   const evidence = await collectIntegrationEdges(ctx, notes);
 
-  // Component names for the registry: the classes we could read plus their callers.
-  const componentNames = [...evidence.apexCallouts.keys()].sort();
-  const registry = buildPrefixRegistry(componentNames, sources);
+  // Component names for the registry: every org-authored Apex class and Flow, the population
+  // the frequency floor is calibrated against. Not the (much narrower) set of classes that
+  // happen to carry a callout: that would bias `products` toward whatever makes outbound
+  // calls and drop every product that does not.
+  const registry = buildPrefixRegistry(sources.componentNames, sources);
 
   const chained = resolveChains(evidence.remoteActions, evidence.apexCallouts);
   const edges = attributeEdges([...evidence.direct, ...chained], registry).sort(
     (a, b) =>
       String(a.endpoint).localeCompare(String(b.endpoint)) ||
-      String(a.via[0]?.name).localeCompare(String(b.via[0]?.name)),
+      String(a.via[0]?.name).localeCompare(String(b.via[0]?.name)) ||
+      a.via.map((h) => h.name).join('>').localeCompare(b.via.map((h) => h.name).join('>')) ||
+      a.detection.localeCompare(b.detection) ||
+      a.attribution.localeCompare(b.attribution),
   );
 
   return {
@@ -59,7 +64,10 @@ export async function runAnatomy(
       omniElementsScanned: evidence.omniElementsScanned,
       omniProceduresTotal: evidence.omniProceduresTotal,
       prefixesUnresolved: registry.unresolved,
-      notes: notes.slice().sort(),
+      // Collectors run sequentially, so `notes` is already deterministic. Insertion order is
+      // kept, not alphabetised: it is the order failures occurred in, which is diagnostic
+      // information an alphabetical sort would discard for no determinism benefit.
+      notes,
     },
   };
 }
