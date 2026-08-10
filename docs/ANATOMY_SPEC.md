@@ -208,6 +208,14 @@ Procedure is recorded with no endpoint and counted in coverage.
 `DataRaptor Post Action` elements carry a `sourceSystem` key and there are 52 of them on the
 probe org. Not used in phase 1, and noted here so it is not rediscovered as novel later.
 
+**The stored `Type` value is `Rest Action`, not `REST Action`.** SOQL string comparison is
+case-insensitive, so the `IN` filter above matches regardless, but any code branching on the
+returned value must compare case-insensitively. Taking the literal from a query rather than
+from returned data cost a full round here: all thirteen REST Action elements were silently
+routed to the Remote Action branch, dropped for having no `remoteClass`, and still counted in
+`omniElementsScanned`. Reporting something as scanned while discarding it is the one failure
+this artifact must never commit.
+
 ### 5.3 The prefix registry
 
 1. Collect org-authored component names, namespace-free.
@@ -291,6 +299,31 @@ Fixtures are built from the *shapes* observed on the three probe orgs, not their
    asked this of `Case.RecordType` only; the probe showed the registry needs it more.
 6. Read-only and network-egress invariants pass.
 
+## 9a. Measured on two orgs
+
+Both runs read-only, both deterministic across consecutive runs.
+
+| | Org A | Org B |
+| --- | --- | --- |
+| Products | 5 (2 app, 3 recordType) | 2 (1 app, 1 package) |
+| Personas | 12 | 13 |
+| Integration edges | 171 | 18 |
+| Unattributed | 64 (37%) | 12 (67%) |
+| Apex bodies scanned / unreadable | 855 / 0 | 233 / 0 |
+| OmniStudio elements | 141 | 0 |
+
+Org B has no OmniStudio, which exercised the absent-feature path: zero elements scanned, no
+error, no note beyond the honest zero. It also supplied the only `package`-sourced product seen
+so far.
+
+The unattributed proportion is the number to watch. At 37 and 67 per cent it is the headline
+finding on both orgs, which is the intended behaviour rather than a defect: the tool says what
+it established and no more.
+
+`SamlSsoConfig` was not queryable on either org, so `ssoConfigs` was empty both times with a
+note saying why. The login-type distribution still populates, so the identity section is not
+wholly blind.
+
 ## 10. Open questions
 
 - Does `Case.RecordType` map to business process outside the org it was observed on? Untested.
@@ -300,3 +333,9 @@ Fixtures are built from the *shapes* observed on the three probe orgs, not their
   before phase 3 assumes the edge set is complete.
 - Whether `products[].componentCount` should count flows and Apex equally. Currently equal,
   which over-weights Apex-heavy products.
+- `capabilities.changeDataCapture` counts every `ChangeEvent` sObject the platform exposes,
+  419 on one org, not the channels actually enabled. That overstates a capability, and needs a
+  decision about what CDC capability should mean before the number is shown to anyone.
+- Prefix candidates that clear the floor but name infrastructure rather than a product
+  (`COMMUNITIES`, `LIGHTNING`, `USER` were all seen) land in `prefixesUnresolved`. Correct, in
+  that none became a product, but the list is noisier than a reader would like.
