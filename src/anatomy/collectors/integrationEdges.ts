@@ -16,7 +16,8 @@ export interface IntegrationEdgeInput {
   apexBodiesScanned: number;
   apexBodiesUnreadable: number;
   omniElementsScanned: number;
-  omniProceduresTotal: number;
+  /** Distinct OmniProcess ids reached by a scanned element, not distinct names. */
+  omniProceduresWithIntegrationElements: number;
   /** DeveloperName of every NamedCredential, sorted. Feeds `endpointOnly` detection. */
   namedCredentials: string[];
   /** SiteName of every RemoteProxy (Remote Site Setting), sorted. Feeds `endpointOnly` detection. */
@@ -94,6 +95,26 @@ export async function collectIntegrationEdges(
     notes.push(`Apex bodies could not be read: ${e instanceof Error ? e.message : String(e)}`);
   }
 
+  // `NamespacePrefix = null` above is correct (managed bodies are hidden from Tooling), but
+  // that exclusion is invisible in apexBodiesUnreadable, which only counts org-authored classes
+  // that failed to read. Left unstated, a reader sees apexBodiesUnreadable: 0 and concludes Apex
+  // coverage was total, when namespaced classes were never in scope at all. Count them and say
+  // so, so the exclusion cannot be mistaken for completeness.
+  try {
+    const rows = await ctx.tooling.query<{ expr0?: number }>(
+      'SELECT COUNT(Id) FROM ApexClass WHERE NamespacePrefix != null',
+    );
+    const namespacedApexClasses = Number(rows[0]?.expr0 ?? 0);
+    if (namespacedApexClasses > 0) {
+      notes.push(
+        `${namespacedApexClasses} namespaced (managed package) Apex class(es) were not examined; ` +
+          'only org-authored bodies are scanned for callouts.',
+      );
+    }
+  } catch (e) {
+    notes.push(`Namespaced Apex class count unavailable: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
   // NamedCredential and RemoteProxy are Tooling-only objects, same as the counts in
   // collectCapabilities. Read here (not there) because these need the names, not a count, to
   // find endpoints that exist but that no other edge already reaches.
@@ -125,22 +146,23 @@ export async function collectIntegrationEdges(
 
   const remoteActions: RemoteActionRef[] = [];
   let omniElementsScanned = 0;
-  let omniProceduresTotal = 0;
+  let omniProceduresWithIntegrationElements = 0;
   try {
     const rows = await ctx.soql.queryAll<{
       Type: string;
       PropertySetConfig: string | null;
-      OmniProcess?: { Name?: string };
+      OmniProcess?: { Id?: string; Name?: string };
     }>(
-      "SELECT Type, PropertySetConfig, OmniProcess.Name FROM OmniProcessElement " +
+      "SELECT Type, PropertySetConfig, OmniProcess.Id, OmniProcess.Name FROM OmniProcessElement " +
         "WHERE OmniProcess.OmniProcessType = 'Integration Procedure' " +
-        "AND Type IN ('REST Action', 'Remote Action') ORDER BY Id",
+        "AND Type IN ('REST Action', 'Remote Action', 'Integration Procedure Action') ORDER BY Id",
     );
     omniElementsScanned = rows.length;
-    const procedures = new Set<string>();
+    const procedureIds = new Set<string>();
+    let integrationProcedureActionCount = 0;
     for (const r of rows) {
       const owner = r.OmniProcess?.Name ?? 'unknown';
-      procedures.add(owner);
+      if (r.OmniProcess?.Id) procedureIds.add(r.OmniProcess.Id);
       // SOQL string comparison is case-insensitive, so the `IN ('REST Action', 'Remote Action')`
       // filter matches what the platform actually stores: `Rest Action`, not `REST Action`. A
       // case-sensitive `===` against the literal from the filter is false for every row, so
@@ -149,24 +171,53 @@ export async function collectIntegrationEdges(
       // once and branch on the lowercase form instead of trusting the filter's casing.
       const type = String(r.Type ?? '').toLowerCase();
       if (type === 'rest action') {
+        // A REST Action with no namedCredential in its config is real evidence that was
+        // examined and found to carry nothing usable. Reporting it as scanned while discarding
+        // it silently is the one failure this artifact must never commit, so the element is
+        // still emitted as an edge, with endpoint: null and its via hop intact, rather than
+        // dropped. detection stays `namedCredential`: that is how the element was found.
         const credential = extractRestActionCredential(r.PropertySetConfig);
-        if (credential) {
+        direct.push({
+          endpoint: credential,
+          from: null,
+          via: [{ type: 'OmniProcess', name: owner }],
+          detection: 'namedCredential',
+          attribution: 'unattributed',
+        });
+      } else if (type === 'remote action') {
+        const remoteClass = remoteClassOf(r.PropertySetConfig);
+        if (remoteClass) {
+          remoteActions.push({ omniProcess: owner, remoteClass });
+        } else {
+          // Same principle as above, applied to the other element type: a Remote Action with
+          // no remoteClass to chain through still reached out. resolveChains records the
+          // equivalent case (a named class with no readable body) as endpoint: null with
+          // `remoteActionChain`; do the same here so the two "we found nothing further" paths
+          // agree, even though only the OmniProcess hop is known.
           direct.push({
-            endpoint: credential,
+            endpoint: null,
             from: null,
             via: [{ type: 'OmniProcess', name: owner }],
-            detection: 'namedCredential',
+            detection: 'remoteActionChain',
             attribution: 'unattributed',
           });
         }
-      } else if (type === 'remote action') {
-        const remoteClass = remoteClassOf(r.PropertySetConfig);
-        if (remoteClass) remoteActions.push({ omniProcess: owner, remoteClass });
+      } else if (type === 'integration procedure action') {
+        // These chain one Integration Procedure to another and carry no endpoint of their own.
+        // Counted in omniElementsScanned already; tallied here for a single summary note below
+        // rather than invented as edges or silently dropped.
+        integrationProcedureActionCount += 1;
       } else {
         notes.push(`OmniProcessElement returned an unexpected Type: ${String(r.Type)}`);
       }
     }
-    omniProceduresTotal = procedures.size;
+    omniProceduresWithIntegrationElements = procedureIds.size;
+    if (integrationProcedureActionCount > 0) {
+      notes.push(
+        `${integrationProcedureActionCount} Integration Procedure Action element(s) chain one Integration ` +
+          'Procedure to another and carry no endpoint; not represented as edges.',
+      );
+    }
   } catch (e) {
     notes.push(`OmniStudio integration elements could not be read: ${e instanceof Error ? e.message : String(e)}`);
   }
@@ -181,7 +232,7 @@ export async function collectIntegrationEdges(
     apexBodiesScanned,
     apexBodiesUnreadable,
     omniElementsScanned,
-    omniProceduresTotal,
+    omniProceduresWithIntegrationElements,
     namedCredentials,
     remoteProxies,
   };

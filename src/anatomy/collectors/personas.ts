@@ -10,6 +10,11 @@ interface UserRow {
 }
 
 export async function collectPersonas(ctx: IntelContext, notes: string[]): Promise<Persona[]> {
+  // landingApp is deliberately deferred: it needs the UserAppInfo/AppDefinition join the spec
+  // describes, which is not implemented yet. Left silent, a hardcoded null reads as "no
+  // landing app configured" rather than "not attempted", so the deferral is recorded here.
+  notes.push('landingApp is not collected in this phase; the UserAppInfo/AppDefinition join was not attempted.');
+
   let rows: UserRow[] = [];
   try {
     // Profile.Name and Profile.UserLicense.Name both terminate in a field literally called

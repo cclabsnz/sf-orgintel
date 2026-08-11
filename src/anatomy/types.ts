@@ -72,7 +72,8 @@ export interface AnatomyCoverage {
   apexBodiesScanned: number;
   apexBodiesUnreadable: number;
   omniElementsScanned: number;
-  omniProceduresTotal: number;
+  /** Distinct OmniProcess ids reached by a scanned element, not distinct names. */
+  omniProceduresWithIntegrationElements: number;
   prefixesUnresolved: string[];
   notes: string[];
 }

@@ -172,10 +172,49 @@ describe('addEndpointOnlyEdges', () => {
     expect(out.filter((e) => e.detection === 'endpointOnly')).toHaveLength(0);
   });
 
-  it('does not duplicate an endpoint already reached by an apexCallout or remoteActionChain edge', () => {
+  it('does not duplicate a named credential already reached by an apexCallout or remoteActionChain edge', () => {
     const apexEdge = edge({ endpoint: 'Payments_API', detection: 'apexCallout' });
     const chainEdge = edge({ endpoint: 'Maps_API', detection: 'remoteActionChain' });
-    const out = addEndpointOnlyEdges([apexEdge, chainEdge], ['Payments_API'], ['Maps_API']);
+    const out = addEndpointOnlyEdges([apexEdge, chainEdge], ['Payments_API', 'Maps_API'], []);
     expect(out).toEqual([apexEdge, chainEdge]);
+  });
+
+  it('keys dedupe by type and name, so a RemoteProxy is not suppressed by an unrelated apexCallout/remoteActionChain endpoint of the same name', () => {
+    // Both an apexCallout and a NamedCredential-style endpoint are, per the spec, ultimately
+    // NamedCredential references. A RemoteProxy (Remote Site Setting) is a different
+    // configuration object entirely, and can coincidentally share a name with one without
+    // being the same resource. A flat name-only dedupe would wrongly drop the real
+    // RemoteProxy edge; keying by type and name must not.
+    const apexEdge = edge({ endpoint: 'Payments_API', detection: 'apexCallout' });
+    const chainEdge = edge({ endpoint: 'Maps_API', detection: 'remoteActionChain' });
+    const out = addEndpointOnlyEdges([apexEdge, chainEdge], [], ['Payments_API', 'Maps_API']);
+    expect(out).toEqual([
+      apexEdge,
+      chainEdge,
+      {
+        endpoint: 'Payments_API',
+        from: null,
+        via: [{ type: 'RemoteProxy', name: 'Payments_API' }],
+        detection: 'endpointOnly',
+        attribution: 'unattributed',
+      },
+      {
+        endpoint: 'Maps_API',
+        from: null,
+        via: [{ type: 'RemoteProxy', name: 'Maps_API' }],
+        detection: 'endpointOnly',
+        attribution: 'unattributed',
+      },
+    ]);
+  });
+
+  it('still suppresses a RemoteProxy edge when a prior endpointOnly RemoteProxy edge already names it', () => {
+    const existing = edge({
+      endpoint: 'Legacy_Site',
+      via: [{ type: 'RemoteProxy', name: 'Legacy_Site' }],
+      detection: 'endpointOnly',
+    });
+    const out = addEndpointOnlyEdges([existing], [], ['Legacy_Site']);
+    expect(out).toEqual([existing]);
   });
 });

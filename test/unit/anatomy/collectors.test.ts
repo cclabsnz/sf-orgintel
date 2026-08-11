@@ -77,7 +77,9 @@ describe('collectPersonas', () => {
     );
     expect(out.map((p) => p.profile)).toEqual(['Alpha', 'Zed']);
     expect(out[0]).toEqual({ profile: 'Alpha', licence: 'Salesforce Platform', activeUsers: 7, landingApp: null });
-    expect(notes).toEqual([]);
+    // landingApp is a deliberate deferral, not a finding, but it must still be recorded as
+    // "not attempted" rather than silently reading as "no landing app configured".
+    expect(notes.some((n) => n.toLowerCase().includes('landingapp'))).toBe(true);
   });
 
   it('defaults a row missing its profile or licence rather than dropping it', async () => {
@@ -107,5 +109,14 @@ describe('collectChannels', () => {
       notes,
     );
     expect(out).toContainEqual({ type: 'site', name: 'Portal', status: 'Active' });
+  });
+
+  it('records a note that app, console and api channels and the Network join are not yet collected', async () => {
+    const notes: string[] = [];
+    await collectChannels(
+      ctx({ soql: mockSoql([{ test: (s) => s.includes('FROM Site'), records: [] }]) }),
+      notes,
+    );
+    expect(notes.some((n) => n.toLowerCase().includes('network'))).toBe(true);
   });
 });

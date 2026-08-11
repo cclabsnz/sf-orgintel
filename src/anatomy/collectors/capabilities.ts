@@ -11,6 +11,16 @@ import type { Capabilities } from '../types.js';
  * that. Several of the objects counted here (LightningComponentBundle, AuraDefinitionBundle,
  * RemoteProxy) are Tooling-only, so the data API is not an alternative.
  */
+/**
+ * Whether an error means "this sObject does not exist on this org", the platform's own shape
+ * for a genuinely absent feature, and nothing looser. A licence-gated refusal can also mention
+ * "not supported" in its message, and that is a failed read, not an absent feature: treating
+ * both the same way turns a refusal into a false "there is none".
+ */
+function isAbsentSObjectError(message: string): boolean {
+  return /INVALID_TYPE/i.test(message) || /sObject type '[^']*' is not supported/i.test(message);
+}
+
 async function count(ctx: IntelContext, notes: string[], label: string, soql: string): Promise<number> {
   try {
     const rows = await ctx.tooling.query<{ expr0?: number }>(soql);
@@ -41,10 +51,14 @@ export async function collectCapabilities(ctx: IntelContext, notes: string[]): P
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     // A missing sObject type means the feature is genuinely absent on this org. Absence
-    // is the finding there, so no note. Anything else (access or permission errors, for
-    // example) is a failed read, not an absent feature, and must say so: otherwise a
-    // refused read is indistinguishable from a real "there is none" in the artifact.
-    if (!/INVALID_TYPE|not supported/i.test(message)) {
+    // is the finding there, so no note. Anything else, including a licence-gated refusal
+    // whose message happens to contain the words "not supported" without actually being
+    // the platform's absent-sObject shape, is a failed read, not an absent feature, and
+    // must say so: otherwise a refused read is indistinguishable from a real "there is
+    // none" in the artifact. Matched narrowly against the two shapes the platform actually
+    // uses for a genuinely missing sObject: the INVALID_TYPE error code, or a message of
+    // the form "sObject type '...' is not supported".
+    if (!isAbsentSObjectError(message)) {
       notes.push(`EventRelayConfig read unavailable: ${message}`);
     }
   }

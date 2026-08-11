@@ -121,7 +121,7 @@ Rendering is optional; the JSON is not.
   ],
   "coverage": {
     "apexBodiesScanned": 0, "apexBodiesUnreadable": 0,
-    "omniElementsScanned": 0, "omniProceduresTotal": 0,
+    "omniElementsScanned": 0, "omniProceduresWithIntegrationElements": 0,
     "prefixesUnresolved": ["..."],
     "notes": ["..."]
   }
@@ -194,7 +194,7 @@ Everything else is seconds. Expect a cold run comparable to `intel map` at about
 One filtered query, not a parser:
 
 ```sql
-SELECT Type, PropertySetConfig, OmniProcess.Name
+SELECT Type, PropertySetConfig, OmniProcess.Id, OmniProcess.Name
 FROM OmniProcessElement
 WHERE OmniProcess.OmniProcessType = 'Integration Procedure'
   AND Type IN ('REST Action', 'Remote Action', 'Integration Procedure Action')
@@ -203,7 +203,14 @@ WHERE OmniProcess.OmniProcessType = 'Integration Procedure'
 That is roughly 150 rows out of 12,566. `REST Action` yields `namedCredential` directly.
 `Remote Action` yields `remoteClass`, which is looked up in the Apex index built in 5.1; if a
 callout is found there the edge becomes `remoteActionChain`, otherwise the Integration
-Procedure is recorded with no endpoint and counted in coverage.
+Procedure is recorded with no endpoint and counted in coverage. A `REST Action` whose config
+carries no `namedCredential`, and a `Remote Action` whose config carries no `remoteClass`, are
+both real elements that were examined and found to carry nothing usable: each is still emitted
+as an edge with `endpoint: null` and its `via` hop intact, never dropped, because an element
+that is scanned and then discarded without a trace is the one failure this artifact must never
+commit. `Integration Procedure Action` elements chain one Integration Procedure to another and
+carry no endpoint of their own; they are counted in `omniElementsScanned` and summarised in a
+coverage note rather than turned into invented edges.
 
 `DataRaptor Post Action` elements carry a `sourceSystem` key and there are 52 of them on the
 probe org. Not used in phase 1, and noted here so it is not rediscovered as novel later.

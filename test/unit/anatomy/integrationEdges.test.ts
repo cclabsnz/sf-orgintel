@@ -156,6 +156,125 @@ describe('collectIntegrationEdges', () => {
     expect(out.remoteActions).toEqual([{ omniProcess: 'ACME_GetThing', remoteClass: 'ACME_Service' }]);
   });
 
+  it('emits a namedCredential edge with endpoint: null for a REST Action whose config carries no namedCredential', async () => {
+    // On a live org three of thirteen REST Actions took this path: reported as scanned,
+    // actually discarded. The evidence must survive with its via hop intact.
+    const notes: string[] = [];
+    const out = await collectIntegrationEdges(
+      { tooling: mockTooling([{ test: () => true, records: [] }]),
+        soql: mockSoql([
+          { test: (s) => s.includes('OmniProcessElement'), records: [
+            {
+              Type: 'Rest Action',
+              PropertySetConfig: JSON.stringify({ restMethod: 'GET' }),
+              OmniProcess: { Id: '0ax1', Name: 'ACME_GetThing' },
+            },
+          ] },
+          { test: () => true, records: [] },
+        ]) } as any,
+      notes,
+    );
+    expect(out.omniElementsScanned).toBe(1);
+    expect(out.direct).toContainEqual({
+      endpoint: null,
+      from: null,
+      via: [{ type: 'OmniProcess', name: 'ACME_GetThing' }],
+      detection: 'namedCredential',
+      attribution: 'unattributed',
+    });
+  });
+
+  it('emits a remoteActionChain edge with endpoint: null for a Remote Action whose config carries no remoteClass', async () => {
+    const notes: string[] = [];
+    const out = await collectIntegrationEdges(
+      { tooling: mockTooling([{ test: () => true, records: [] }]),
+        soql: mockSoql([
+          { test: (s) => s.includes('OmniProcessElement'), records: [
+            {
+              Type: 'Remote Action',
+              PropertySetConfig: JSON.stringify({}),
+              OmniProcess: { Id: '0ax2', Name: 'ACME_GetThing' },
+            },
+          ] },
+          { test: () => true, records: [] },
+        ]) } as any,
+      notes,
+    );
+    expect(out.omniElementsScanned).toBe(1);
+    expect(out.remoteActions).toEqual([]);
+    expect(out.direct).toContainEqual({
+      endpoint: null,
+      from: null,
+      via: [{ type: 'OmniProcess', name: 'ACME_GetThing' }],
+      detection: 'remoteActionChain',
+      attribution: 'unattributed',
+    });
+  });
+
+  it('counts distinct OmniProcess ids, not names, for omniProceduresWithIntegrationElements', async () => {
+    const notes: string[] = [];
+    const out = await collectIntegrationEdges(
+      { tooling: mockTooling([{ test: () => true, records: [] }]),
+        soql: mockSoql([
+          { test: (s) => s.includes('OmniProcessElement'), records: [
+            {
+              Type: 'Rest Action',
+              PropertySetConfig: JSON.stringify({ namedCredential: 'Payments_API' }),
+              OmniProcess: { Id: '0ax1', Name: 'ACME_GetThing' },
+            },
+            {
+              Type: 'Rest Action',
+              PropertySetConfig: JSON.stringify({ namedCredential: 'Maps_API' }),
+              OmniProcess: { Id: '0ax1', Name: 'ACME_GetThing' },
+            },
+          ] },
+          { test: () => true, records: [] },
+        ]) } as any,
+      notes,
+    );
+    expect(out.omniProceduresWithIntegrationElements).toBe(1);
+  });
+
+  it('counts and notes Integration Procedure Action elements rather than dropping them silently', async () => {
+    const notes: string[] = [];
+    const out = await collectIntegrationEdges(
+      { tooling: mockTooling([{ test: () => true, records: [] }]),
+        soql: mockSoql([
+          { test: (s) => s.includes('OmniProcessElement'), records: [
+            {
+              Type: 'Integration Procedure Action',
+              PropertySetConfig: JSON.stringify({}),
+              OmniProcess: { Id: '0ax3', Name: 'ACME_Router' },
+            },
+          ] },
+          { test: () => true, records: [] },
+        ]) } as any,
+      notes,
+    );
+    expect(out.omniElementsScanned).toBe(1);
+    expect(out.direct).toEqual([]);
+    expect(notes.join(' ')).toContain('Integration Procedure Action');
+  });
+
+  it('notes namespaced Apex classes excluded from body scanning rather than letting apexBodiesUnreadable read as complete coverage', async () => {
+    const notes: string[] = [];
+    const out = await collectIntegrationEdges(
+      { tooling: mockTooling([
+          { test: (s) => s.includes('WHERE NamespacePrefix = null'), records: [
+            { Id: '01p1', Name: 'A', Body: 'callout:Payments_API' },
+          ] },
+          { test: (s) => s.includes('WHERE NamespacePrefix != null'), records: [{ expr0: 42 }] },
+          { test: () => true, records: [] },
+        ]),
+        soql: mockSoql([{ test: () => true, records: [] }]) } as any,
+      notes,
+    );
+    expect(out.apexBodiesScanned).toBe(1);
+    expect(out.apexBodiesUnreadable).toBe(0);
+    expect(notes.join(' ')).toContain('42');
+    expect(notes.join(' ').toLowerCase()).toContain('namespaced');
+  });
+
   it('records a note and drops the element when Type matches neither branch', async () => {
     const notes: string[] = [];
     const out = await collectIntegrationEdges(

@@ -52,10 +52,27 @@ export function addEndpointOnlyEdges(
   namedCredentials: readonly string[],
   remoteProxies: readonly string[],
 ): IntegrationEdge[] {
-  const known = new Set(edges.map((e) => e.endpoint).filter((e): e is string => e !== null));
+  // Keyed by type and name together, not by endpoint value alone: a NamedCredential
+  // developer name and a RemoteProxy site name are different configuration objects and can
+  // coincidentally share a name without being the same resource. A flat set of endpoint
+  // strings would let a RemoteProxy called "Payments_API" suppress its own edge merely
+  // because some unrelated Apex class also made a `callout:Payments_API`. `namedCredential`,
+  // `apexCallout` and `remoteActionChain` edges all resolve to a NamedCredential-style
+  // endpoint (the callout target), so they feed the NamedCredential side only.
+  const knownNamedCredentialNames = new Set<string>();
+  const knownRemoteProxyNames = new Set<string>();
+  for (const e of edges) {
+    if (e.endpoint === null) continue;
+    if (e.detection === 'endpointOnly' && e.via[0]?.type === 'RemoteProxy') {
+      knownRemoteProxyNames.add(e.endpoint);
+    } else {
+      knownNamedCredentialNames.add(e.endpoint);
+    }
+  }
+
   const extra: IntegrationEdge[] = [];
   for (const name of namedCredentials) {
-    if (known.has(name)) continue;
+    if (knownNamedCredentialNames.has(name)) continue;
     extra.push({
       endpoint: name,
       from: null,
@@ -65,7 +82,7 @@ export function addEndpointOnlyEdges(
     });
   }
   for (const name of remoteProxies) {
-    if (known.has(name)) continue;
+    if (knownRemoteProxyNames.has(name)) continue;
     extra.push({
       endpoint: name,
       from: null,
