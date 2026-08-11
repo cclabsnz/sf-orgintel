@@ -41,6 +41,23 @@ describe('collectCapabilities', () => {
     expect(notes.some((n) => n.toLowerCase().includes('eventrelay'))).toBe(false);
   });
 
+  it('reports a note for a licence-gated refusal whose message merely contains "not supported"', async () => {
+    // The old classifier, /INVALID_TYPE|not supported/i, matched this message and treated a
+    // licence refusal as a genuinely absent feature. Only the platform's actual absent-sObject
+    // shapes (an INVALID_TYPE code, or "sObject type '...' is not supported") should suppress
+    // the note; anything else, including this one, is a failed read and must say so.
+    const notes: string[] = [];
+    const out = await collectCapabilities(
+      { soql: mockSoql([{ test: (s) => s.includes('EventRelayConfig'),
+          error: new Error('This feature is not supported for your organization license.') }]),
+        tooling: mockTooling([{ test: () => true, records: [] }]),
+        rest: mockRest([]) } as any,
+      notes,
+    );
+    expect(out.eventRelayConfigured).toBe(false);
+    expect(notes.some((n) => n.toLowerCase().includes('eventrelay'))).toBe(true);
+  });
+
   it('reports eventRelayConfigured false with a note when the read is refused, not absent', async () => {
     const notes: string[] = [];
     const out = await collectCapabilities(

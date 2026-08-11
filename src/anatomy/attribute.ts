@@ -40,6 +40,60 @@ export function resolveChains(
   return out;
 }
 
+/**
+ * Endpoints that exist as configuration, a `NamedCredential` or a `RemoteProxy`, that no
+ * detected call already reaches. Per the spec this is `endpointOnly`: the site is configured
+ * with no code path found to it. Skips any name already carried as another edge's `endpoint`,
+ * so a target already proven by a `namedCredential`, `apexCallout` or `remoteActionChain` edge
+ * does not also get a redundant, weaker `endpointOnly` sibling.
+ */
+export function addEndpointOnlyEdges(
+  edges: readonly IntegrationEdge[],
+  namedCredentials: readonly string[],
+  remoteProxies: readonly string[],
+): IntegrationEdge[] {
+  // Keyed by type and name together, not by endpoint value alone: a NamedCredential
+  // developer name and a RemoteProxy site name are different configuration objects and can
+  // coincidentally share a name without being the same resource. A flat set of endpoint
+  // strings would let a RemoteProxy called "Payments_API" suppress its own edge merely
+  // because some unrelated Apex class also made a `callout:Payments_API`. `namedCredential`,
+  // `apexCallout` and `remoteActionChain` edges all resolve to a NamedCredential-style
+  // endpoint (the callout target), so they feed the NamedCredential side only.
+  const knownNamedCredentialNames = new Set<string>();
+  const knownRemoteProxyNames = new Set<string>();
+  for (const e of edges) {
+    if (e.endpoint === null) continue;
+    if (e.detection === 'endpointOnly' && e.via[0]?.type === 'RemoteProxy') {
+      knownRemoteProxyNames.add(e.endpoint);
+    } else {
+      knownNamedCredentialNames.add(e.endpoint);
+    }
+  }
+
+  const extra: IntegrationEdge[] = [];
+  for (const name of namedCredentials) {
+    if (knownNamedCredentialNames.has(name)) continue;
+    extra.push({
+      endpoint: name,
+      from: null,
+      via: [{ type: 'NamedCredential', name }],
+      detection: 'endpointOnly',
+      attribution: 'unattributed',
+    });
+  }
+  for (const name of remoteProxies) {
+    if (knownRemoteProxyNames.has(name)) continue;
+    extra.push({
+      endpoint: name,
+      from: null,
+      via: [{ type: 'RemoteProxy', name }],
+      detection: 'endpointOnly',
+      attribution: 'unattributed',
+    });
+  }
+  return [...edges, ...extra];
+}
+
 /** Longest prefix wins, so ACMEX is not attributed to ACME when both are registered. */
 function productFor(name: string, registry: PrefixRegistry): string | null {
   const upper = name.toUpperCase();

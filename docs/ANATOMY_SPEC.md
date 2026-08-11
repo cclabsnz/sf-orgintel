@@ -121,7 +121,8 @@ Rendering is optional; the JSON is not.
   ],
   "coverage": {
     "apexBodiesScanned": 0, "apexBodiesUnreadable": 0,
-    "omniElementsScanned": 0, "omniProceduresTotal": 0,
+    "omniElementsScanned": 0, "omniProceduresWithIntegrationElements": 0,
+    "omniElementsSkippedSuperseded": 0,
     "prefixesUnresolved": ["..."],
     "notes": ["..."]
   }
@@ -139,7 +140,7 @@ credential whose owning product cannot be established.
 | `namedCredential` | A `REST Action` element or a `NamedCredential` record names the endpoint |
 | `apexCallout` | `callout:<name>` found in an Apex body read through Tooling |
 | `remoteActionChain` | A `Remote Action` element names an Apex class in which a callout was found |
-| `endpointOnly` | A `RemoteProxy` endpoint exists with no code path found to it |
+| `endpointOnly` | A `RemoteProxy` endpoint exists with no code path found to it, or a scanned element (for example a `REST Action` with no `namedCredential`) confirms an integration point exists with no endpoint determined from it |
 
 | `attribution` | Rule |
 | --- | --- |
@@ -194,19 +195,62 @@ Everything else is seconds. Expect a cold run comparable to `intel map` at about
 One filtered query, not a parser:
 
 ```sql
-SELECT Type, PropertySetConfig, OmniProcess.Name
+SELECT Type, PropertySetConfig, OmniProcess.Id, OmniProcess.Name
 FROM OmniProcessElement
 WHERE OmniProcess.OmniProcessType = 'Integration Procedure'
+  AND OmniProcess.IsActive = true
   AND Type IN ('REST Action', 'Remote Action', 'Integration Procedure Action')
 ```
 
-That is roughly 150 rows out of 12,566. `REST Action` yields `namedCredential` directly.
-`Remote Action` yields `remoteClass`, which is looked up in the Apex index built in 5.1; if a
-callout is found there the edge becomes `remoteActionChain`, otherwise the Integration
-Procedure is recorded with no endpoint and counted in coverage.
+**`OmniProcess` rows are versions, not procedures, and only the active version is read.**
+Every edit to an Integration Procedure creates a new `OmniProcess` row; the old one is kept and
+marked inactive rather than deleted. Reading every row therefore reports integrations that no
+longer run, which is worse than a coverage gap: it is a confident, wrong statement about the
+present. Measured on a live org, elements matching this query (before the `IsActive` filter
+existed) broke down as:
+
+| Elements | Distinct procedure names | Distinct `OmniProcess` ids | Active versions | On an active version | On a superseded version |
+| --- | --- | --- | --- | --- | --- |
+| 141 | 30 | 92 | 16 | 25 | 116 |
+
+82 per cent of the evidence came from versions nobody runs anymore. `OmniProcess.IsActive =
+true` in the query above keeps the scan to what is live; the superseded elements are not
+silently narrowed away, they are counted in `coverage.omniElementsSkippedSuperseded` and
+summarised in a coverage note, following the same rule as every other exclusion in this
+collector. `coverage.omniProceduresWithIntegrationElements` counts distinct procedure *names* among the
+active-version elements, not distinct `OmniProcess` ids: counting ids conflates version churn
+with procedure count. On the org above, id-counting reported 92 (before the `IsActive` filter)
+where the org has 30 procedures; even after restricting to active versions, several elements can
+still share one procedure across its 16 active `OmniProcess` rows, so counting ids would still
+overstate the number of procedures involved.
+
+That is roughly 150 rows out of 12,566 before the active-version filter. `REST Action` yields
+`namedCredential` directly. `Remote Action` yields `remoteClass`, which is looked up in the Apex
+index built in 5.1; if a callout is found there the edge becomes `remoteActionChain`, otherwise
+the Integration Procedure is recorded with no endpoint and counted in coverage. A `Remote
+Action` whose config carries no `remoteClass` is a real element that was examined and found to
+carry nothing usable: it is still emitted as an edge with `endpoint: null` and its `via` hop
+intact, never dropped, because an element that is scanned and then discarded without a trace is
+the one failure this artifact must never commit. A `REST Action` whose config carries no
+`namedCredential` gets the same treatment, but not the same `detection` value: labelling it
+`namedCredential` asserts a named endpoint was found when none was, which on a live org happened
+for three of thirteen `REST Action` elements. It is emitted as `endpointOnly` instead, the value
+that already means "one side of an integration relationship is confirmed, the other is not",
+generalised from its original RemoteProxy-only case rather than adding a fifth detection value.
+`Integration Procedure Action` elements chain one Integration Procedure to another and carry no
+endpoint of their own; they are counted in `omniElementsScanned` and summarised in a coverage
+note rather than turned into invented edges.
 
 `DataRaptor Post Action` elements carry a `sourceSystem` key and there are 52 of them on the
 probe org. Not used in phase 1, and noted here so it is not rediscovered as novel later.
+
+**The stored `Type` value is `Rest Action`, not `REST Action`.** SOQL string comparison is
+case-insensitive, so the `IN` filter above matches regardless, but any code branching on the
+returned value must compare case-insensitively. Taking the literal from a query rather than
+from returned data cost a full round here: all thirteen REST Action elements were silently
+routed to the Remote Action branch, dropped for having no `remoteClass`, and still counted in
+`omniElementsScanned`. Reporting something as scanned while discarding it is the one failure
+this artifact must never commit.
 
 ### 5.3 The prefix registry
 
@@ -274,6 +318,13 @@ Unit tests with mocked clients, per the repo convention. No test touches an org.
   two axes vary independently.
 - `resolveChains`: a `Remote Action` naming a class with a `callout:` becomes
   `remoteActionChain` with both hops in `via`; naming an unreadable class does not.
+- `collectIntegrationEdges`: the OmniStudio query is restricted to `OmniProcess.IsActive =
+  true`; excluded (superseded-version) elements are counted in
+  `omniElementsSkippedSuperseded` and noted, never silently dropped;
+  `omniProceduresWithIntegrationElements` counts distinct procedure names among active-version
+  elements, not distinct `OmniProcess` ids, so several active versions sharing one name still
+  count once; a `REST Action` with no `namedCredential` is emitted as `endpointOnly`, not
+  `namedCredential`.
 - Report: coverage renders above the bands; an empty band renders as empty; notes are escaped.
 - Invariants: `readonly-invariant` and `network-egress` unchanged and passing.
 
@@ -291,6 +342,38 @@ Fixtures are built from the *shapes* observed on the three probe orgs, not their
    asked this of `Case.RecordType` only; the probe showed the registry needs it more.
 6. Read-only and network-egress invariants pass.
 
+## 9a. Measured on two orgs
+
+Both runs read-only, both deterministic across consecutive runs.
+
+| | Org A | Org B |
+| --- | --- | --- |
+| Products | 5 (2 app, 3 recordType) | 2 (1 app, 1 package) |
+| Personas | 12 | 13 |
+| Integration edges | 171 | 18 |
+| Unattributed | 64 (37%) | 12 (67%) |
+| Apex bodies scanned / unreadable | 855 / 0 | 233 / 0 |
+| OmniStudio elements (pre `IsActive` filter) | 141 (25 active / 116 superseded) | 0 |
+
+Org A's OmniStudio figure predates the `OmniProcess.IsActive` filter described in 5.2 and is
+kept here as the measurement that motivated it: of the 141 elements, only 25 sat on an active
+version, across 16 active `OmniProcess` rows covering 30 distinct procedures. `Integration
+edges` above reflects the un-filtered run for the same reason; a re-run against the active-only
+query reports fewer edges, not because the org integrates with less but because the artifact no
+longer counts versions nobody runs.
+
+Org B has no OmniStudio, which exercised the absent-feature path: zero elements scanned, no
+error, no note beyond the honest zero. It also supplied the only `package`-sourced product seen
+so far.
+
+The unattributed proportion is the number to watch. At 37 and 67 per cent it is the headline
+finding on both orgs, which is the intended behaviour rather than a defect: the tool says what
+it established and no more.
+
+`SamlSsoConfig` was not queryable on either org, so `ssoConfigs` was empty both times with a
+note saying why. The login-type distribution still populates, so the identity section is not
+wholly blind.
+
 ## 10. Open questions
 
 - Does `Case.RecordType` map to business process outside the org it was observed on? Untested.
@@ -300,3 +383,9 @@ Fixtures are built from the *shapes* observed on the three probe orgs, not their
   before phase 3 assumes the edge set is complete.
 - Whether `products[].componentCount` should count flows and Apex equally. Currently equal,
   which over-weights Apex-heavy products.
+- `capabilities.changeDataCapture` counts every `ChangeEvent` sObject the platform exposes,
+  419 on one org, not the channels actually enabled. That overstates a capability, and needs a
+  decision about what CDC capability should mean before the number is shown to anyone.
+- Prefix candidates that clear the floor but name infrastructure rather than a product
+  (`COMMUNITIES`, `LIGHTNING`, `USER` were all seen) land in `prefixesUnresolved`. Correct, in
+  that none became a product, but the list is noisier than a reader would like.
