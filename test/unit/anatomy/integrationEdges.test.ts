@@ -295,6 +295,34 @@ describe('collectIntegrationEdges', () => {
     expect(out.omniProceduresWithIntegrationElements).toBe(2);
   });
 
+  it('counts two distinct procedures when both have no OmniProcess.Name, not one', async () => {
+    // Regression pin: the 'unknown' display fallback for a missing OmniProcess.Name was also
+    // used as the counting key, so two rows on different procedures with no name both added
+    // the literal 'unknown' to the set and collapsed into a single counted procedure. The
+    // count must key on OmniProcess.Id when the name is absent, since the Id is unique per row.
+    const notes: string[] = [];
+    const out = await collectIntegrationEdges(
+      { tooling: mockTooling([{ test: () => true, records: [] }]),
+        soql: mockSoql([
+          { test: (s) => s.includes('OmniProcessElement'), records: [
+            {
+              Type: 'Rest Action',
+              PropertySetConfig: JSON.stringify({ namedCredential: 'Payments_API' }),
+              OmniProcess: { Id: '0ax1' },
+            },
+            {
+              Type: 'Rest Action',
+              PropertySetConfig: JSON.stringify({ namedCredential: 'Maps_API' }),
+              OmniProcess: { Id: '0ax2' },
+            },
+          ] },
+          { test: () => true, records: [] },
+        ]) } as any,
+      notes,
+    );
+    expect(out.omniProceduresWithIntegrationElements).toBe(2);
+  });
+
   it('restricts the OmniStudio element query to active versions', async () => {
     // Finding A: the query itself must ask for OmniProcess.IsActive = true, not filter
     // client-side, so an org's OmniProcessElement rows for superseded versions are never

@@ -184,7 +184,11 @@ export async function collectIntegrationEdges(
     let integrationProcedureActionCount = 0;
     for (const r of rows) {
       const owner = r.OmniProcess?.Name ?? 'unknown';
-      procedureNames.add(owner);
+      // Two rows with no OmniProcess.Name would both fall back to the literal 'unknown' and
+      // collapse into one counted procedure even though they are distinct procedures. The
+      // OmniProcess.Id is unique per row, so it is used only as a fallback key here, keeping
+      // 'unknown' as the display label on the via hop above where a shared placeholder is fine.
+      procedureNames.add(r.OmniProcess?.Name ?? `unknown:${r.OmniProcess?.Id ?? ''}`);
       // SOQL string comparison is case-insensitive, so the `IN ('REST Action', 'Remote Action')`
       // filter matches what the platform actually stores: `Rest Action`, not `REST Action`. A
       // case-sensitive `===` against the literal from the filter is false for every row, so
