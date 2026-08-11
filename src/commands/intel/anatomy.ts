@@ -66,6 +66,12 @@ export default class IntelAnatomyCommand extends SfCommand<AnatomyArtifact> {
     this.log(`  Integration edges: ${total}`);
     this.log(`  Unattributed: ${unattributed} of ${total} (${proportion})`);
     this.log(`  Apex bodies: ${artifact.coverage.apexBodiesScanned} scanned, ${artifact.coverage.apexBodiesUnreadable} unreadable`);
+    if (artifact.coverage.omniElementsScanned > 0 || artifact.coverage.omniElementsSkippedSuperseded > 0) {
+      this.log(
+        `  OmniStudio elements: ${artifact.coverage.omniElementsScanned} scanned (active versions), ` +
+          `${artifact.coverage.omniElementsSkippedSuperseded} skipped (superseded versions)`,
+      );
+    }
     if (artifact.coverage.prefixesUnresolved.length > 0) {
       this.log(`  Prefixes with no product source: ${artifact.coverage.prefixesUnresolved.join(', ')}`);
     }

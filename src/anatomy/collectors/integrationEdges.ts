@@ -16,8 +16,21 @@ export interface IntegrationEdgeInput {
   apexBodiesScanned: number;
   apexBodiesUnreadable: number;
   omniElementsScanned: number;
-  /** Distinct OmniProcess ids reached by a scanned element, not distinct names. */
+  /**
+   * Distinct Integration Procedure names reached by a scanned element on its active version,
+   * not distinct OmniProcess ids. `OmniProcess` rows are versions: several versions can share
+   * one procedure name, and only one is active at a time, so counting ids overstates how many
+   * procedures actually carry integration evidence.
+   */
   omniProceduresWithIntegrationElements: number;
+  /**
+   * Elements that exist on a superseded (inactive) Integration Procedure version. Excluded
+   * from `omniElementsScanned` and from edges: a version that is not active does not run, and
+   * reporting its evidence as current would describe the org as it used to be, not as it is.
+   * Counted rather than dropped silently, per the same rule that keeps a scanned-but-empty
+   * element in the artifact instead of discarding it.
+   */
+  omniElementsSkippedSuperseded: number;
   /** DeveloperName of every NamedCredential, sorted. Feeds `endpointOnly` detection. */
   namedCredentials: string[];
   /** SiteName of every RemoteProxy (Remote Site Setting), sorted. Feeds `endpointOnly` detection. */
@@ -147,7 +160,15 @@ export async function collectIntegrationEdges(
   const remoteActions: RemoteActionRef[] = [];
   let omniElementsScanned = 0;
   let omniProceduresWithIntegrationElements = 0;
+  let omniElementsSkippedSuperseded = 0;
   try {
+    // `OmniProcess` rows are versions, not procedures: a procedure that has been edited twice
+    // has three OmniProcess rows and one active one. Measured on a live org, elements matching
+    // this query broke down as 141 total across 92 distinct OmniProcess ids and only 30
+    // distinct procedure names, but just 16 of those versions were active; 25 elements sat on
+    // an active version and 116 sat on versions nobody runs anymore. Restricting to
+    // `IsActive = true` here keeps the artifact describing the org as it is now, not as it was
+    // several edits ago.
     const rows = await ctx.soql.queryAll<{
       Type: string;
       PropertySetConfig: string | null;
@@ -155,14 +176,15 @@ export async function collectIntegrationEdges(
     }>(
       "SELECT Type, PropertySetConfig, OmniProcess.Id, OmniProcess.Name FROM OmniProcessElement " +
         "WHERE OmniProcess.OmniProcessType = 'Integration Procedure' " +
+        "AND OmniProcess.IsActive = true " +
         "AND Type IN ('REST Action', 'Remote Action', 'Integration Procedure Action') ORDER BY Id",
     );
     omniElementsScanned = rows.length;
-    const procedureIds = new Set<string>();
+    const procedureNames = new Set<string>();
     let integrationProcedureActionCount = 0;
     for (const r of rows) {
       const owner = r.OmniProcess?.Name ?? 'unknown';
-      if (r.OmniProcess?.Id) procedureIds.add(r.OmniProcess.Id);
+      procedureNames.add(owner);
       // SOQL string comparison is case-insensitive, so the `IN ('REST Action', 'Remote Action')`
       // filter matches what the platform actually stores: `Rest Action`, not `REST Action`. A
       // case-sensitive `===` against the literal from the filter is false for every row, so
@@ -175,13 +197,23 @@ export async function collectIntegrationEdges(
         // examined and found to carry nothing usable. Reporting it as scanned while discarding
         // it silently is the one failure this artifact must never commit, so the element is
         // still emitted as an edge, with endpoint: null and its via hop intact, rather than
-        // dropped. detection stays `namedCredential`: that is how the element was found.
+        // dropped.
+        //
+        // detection must not stay `namedCredential` here: that value's own definition is "names
+        // the endpoint", and this element does not. Labelling a credential-less element that way
+        // asserts a specific fact (a named credential was found) that is false. Of the four
+        // detection values, `endpointOnly` is the only one that does not claim a resolution
+        // mechanism succeeded; it already carries the same shape of fact for a RemoteProxy that
+        // exists with no code path found to it, i.e. one side of an integration relationship is
+        // confirmed (here, that a REST Action element exists) and the other (its endpoint) is
+        // not. Generalising it to this case rather than inventing a fifth value keeps the axis a
+        // closed, honest set: proven-but-incomplete evidence, not a specific untrue claim.
         const credential = extractRestActionCredential(r.PropertySetConfig);
         direct.push({
           endpoint: credential,
           from: null,
           via: [{ type: 'OmniProcess', name: owner }],
-          detection: 'namedCredential',
+          detection: credential ? 'namedCredential' : 'endpointOnly',
           attribution: 'unattributed',
         });
       } else if (type === 'remote action') {
@@ -211,11 +243,31 @@ export async function collectIntegrationEdges(
         notes.push(`OmniProcessElement returned an unexpected Type: ${String(r.Type)}`);
       }
     }
-    omniProceduresWithIntegrationElements = procedureIds.size;
+    omniProceduresWithIntegrationElements = procedureNames.size;
     if (integrationProcedureActionCount > 0) {
       notes.push(
         `${integrationProcedureActionCount} Integration Procedure Action element(s) chain one Integration ` +
           'Procedure to another and carry no endpoint; not represented as edges.',
+      );
+    }
+
+    // Same principle as the namespaced-Apex count above: narrowing the scan above to active
+    // versions is correct, but doing it silently would trade one honesty failure (reporting
+    // dead integrations as live) for another (undercounting coverage without saying so).
+    // Count what was excluded and say so, rather than letting a smaller omniElementsScanned
+    // read as if the org simply had less OmniStudio.
+    const supersededRows = await ctx.soql.queryAll<{ expr0?: number }>(
+      "SELECT COUNT(Id) FROM OmniProcessElement " +
+        "WHERE OmniProcess.OmniProcessType = 'Integration Procedure' " +
+        "AND OmniProcess.IsActive != true " +
+        "AND Type IN ('REST Action', 'Remote Action', 'Integration Procedure Action')",
+    );
+    omniElementsSkippedSuperseded = Number(supersededRows[0]?.expr0 ?? 0);
+    if (omniElementsSkippedSuperseded > 0) {
+      notes.push(
+        `${omniElementsSkippedSuperseded} OmniStudio integration element(s) sit on superseded ` +
+          '(inactive) Integration Procedure versions and were excluded; only the active version ' +
+          'of each procedure is scanned.',
       );
     }
   } catch (e) {
@@ -233,6 +285,7 @@ export async function collectIntegrationEdges(
     apexBodiesUnreadable,
     omniElementsScanned,
     omniProceduresWithIntegrationElements,
+    omniElementsSkippedSuperseded,
     namedCredentials,
     remoteProxies,
   };

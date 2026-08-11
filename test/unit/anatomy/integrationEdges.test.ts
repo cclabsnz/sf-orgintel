@@ -156,9 +156,10 @@ describe('collectIntegrationEdges', () => {
     expect(out.remoteActions).toEqual([{ omniProcess: 'ACME_GetThing', remoteClass: 'ACME_Service' }]);
   });
 
-  it('emits a namedCredential edge with endpoint: null for a REST Action whose config carries no namedCredential', async () => {
+  it('emits an endpointOnly edge with endpoint: null for a REST Action whose config carries no namedCredential', async () => {
     // On a live org three of thirteen REST Actions took this path: reported as scanned,
-    // actually discarded. The evidence must survive with its via hop intact.
+    // actually discarded. The evidence must survive with its via hop intact, and it must not
+    // be labelled `namedCredential`, which asserts a named endpoint was found when none was.
     const notes: string[] = [];
     const out = await collectIntegrationEdges(
       { tooling: mockTooling([{ test: () => true, records: [] }]),
@@ -177,6 +178,33 @@ describe('collectIntegrationEdges', () => {
     expect(out.omniElementsScanned).toBe(1);
     expect(out.direct).toContainEqual({
       endpoint: null,
+      from: null,
+      via: [{ type: 'OmniProcess', name: 'ACME_GetThing' }],
+      detection: 'endpointOnly',
+      attribution: 'unattributed',
+    });
+  });
+
+  it('still emits a namedCredential edge when a REST Action config carries a credential', async () => {
+    // Pins the boundary against the endpointOnly fix above: a REST Action that does name a
+    // credential must keep detection: namedCredential, not fall through to endpointOnly.
+    const notes: string[] = [];
+    const out = await collectIntegrationEdges(
+      { tooling: mockTooling([{ test: () => true, records: [] }]),
+        soql: mockSoql([
+          { test: (s) => s.includes('OmniProcessElement'), records: [
+            {
+              Type: 'Rest Action',
+              PropertySetConfig: JSON.stringify({ namedCredential: 'Payments_API' }),
+              OmniProcess: { Id: '0ax1', Name: 'ACME_GetThing' },
+            },
+          ] },
+          { test: () => true, records: [] },
+        ]) } as any,
+      notes,
+    );
+    expect(out.direct).toContainEqual({
+      endpoint: 'Payments_API',
       from: null,
       via: [{ type: 'OmniProcess', name: 'ACME_GetThing' }],
       detection: 'namedCredential',
@@ -211,7 +239,7 @@ describe('collectIntegrationEdges', () => {
     });
   });
 
-  it('counts distinct OmniProcess ids, not names, for omniProceduresWithIntegrationElements', async () => {
+  it('counts distinct procedure names, not distinct OmniProcess ids, for omniProceduresWithIntegrationElements', async () => {
     const notes: string[] = [];
     const out = await collectIntegrationEdges(
       { tooling: mockTooling([{ test: () => true, records: [] }]),
@@ -233,6 +261,106 @@ describe('collectIntegrationEdges', () => {
       notes,
     );
     expect(out.omniProceduresWithIntegrationElements).toBe(1);
+  });
+
+  it('counts one procedure, not two versions, when two active-version elements share a procedure name but different OmniProcess ids', async () => {
+    // OmniProcess rows are versions. Two elements naming the same procedure by name but two
+    // different ids (as if two versions of one procedure were both, implausibly, active) must
+    // still count as one procedure: the field counts procedures, not versions.
+    const notes: string[] = [];
+    const out = await collectIntegrationEdges(
+      { tooling: mockTooling([{ test: () => true, records: [] }]),
+        soql: mockSoql([
+          { test: (s) => s.includes('OmniProcessElement'), records: [
+            {
+              Type: 'Rest Action',
+              PropertySetConfig: JSON.stringify({ namedCredential: 'Payments_API' }),
+              OmniProcess: { Id: '0ax1', Name: 'ACME_GetThing' },
+            },
+            {
+              Type: 'Rest Action',
+              PropertySetConfig: JSON.stringify({ namedCredential: 'Maps_API' }),
+              OmniProcess: { Id: '0ax2', Name: 'ACME_GetThing' },
+            },
+            {
+              Type: 'Rest Action',
+              PropertySetConfig: JSON.stringify({ namedCredential: 'Weather_API' }),
+              OmniProcess: { Id: '0ax3', Name: 'ACME_OtherThing' },
+            },
+          ] },
+          { test: () => true, records: [] },
+        ]) } as any,
+      notes,
+    );
+    expect(out.omniProceduresWithIntegrationElements).toBe(2);
+  });
+
+  it('restricts the OmniStudio element query to active versions', async () => {
+    // Finding A: the query itself must ask for OmniProcess.IsActive = true, not filter
+    // client-side, so an org's OmniProcessElement rows for superseded versions are never
+    // fetched or emitted as edges in the first place.
+    const notes: string[] = [];
+    let capturedQuery = '';
+    const out = await collectIntegrationEdges(
+      { tooling: mockTooling([{ test: () => true, records: [] }]),
+        soql: mockSoql([
+          { test: (s) => s.includes('COUNT(Id)') && s.includes('OmniProcessElement'), records: [{ expr0: 0 }] },
+          { test: (s) => {
+              if (s.includes('OmniProcessElement')) capturedQuery = s;
+              return s.includes('OmniProcessElement');
+            }, records: [] },
+          { test: () => true, records: [] },
+        ]) } as any,
+      notes,
+    );
+    expect(capturedQuery).toContain('OmniProcess.IsActive = true');
+    expect(out.omniElementsScanned).toBe(0);
+  });
+
+  it('counts and notes elements skipped because their OmniProcess version is superseded', async () => {
+    // Finding A: silently narrowing the scan to active versions is the same failure as
+    // silently dropping evidence. The exclusion must be counted and stated.
+    const notes: string[] = [];
+    const out = await collectIntegrationEdges(
+      { tooling: mockTooling([{ test: () => true, records: [] }]),
+        soql: mockSoql([
+          { test: (s) => s.includes('COUNT(Id)') && s.includes('OmniProcessElement'), records: [{ expr0: 116 }] },
+          { test: (s) => s.includes('OmniProcessElement'), records: [
+            {
+              Type: 'Rest Action',
+              PropertySetConfig: JSON.stringify({ namedCredential: 'Payments_API' }),
+              OmniProcess: { Id: '0ax1', Name: 'ACME_GetThing' },
+            },
+          ] },
+          { test: () => true, records: [] },
+        ]) } as any,
+      notes,
+    );
+    expect(out.omniElementsScanned).toBe(1);
+    expect(out.omniElementsSkippedSuperseded).toBe(116);
+    expect(notes.join(' ')).toContain('116');
+    expect(notes.join(' ').toLowerCase()).toContain('superseded');
+  });
+
+  it('does not add a superseded note when nothing was excluded', async () => {
+    const notes: string[] = [];
+    const out = await collectIntegrationEdges(
+      { tooling: mockTooling([{ test: () => true, records: [] }]),
+        soql: mockSoql([
+          { test: (s) => s.includes('COUNT(Id)') && s.includes('OmniProcessElement'), records: [{ expr0: 0 }] },
+          { test: (s) => s.includes('OmniProcessElement'), records: [
+            {
+              Type: 'Rest Action',
+              PropertySetConfig: JSON.stringify({ namedCredential: 'Payments_API' }),
+              OmniProcess: { Id: '0ax1', Name: 'ACME_GetThing' },
+            },
+          ] },
+          { test: () => true, records: [] },
+        ]) } as any,
+      notes,
+    );
+    expect(out.omniElementsSkippedSuperseded).toBe(0);
+    expect(notes.join(' ').toLowerCase()).not.toContain('superseded');
   });
 
   it('counts and notes Integration Procedure Action elements rather than dropping them silently', async () => {

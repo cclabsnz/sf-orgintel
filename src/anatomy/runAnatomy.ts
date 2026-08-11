@@ -68,6 +68,7 @@ export async function runAnatomy(
       apexBodiesUnreadable: evidence.apexBodiesUnreadable,
       omniElementsScanned: evidence.omniElementsScanned,
       omniProceduresWithIntegrationElements: evidence.omniProceduresWithIntegrationElements,
+      omniElementsSkippedSuperseded: evidence.omniElementsSkippedSuperseded,
       prefixesUnresolved: registry.unresolved,
       // Collectors run sequentially, so `notes` is already deterministic. Insertion order is
       // kept, not alphabetised: it is the order failures occurred in, which is diagnostic
