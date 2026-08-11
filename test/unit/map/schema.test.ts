@@ -1,7 +1,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import Ajv from 'ajv';
+import { Ajv } from 'ajv';
 import { loadSchema } from '@cclabsnz/sf-core';
 import type { CouplingGraph, LandscapeManifest, ProcessGraph } from '@cclabsnz/sf-core';
 import { parseFlowXml } from '../../../src/map/flow/parseFlow.js';

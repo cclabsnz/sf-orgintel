@@ -1,7 +1,17 @@
 // src/anatomy/types.ts
 // Shape of anatomy.json. Data only, no logic, so every consumer agrees on one definition.
 
-/** How an integration edge was proven to exist. Independent of who owns it. */
+/**
+ * How an integration edge was proven to exist. Independent of who owns it.
+ *
+ * `endpointOnly` covers two shapes of incomplete-but-real evidence, not just one: a
+ * `NamedCredential`/`RemoteProxy` that names a destination with no code path found to it, and
+ * (since one side of the pair is still missing either way) a scanned element that confirms an
+ * integration point exists, such as a REST Action, whose config carries no usable credential.
+ * Neither claims a resolution mechanism succeeded, which is why the value is safe for both:
+ * the alternative of leaving a credential-less REST Action as `namedCredential` asserts a
+ * named endpoint was found when none was.
+ */
 export type Detection = 'namedCredential' | 'apexCallout' | 'remoteActionChain' | 'endpointOnly';
 
 /** How an edge was traced to a product. Independent of how strongly it was detected. */
@@ -72,7 +82,13 @@ export interface AnatomyCoverage {
   apexBodiesScanned: number;
   apexBodiesUnreadable: number;
   omniElementsScanned: number;
-  omniProceduresTotal: number;
+  /**
+   * Distinct Integration Procedure names reached by a scanned element on its active version,
+   * not distinct OmniProcess ids (OmniProcess rows are versions; several can share one name).
+   */
+  omniProceduresWithIntegrationElements: number;
+  /** Elements excluded because they sit on a superseded (inactive) Integration Procedure version. */
+  omniElementsSkippedSuperseded: number;
   prefixesUnresolved: string[];
   notes: string[];
 }

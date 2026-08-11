@@ -25,6 +25,28 @@ describe('collectIdentity', () => {
     }
   });
 
+  it('sorts ssoConfigs by issuer, null-safe, for deterministic output', async () => {
+    const notes: string[] = [];
+    const out = await collectIdentity(
+      {
+        soql: mockSoql([{ test: (s) => s.includes('LoginHistory'), records: [] }]),
+        tooling: mockTooling([
+          {
+            test: (s) => s.includes('SamlSsoConfig'),
+            records: [{ Issuer: 'https://zed.example.com' }, { Issuer: null }, { Issuer: 'https://acme.example.com' }],
+          },
+        ]),
+        metadata: { list: async () => [] },
+      } as any,
+      notes,
+    );
+    expect(out.ssoConfigs.map((c) => c.issuer)).toEqual([
+      null,
+      'https://acme.example.com',
+      'https://zed.example.com',
+    ]);
+  });
+
   it('still returns login data when SSO metadata cannot be retrieved', async () => {
     const notes: string[] = [];
     const out = await collectIdentity(

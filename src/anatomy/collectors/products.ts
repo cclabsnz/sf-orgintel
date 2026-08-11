@@ -7,6 +7,14 @@ export interface RegistrySourceNames {
   apps: string[];
   packages: string[];
   recordTypes: string[];
+  /**
+   * The population the prefix registry's frequency floor is calibrated against: every
+   * org-authored Apex class and Flow, not just the subset that happens to make outbound
+   * calls. Feeding the registry a narrower population (for example, only classes with a
+   * callout) would bias `products` toward whatever makes outbound calls and silently drop
+   * everything else.
+   */
+  componentNames: string[];
 }
 
 async function safe<T>(label: string, notes: string[], fn: () => Promise<T[]>): Promise<T[]> {
@@ -39,5 +47,24 @@ export async function collectProducts(ctx: IntelContext, notes: string[]): Promi
     )).map((r) => r.DeveloperName),
   );
 
-  return { apps: apps.sort(), packages: packages.sort(), recordTypes: recordTypes.sort() };
+  const apexClassNames = await safe('ApexClass', notes, async () =>
+    (await ctx.tooling.query<{ Name: string }>(
+      'SELECT Name FROM ApexClass WHERE NamespacePrefix = null',
+    )).map((r) => r.Name),
+  );
+
+  const flowNames = await safe('FlowDefinition', notes, async () =>
+    (await ctx.tooling.query<{ DeveloperName: string }>(
+      'SELECT DeveloperName FROM FlowDefinition WHERE NamespacePrefix = null',
+    )).map((r) => r.DeveloperName),
+  );
+
+  const componentNames = [...apexClassNames, ...flowNames].sort();
+
+  return {
+    apps: apps.sort(),
+    packages: packages.sort(),
+    recordTypes: recordTypes.sort(),
+    componentNames,
+  };
 }
