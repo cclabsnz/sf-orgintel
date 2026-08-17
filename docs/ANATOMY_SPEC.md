@@ -377,6 +377,29 @@ Three rules, carried from the coverage work already shipped in the map report:
 On a small single-product org View A is a short table. That is acceptable. A band silently
 vanishing is not.
 
+### 6.1 What the artifact records and what the drawing shows are different jobs
+
+`coverage.unavailable[].detail` is the record, and it keeps the platform's error text verbatim,
+including the parts nobody wants to read. The drawing is a presentation of that record, and it
+gets one line of a fixed width, so it may shorten what it shows. Neither may change what the
+record says.
+
+Two rules follow, both found by putting a real platform error on a band for the first time
+(section 9b), and both applied to the drawing only:
+
+- **Flatten.** An SVG `<text>` node has no line breaks. A malformed-query error arrives as
+  several lines carrying a fragment of the query and a caret pointing at a column, and every
+  newline in it renders as a space, so the caveat came out as a smear of query internals.
+- **Lead with the reason.** The platform echoes the query first and says what was wrong with it
+  last, after an `ERROR at Row:N:Column:N` marker. Flattened but untrimmed, the line opened with
+  a column list and ran out of width before reaching `sObject type 'OmniProcessElement' is not
+  supported`, which is the only part that explains the gap. For display, the text between the
+  collector's own introduction and that marker is dropped.
+
+The trim may only ever shorten a platform error. A detail carrying no marker is left alone, so a
+sentence a collector wrote deliberately is never rewritten, and the full text stays reachable in
+the coverage table above the drawing and in the element's `<title>`.
+
 ## 7. Error handling
 
 | Condition | Behaviour |
@@ -499,6 +522,33 @@ it established and no more.
 `SamlSsoConfig` was not queryable on either org, so `ssoConfigs` was empty both times with a
 note saying why. The login-type distribution still populates, so the identity section is not
 wholly blind.
+
+### 9b. The absence paths, measured on a third org
+
+Orgs A and B populated all seven bands and neither had a failed capability read, so View A's
+absence paths went unexercised by both. They were run against a stock Developer Edition org,
+which is thin by construction and is not a client org.
+
+| Path | Reached | What rendered |
+| --- | --- | --- |
+| Empty band | yes, `products` | "None found. This band was collected and the org has none." |
+| Not-collected band | yes, `channels` | "Not collected." plus the deferral detail |
+| Partly-collected caveat, from a **failed** read | yes, `integration` and `external` | "Partly collected." plus the platform's reason |
+| Hatched not-read tile | **no** | every capability read succeeded |
+
+Tiles reconcile: 4 + 0 + 0 + 8 + 1 + 1 + 3 = 17, matching the drawing. Two consecutive runs are
+byte-identical in both `anatomy.json` and the HTML apart from the generated timestamp.
+
+The caveat path had only ever been reached by a *deferral* before this, where the detail is a
+sentence this project wrote. Reaching it by a *failure* put a platform error on a band for the
+first time and exposed a rendering defect described in section 6.1.
+
+**The hatched not-read tile remains unverified against a live org.** It has unit tests and
+fixture renders behind it and nothing else. Reaching it needs an org where a capability count is
+refused rather than absent, which none of the three orgs measured so far provides. This is
+stated rather than left implied, because a path that has never run against a real refusal is
+exactly the kind of thing a reader would otherwise assume was covered by "verified on three
+orgs".
 
 ## 10. Open questions
 

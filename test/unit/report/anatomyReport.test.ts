@@ -86,6 +86,43 @@ describe('renderAnatomyHtml', () => {
     expect(html).toContain('app, console and api channel types were not attempted.');
   });
 
+  it('flattens a multi-line failure detail onto one line before drawing it', () => {
+    // Found on a live org without OmniStudio. The platform's error for an absent sObject is a
+    // multi-line SOQL parse error carrying a fragment of the query and a caret, and an SVG text
+    // node has no line breaks: every newline renders as a space, so the caveat came out as a
+    // smear of query internals and the truncation budget went on them instead of the reason.
+    // The artifact keeps the error verbatim; only the drawing is flattened.
+    const detail =
+      "OmniStudio elements could not be read: \nOmniProcess.Id FROM OmniProcessElement WHERE OmniProcess.OmniProcessType\n" +
+      "                                      ^\nERROR at Row:1:Column:71\nsObject type 'OmniProcessElement' is not supported.";
+    const html = render({
+      edges: [{ endpoint: 'https://x.example', from: null, via: [], detection: 'namedCredential', attribution: 'unattributed' }],
+      coverage: { ...artifact().coverage, unavailable: [{ scope: 'edges.omniStudio', reason: 'failed', detail }] },
+    });
+
+    const drawn = /<text x="16"[^>]*>Partly collected\.[^<]*/.exec(html)?.[0] ?? '';
+    expect(drawn).not.toMatch(/[\n\r\t]/);
+    expect(drawn).not.toMatch(/ {2}/);
+    // The reason leads, and the echoed query is gone: flattening alone left the drawn line
+    // opening with a column list and running out of width before saying anything useful.
+    expect(drawn).toContain("could not be read: sObject type 'OmniProcessElement' is not supported.");
+    expect(drawn).not.toContain('OmniProcess.Id FROM');
+    // The artifact's verbatim text is still reachable, in the coverage table above the drawing.
+    expect(html).toContain('OmniProcess.Id FROM OmniProcessElement');
+  });
+
+  it('leaves a detail alone when it carries no platform error to trim', () => {
+    // The trim may only ever shorten a platform error, never rewrite a sentence a collector
+    // wrote deliberately. A deferral is prose from us, and has to survive intact.
+    const html = render({
+      coverage: {
+        ...artifact().coverage,
+        unavailable: [{ scope: 'channels.network', reason: 'deferred', detail: 'The Network join: not attempted in this phase.' }],
+      },
+    });
+    expect(html).toContain('Not collected. The Network join: not attempted in this phase.');
+  });
+
   it('lists the coverage notes it was given', () => {
     const html = render({ coverage: { ...artifact().coverage, notes: ['Channels currently reflect Site only; the Network join was not attempted.'] } });
     expect(html).toContain('not attempted');
