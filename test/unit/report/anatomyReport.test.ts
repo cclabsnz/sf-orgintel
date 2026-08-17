@@ -98,8 +98,14 @@ describe('renderAnatomyHtml', () => {
   });
 
   it('makes no external requests', () => {
+    // No host exemption, deliberately. The first cut carried `(?!www\.w3\.org)` for an SVG
+    // namespace declaration this renderer never emits, and CodeQL was right to call it high
+    // severity: the lookahead has no right-hand boundary, so `https://www.w3.org.attacker.com/x`
+    // satisfies it and the assertion would have waved through the exact remote asset it exists to
+    // catch. The report embeds its fonts as data URIs and draws inline SVG, so it needs no
+    // protocol URL at all, and the honest assertion is that it contains none.
     const html = render();
-    expect(html).not.toMatch(/https?:\/\/(?!www\.w3\.org)/);
+    expect(html).not.toMatch(/https?:\/\//);
   });
 
   it('is byte-identical for the same artifact', () => {
