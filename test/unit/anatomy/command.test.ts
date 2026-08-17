@@ -10,14 +10,14 @@ describe('writeArtifact', () => {
   afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
   it('writes anatomy.json and returns its path', () => {
-    const artifact = { version: 1, edges: [] } as any;
+    const artifact = { version: 2, edges: [] } as any;
     const p = writeArtifact(dir, artifact);
     expect(p).toBe(join(dir, 'anatomy.json'));
     expect(JSON.parse(readFileSync(p, 'utf-8'))).toEqual(artifact);
   });
 
   it('writes stable JSON, so two runs of the same artifact diff cleanly', () => {
-    const artifact = { version: 1, edges: [] } as any;
+    const artifact = { version: 2, edges: [] } as any;
     const a = readFileSync(writeArtifact(dir, artifact), 'utf-8');
     const b = readFileSync(writeArtifact(dir, artifact), 'utf-8');
     expect(a).toBe(b);
@@ -27,7 +27,7 @@ describe('writeArtifact', () => {
   it('writes no HTML of its own, so a run without --html leaves none behind', () => {
     // The two writers are separate on purpose: --html is opt-in, and a report carrying real
     // product names and endpoints must never appear on disk because a flag was defaulted on.
-    writeArtifact(dir, { version: 1, edges: [] } as any);
+    writeArtifact(dir, { version: 2, edges: [] } as any);
     expect(readdirSync(dir).filter((f) => f.endsWith('.html'))).toEqual([]);
   });
 });

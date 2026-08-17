@@ -39,11 +39,28 @@ export interface SObjectEntry {
 /**
  * Mock RestClient answering the global describe (`/sobjects/`) and, optionally, per-object
  * describes (`/sobjects/<name>/describe/`) from a fixture map.
+ *
+ * Pass an `Error` instead of a list to make every GET fail, which is how a collector's
+ * describe-refused path gets exercised without casting a hand-rolled object into `RestClient`.
  */
 export function mockRest(
-  sobjects: SObjectEntry[],
+  sobjects: SObjectEntry[] | Error,
   describes: Record<string, unknown> = {},
 ): RestClient {
+  if (sobjects instanceof Error) {
+    const err = sobjects;
+    return {
+      async get<T>(): Promise<T> {
+        throw err;
+      },
+      async getRaw(): Promise<string> {
+        throw err;
+      },
+      async getRawToFile(): Promise<number> {
+        throw err;
+      },
+    };
+  }
   const full = sobjects.map((s) => ({
     name: s.name,
     label: s.label ?? s.name,

@@ -85,9 +85,14 @@ and a naive prefix-to-app match invents products that do not exist.
 `anatomy.json`, written to `--output`, is the contract. `--html` renders View A on top of it.
 Rendering is optional; the JSON is not.
 
+**Versioning.** `version` is bumped when an existing field changes meaning, not only when a field
+is added or removed. A renamed field announces itself; a field that keeps its name while the
+number behind it changes does not, and that is the case worth a version for. Version 2 exists for
+exactly one such change, `capabilities.changeDataCapture`, described below.
+
 ```jsonc
 {
-  "version": 1,
+  "version": 2,
   "provenance": { "generatedAt": "...", "orgId": "...", "toolVersion": "...", "apiVersion": "..." },
   "products": [
     { "key": "ACME", "label": "...", "source": "app" | "package" | "recordType",
@@ -101,7 +106,7 @@ Rendering is optional; the JSON is not.
   ],
   "capabilities": {
     "apexClasses": 0, "apexTriggers": 0, "flows": 0, "lwc": 0, "aura": 0,
-    "platformEvents": ["..."], "changeDataCapture": ["..."],
+    "platformEvents": ["Order__e"], "changeDataCapture": ["AccountChangeEvent"],
     "namedCredentials": 0, "externalDataSources": 0, "remoteSites": 0,
     "eventRelayConfigured": false
   },
@@ -175,7 +180,7 @@ prevents another collector from running.
 | `collectProducts` | installed packages, `CustomApplication`, `Case`/`Account` RecordType |
 | `collectPersonas` | `UserLicense`, `User` grouped by profile, permission set groups |
 | `collectChannels` | `Site`, `Network`, `UserAppInfo` joined to `AppDefinition` |
-| `collectCapabilities` | counts over Apex, Flow, LWC, Aura; `__e` and `ChangeEvent` suffixes; `EventRelayConfig` |
+| `collectCapabilities` | counts over Apex, Flow, LWC, Aura; `__e` suffix; `PlatformEventChannelMember`; `EventRelayConfig` |
 | `collectIdentity` | metadata list and targeted retrieve for SSO; `LoginHistory` grouped by application and login type |
 | `collectIntegrationEdges` | `NamedCredential`, `RemoteProxy`, `ApexClass.Body`, `OmniProcessElement` |
 
@@ -190,6 +195,37 @@ Collectors perform IO. Everything after them is pure:
 - `resolveChains(omniElements, apexIndex) -> Edge[]`
 
 Attribution is the part most likely to be wrong, so it must be unit-testable with no org.
+
+### 5.0 Change Data Capture means enabled, not supported
+
+Version 1 built `capabilities.changeDataCapture` from the global describe, taking every sObject
+whose name ended in `ChangeEvent`. That is not a fact about the org. The platform exposes a change
+event type for every object that *supports* CDC, so the list grows with the org's object count
+and says nothing about whether one change event is being published anywhere. It read **419 on an
+org with CDC switched off entirely**, and View A then drew that as the largest, darkest tile in
+the Ops band: a capability the org does not use, rendered as its heaviest reading.
+
+The measurement is `PlatformEventChannelMember`, which the Tooling API reference defines as "an
+entity selected for Change Data Capture notifications on a standard or custom channel". One query
+therefore covers both the Setup *Selected Entities* list, which is the standard `ChangeEvents`
+channel, and any custom `MyChannel__chn`:
+
+```sql
+SELECT SelectedEntity FROM PlatformEventChannelMember
+```
+
+`SelectedEntity` is the change event name, for example `AccountChangeEvent`. Results are
+de-duplicated, because one entity can belong to more than one channel, and sorted.
+
+Measured across six real orgs, every one returned zero rows. An empty array is therefore the
+expected reading on most orgs and is a genuine measurement, not a gap: it raises no
+`coverage.unavailable` entry, and View A draws it as a measured `0`. Only a refused read does
+that, under the same absent-versus-refused rule `EventRelayConfig` already follows, since
+`INVALID_TYPE` on `PlatformEventChannelMember` means the feature is genuinely absent from the org.
+
+The positive case is unverified against a live org, because none of the six had CDC enabled. It
+rests on the documented behaviour of the object rather than on a reading, which is weaker evidence
+than everything else in this section and is worth confirming on the first org that has CDC on.
 
 ### 5.1 Apex bodies
 
@@ -473,9 +509,6 @@ wholly blind.
   before phase 3 assumes the edge set is complete.
 - Whether `products[].componentCount` should count flows and Apex equally. Currently equal,
   which over-weights Apex-heavy products.
-- `capabilities.changeDataCapture` counts every `ChangeEvent` sObject the platform exposes,
-  419 on one org, not the channels actually enabled. That overstates a capability, and needs a
-  decision about what CDC capability should mean before the number is shown to anyone.
 - Prefix candidates that clear the floor but name infrastructure rather than a product
   (`COMMUNITIES`, `LIGHTNING`, `USER` were all seen) land in `prefixesUnresolved`. Correct, in
   that none became a product, but the list is noisier than a reader would like.
