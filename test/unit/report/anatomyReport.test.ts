@@ -71,6 +71,21 @@ describe('renderAnatomyHtml', () => {
     expect(html).toContain('FlowDefinitionView was not queryable.');
   });
 
+  it('qualifies a band that has tiles but was only partly gathered', () => {
+    // Found by rendering a live org: ten site channels drew as a complete channel inventory
+    // while three of the four channel types had never been attempted. The caveat has to sit on
+    // the band, not only in the coverage table, because the band is what the reader looks at.
+    const html = render({
+      channels: [{ type: 'site', name: 'Portal', status: 'Active' }],
+      coverage: {
+        ...artifact().coverage,
+        unavailable: [{ scope: 'channels.appConsoleApi', reason: 'deferred', detail: 'app, console and api channel types were not attempted.' }],
+      },
+    });
+    expect(html).toContain('Partly collected');
+    expect(html).toContain('app, console and api channel types were not attempted.');
+  });
+
   it('lists the coverage notes it was given', () => {
     const html = render({ coverage: { ...artifact().coverage, notes: ['Channels currently reflect Site only; the Network join was not attempted.'] } });
     expect(html).toContain('not attempted');

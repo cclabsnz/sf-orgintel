@@ -184,6 +184,48 @@ describe('buildBands', () => {
     expect(ops.tiles.some((t) => /event relay/i.test(t.label))).toBe(true);
   });
 
+  it('declares what a populated band still did not gather, instead of implying it is complete', () => {
+    // Found by rendering a live org: the channels band drew ten site channels and nothing else,
+    // while the artifact recorded that three of the four channel types and the Network join were
+    // never attempted. A band with tiles was classified `populated` and stopped consulting
+    // `coverage.unavailable` entirely, so the drawing asserted a complete channel inventory. That
+    // is the same "we never looked" misreading `emptiness` exists to prevent, one band over.
+    const a = artifact({
+      channels: [{ type: 'site', name: 'Portal', status: 'Active' }],
+      coverage: {
+        ...artifact().coverage,
+        unavailable: [
+          { scope: 'channels.appConsoleApi', reason: 'deferred', detail: 'app, console and api channel types were not attempted.' },
+          { scope: 'channels.network', reason: 'deferred', detail: 'The Network join was not attempted.' },
+        ],
+      },
+    });
+    const channels = buildBands(a).find((b) => b.id === 'channels')!;
+    expect(channels.emptiness).toBe('populated');
+    expect(channels.caveats).toEqual([
+      'app, console and api channel types were not attempted.',
+      'The Network join was not attempted.',
+    ]);
+  });
+
+  it('does not caveat the users band for a field it never renders', () => {
+    // The same asymmetry BAND_SCOPES already encodes for emptiness has to hold for caveats:
+    // `personas.landingApp` defers one optional field, while `activeUsers`, the only reading the
+    // band draws, is queried for real on every run. Caveating it would cry wolf on every org.
+    const a = artifact({
+      personas: [{ profile: 'Support', licence: 'Salesforce', activeUsers: 7, landingApp: null }],
+      coverage: {
+        ...artifact().coverage,
+        unavailable: [{ scope: 'personas.landingApp', reason: 'deferred', detail: 'landingApp is not collected in this phase.' }],
+      },
+    });
+    expect(buildBands(a).find((b) => b.id === 'users')!.caveats).toEqual([]);
+  });
+
+  it('leaves a band with nothing missing uncaveated', () => {
+    for (const band of buildBands(artifact())) expect(band.caveats).toEqual([]);
+  });
+
   it('is deterministic and sorts tiles within a band', () => {
     const a = artifact({ products: [
       { key: 'ZED', label: 'ZED', source: 'app', componentCount: 5, prefixes: ['ZED'] },

@@ -323,6 +323,17 @@ Three rules, carried from the coverage work already shipped in the map report:
   its source record was actually collected.
 - Absence renders explicitly. "No Event Relay configured" gets a slot. A band with no contents
   says it is empty rather than collapsing, because a missing band reads as *not checked*.
+- Partial collection renders explicitly too, and this is a separate rule because the first pass
+  missed it. `emptiness` answers "was this gathered" only for a band with nothing in it, so a
+  band that *has* tiles stopped consulting `coverage.unavailable` altogether. On a live org that
+  drew ten Site channels as though they were the org's whole channel inventory, while three of
+  the four channel types and the Network join had never been attempted, both of them recorded in
+  `coverage.unavailable` and both ignored because the band had tiles. A populated band therefore
+  carries `BandContent.caveats`, the details of every `coverage.unavailable` entry in its own
+  scope list, and renders them on the band as "Partly collected", the same admission as
+  "Not collected" scoped smaller. The coverage section stating the same gap above the drawing is
+  not sufficient on its own: the band is what a reader looks at, and an uncaveated band is a
+  claim of completeness.
 - A coverage section sits above the bands, stating Apex bodies scanned against unreadable,
   OmniStudio elements scanned, and unresolved prefixes. With prefix resolution around half,
   this is load-bearing rather than a footnote.

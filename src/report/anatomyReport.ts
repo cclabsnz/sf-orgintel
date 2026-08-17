@@ -196,6 +196,19 @@ function renderBand(b: PlacedBand, idx: number, width: number): string {
       : `<text x="16" y="${r(b.y + 44)}" font-size="11.5" fill="${INK}">` +
         `${esc(truncate(statusText, width - 32, LABEL_CHAR_W))}<title>${esc(statusText)}</title></text>`;
 
+  // A populated band that was only partly gathered. Without this the drawing quietly asserts a
+  // complete inventory: a live org rendered ten site channels as the whole of its channels while
+  // three of the four channel types had never been attempted. "Partly collected" is deliberately
+  // the same shape of phrase as "Not collected", since it is the same admission, scoped smaller.
+  const caveat =
+    b.caveats.length === 0 || b.caveatY === null
+      ? ''
+      : (() => {
+          const text = `Partly collected. ${b.caveats.join(' ')}`;
+          return `<text x="16" y="${b.caveatY}" font-size="10" fill="${DIM}">` +
+            `${esc(truncate(text, width - 32, 5.6))}<title>${esc(text)}</title></text>`;
+        })();
+
   const maxMetric = b.tiles.reduce((m, t) => Math.max(m, t.tile.metric), 0);
   const minMetric = b.tiles.reduce((m, t) => Math.min(m, t.tile.metric), maxMetric);
   // A band whose readings are all the same has no ranking to show, and shading it by ratio would
@@ -204,7 +217,7 @@ function renderBand(b: PlacedBand, idx: number, width: number): string {
   const uniform = maxMetric === minMetric;
   const tiles = b.tiles.map((p) => renderTile(p.tile, p.x, p.y, p.w, p.h, uniform ? 0 : maxMetric)).join('');
 
-  return ground + heading + status + tiles;
+  return ground + heading + caveat + status + tiles;
 }
 
 function renderTile(tile: Tile, x: number, y: number, w: number, h: number, maxMetric: number): string {

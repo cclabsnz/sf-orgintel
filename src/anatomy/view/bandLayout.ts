@@ -30,6 +30,9 @@ export interface PlacedBand {
   tiles: PlacedTile[];
   emptiness: BandContent['emptiness'];
   note: string | null;
+  caveats: string[];
+  /** Baseline for the caveat line, when there is one. Null when the band has nothing to qualify. */
+  caveatY: number | null;
 }
 
 export interface BandLayout {
@@ -56,6 +59,8 @@ const MARGIN_Y = 12;
 const HEADER_H = 26;
 /** Breathing room under the last row of a band, before the next band's header. */
 const BAND_PAD_BOTTOM = 12;
+/** Extra strip under the header for a band that has something to qualify. */
+const CAVEAT_H = 15;
 
 /**
  * Narrowest a tile may be drawn. Below roughly this, a label is unreadable and a reading is lost.
@@ -93,7 +98,10 @@ function tileWidth(metric: number, maxMetric: number, available: number): number
 function layoutBand(band: BandContent, top: number, width: number, tileHeight: number, gutter: number): PlacedBand {
   const available = Math.max(FLOOR_W, width - MARGIN_X * 2);
   const maxMetric = band.tiles.reduce((m, t) => Math.max(m, t.metric), 0);
-  const tilesTop = top + HEADER_H;
+  // One line, however many caveats there are: they render as one joined sentence, and a band
+  // that grows a row per caveat would push its own tiles down for no gain in what is said.
+  const caveatH = band.caveats.length > 0 ? CAVEAT_H : 0;
+  const tilesTop = top + HEADER_H + caveatH;
 
   const placed: PlacedTile[] = [];
   let x = MARGIN_X;
@@ -113,7 +121,7 @@ function layoutBand(band: BandContent, top: number, width: number, tileHeight: n
 
   // Empty and not-collected bands reserve one row anyway. See invariant 1 above.
   const rows = band.tiles.length === 0 ? 1 : row + 1;
-  const height = HEADER_H + rows * tileHeight + (rows - 1) * gutter + BAND_PAD_BOTTOM;
+  const height = HEADER_H + caveatH + rows * tileHeight + (rows - 1) * gutter + BAND_PAD_BOTTOM;
 
   return {
     id: band.id,
@@ -123,6 +131,8 @@ function layoutBand(band: BandContent, top: number, width: number, tileHeight: n
     tiles: placed,
     emptiness: band.emptiness,
     note: band.note,
+    caveats: band.caveats,
+    caveatY: caveatH > 0 ? r(top + HEADER_H + 10) : null,
   };
 }
 

@@ -1,12 +1,13 @@
 import { layoutBands } from '../../../src/anatomy/view/bandLayout.js';
 import type { BandContent } from '../../../src/anatomy/view/bands.js';
 
-const band = (id: string, n: number, metrics: number[] = []): BandContent =>
+const band = (id: string, n: number, metrics: number[] = [], caveats: string[] = []): BandContent =>
   ({
     id: id as BandContent['id'],
     title: id,
     emptiness: n === 0 ? 'empty' : 'populated',
     note: null,
+    caveats,
     tiles: Array.from({ length: n }, (_, i) => ({
       id: `${id}-${i}`, label: `${id}-${i}`, sublabel: null,
       metric: metrics[i] ?? 1, fill: null, unavailable: false,
@@ -58,6 +59,21 @@ describe('layoutBands', () => {
   it('does not divide by zero when every metric is zero', () => {
     const out = layoutBands([band('products', 3, [0, 0, 0])]);
     for (const t of out.bands[0].tiles) expect(Number.isFinite(t.w)).toBe(true);
+  });
+
+  it('reserves room for a caveat, so it cannot be written over the tiles it qualifies', () => {
+    const plain = layoutBands([band('channels', 3)]).bands[0];
+    const caveated = layoutBands([band('channels', 3, [], ['The Network join was not attempted.'])]).bands[0];
+    expect(caveated.height).toBeGreaterThan(plain.height);
+    expect(caveated.tiles[0].y).toBeGreaterThan(plain.tiles[0].y);
+    expect(caveated.caveats).toEqual(['The Network join was not attempted.']);
+  });
+
+  it('reserves one caveat line however many caveats there are', () => {
+    // They render as one joined sentence, so two do not cost twice the room.
+    const one = layoutBands([band('channels', 3, [], ['a'])]).bands[0];
+    const two = layoutBands([band('channels', 3, [], ['a', 'b'])]).bands[0];
+    expect(two.height).toBe(one.height);
   });
 
   it('is deterministic for the same input', () => {
