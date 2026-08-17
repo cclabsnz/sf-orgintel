@@ -191,7 +191,9 @@ function renderBand(b: PlacedBand, idx: number, width: number): string {
   const status =
     b.emptiness === 'populated'
       ? ''
-      : `<text x="16" y="${r(b.y + 44)}" font-size="11" fill="${DIM}">` +
+      // Set in ink, not the dim grey the band title uses. This sentence is the whole finding for
+      // an empty band, and it was the faintest thing in the row when it was styled as a caption.
+      : `<text x="16" y="${r(b.y + 44)}" font-size="11.5" fill="${INK}">` +
         `${esc(truncate(statusText, width - 32, LABEL_CHAR_W))}<title>${esc(statusText)}</title></text>`;
 
   const maxMetric = b.tiles.reduce((m, t) => Math.max(m, t.tile.metric), 0);
