@@ -1,16 +1,15 @@
-import { mockSoql, mockTooling } from '../helpers/mocks.js';
+import { mockSoql, mockTooling, mockIntelContext } from '../helpers/mocks.js';
 import { collectIdentity } from '../../../src/anatomy/collectors/identity.js';
 
 describe('collectIdentity', () => {
   it('reports login counts by type as facts, with no grading', async () => {
     const notes: string[] = [];
     const out = await collectIdentity(
-      { soql: mockSoql([{ test: (s) => s.includes('LoginHistory'), records: [
+      mockIntelContext({ soql: mockSoql([{ test: (s) => s.includes('LoginHistory'), records: [
           { Application: 'Portal', LoginType: 'Application', expr0: 900 },
           { Application: 'Portal', LoginType: 'SAML Sfdc Initiated SSO', expr0: 80 },
         ] }]),
-        tooling: mockTooling([{ test: () => true, records: [] }]),
-        metadata: { list: async () => [] } } as any,
+        tooling: mockTooling([{ test: () => true, records: [] }]) }),
       notes,
     );
     expect(out.loginsByType).toHaveLength(2);
@@ -28,7 +27,7 @@ describe('collectIdentity', () => {
   it('sorts ssoConfigs by issuer, null-safe, for deterministic output', async () => {
     const notes: string[] = [];
     const out = await collectIdentity(
-      {
+      mockIntelContext({
         soql: mockSoql([{ test: (s) => s.includes('LoginHistory'), records: [] }]),
         tooling: mockTooling([
           {
@@ -36,8 +35,7 @@ describe('collectIdentity', () => {
             records: [{ Issuer: 'https://zed.example.com' }, { Issuer: null }, { Issuer: 'https://acme.example.com' }],
           },
         ]),
-        metadata: { list: async () => [] },
-      } as any,
+      }),
       notes,
     );
     expect(out.ssoConfigs.map((c) => c.issuer)).toEqual([
@@ -50,10 +48,9 @@ describe('collectIdentity', () => {
   it('still returns login data when SSO metadata cannot be retrieved', async () => {
     const notes: string[] = [];
     const out = await collectIdentity(
-      { soql: mockSoql([{ test: (s) => s.includes('LoginHistory'), records: [
+      mockIntelContext({ soql: mockSoql([{ test: (s) => s.includes('LoginHistory'), records: [
           { Application: 'X', LoginType: 'Application', expr0: 1 } ] }]),
-        tooling: mockTooling([{ test: () => true, error: new Error('no access') }]),
-        metadata: { list: async () => { throw new Error('denied'); } } } as any,
+        tooling: mockTooling([{ test: () => true, error: new Error('no access') }]) }),
       notes,
     );
     expect(out.ssoConfigs).toEqual([]);

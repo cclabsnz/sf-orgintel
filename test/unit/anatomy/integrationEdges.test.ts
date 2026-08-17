@@ -1,4 +1,4 @@
-import { mockSoql, mockTooling } from '../helpers/mocks.js';
+import { mockSoql, mockTooling, mockIntelContext } from '../helpers/mocks.js';
 import { collectIntegrationEdges, extractCallouts, extractRestActionCredential } from '../../../src/anatomy/collectors/integrationEdges.js';
 
 describe('extractCallouts', () => {
@@ -30,14 +30,14 @@ describe('collectIntegrationEdges', () => {
   it('counts unreadable Apex bodies instead of silently dropping them', async () => {
     const notes: string[] = [];
     const out = await collectIntegrationEdges(
-      { tooling: mockTooling([
+      mockIntelContext({ tooling: mockTooling([
           { test: (s) => s.includes('FROM ApexClass'), records: [
             { Id: '01p1', Name: 'A', Body: "callout:Payments_API" },
             { Id: '01p2', Name: 'B', Body: null },
           ] },
           { test: () => true, records: [] },
         ]),
-        soql: mockSoql([{ test: () => true, records: [] }]) } as any,
+        soql: mockSoql([{ test: () => true, records: [] }]) }),
       notes,
     );
     expect(out.apexBodiesScanned).toBe(1);
@@ -48,9 +48,9 @@ describe('collectIntegrationEdges', () => {
   it('does not fail the collector when OmniStudio is absent', async () => {
     const notes: string[] = [];
     const out = await collectIntegrationEdges(
-      { tooling: mockTooling([{ test: () => true, records: [] }]),
+      mockIntelContext({ tooling: mockTooling([{ test: () => true, records: [] }]),
         soql: mockSoql([{ test: (s) => s.includes('OmniProcessElement'), error: new Error("sObject type 'OmniProcessElement' is not supported") },
-                        { test: () => true, records: [] }]) } as any,
+                        { test: () => true, records: [] }]) }),
       notes,
     );
     expect(out.remoteActions).toEqual([]);
@@ -61,13 +61,13 @@ describe('collectIntegrationEdges', () => {
   it('emits an apexCallout edge for a callout with no OmniStudio reference to its class', async () => {
     const notes: string[] = [];
     const out = await collectIntegrationEdges(
-      { tooling: mockTooling([
+      mockIntelContext({ tooling: mockTooling([
           { test: (s) => s.includes('FROM ApexClass'), records: [
             { Id: '01p1', Name: 'OrphanService', Body: 'callout:Payments_API' },
           ] },
           { test: () => true, records: [] },
         ]),
-        soql: mockSoql([{ test: () => true, records: [] }]) } as any,
+        soql: mockSoql([{ test: () => true, records: [] }]) }),
       notes,
     );
     expect(out.direct).toContainEqual({
@@ -82,12 +82,12 @@ describe('collectIntegrationEdges', () => {
   it('reads NamedCredential and RemoteProxy names for endpointOnly detection', async () => {
     const notes: string[] = [];
     const out = await collectIntegrationEdges(
-      { tooling: mockTooling([
+      mockIntelContext({ tooling: mockTooling([
           { test: (s) => s.includes('FROM ApexClass'), records: [] },
           { test: (s) => s.includes('FROM NamedCredential'), records: [{ DeveloperName: 'Payments_API' }] },
           { test: (s) => s.includes('FROM RemoteProxy'), records: [{ SiteName: 'Legacy_Site' }] },
         ]),
-        soql: mockSoql([{ test: () => true, records: [] }]) } as any,
+        soql: mockSoql([{ test: () => true, records: [] }]) }),
       notes,
     );
     expect(out.namedCredentials).toEqual(['Payments_API']);
@@ -97,12 +97,12 @@ describe('collectIntegrationEdges', () => {
   it('records a note rather than throwing when NamedCredential or RemoteProxy cannot be read', async () => {
     const notes: string[] = [];
     const out = await collectIntegrationEdges(
-      { tooling: mockTooling([
+      mockIntelContext({ tooling: mockTooling([
           { test: (s) => s.includes('FROM ApexClass'), records: [] },
           { test: (s) => s.includes('FROM NamedCredential'), error: new Error('INSUFFICIENT_ACCESS') },
           { test: (s) => s.includes('FROM RemoteProxy'), error: new Error('INSUFFICIENT_ACCESS') },
         ]),
-        soql: mockSoql([{ test: () => true, records: [] }]) } as any,
+        soql: mockSoql([{ test: () => true, records: [] }]) }),
       notes,
     );
     expect(out.namedCredentials).toEqual([]);
@@ -114,7 +114,7 @@ describe('collectIntegrationEdges', () => {
   it('matches the platform casing "Rest Action" and produces a namedCredential edge', async () => {
     const notes: string[] = [];
     const out = await collectIntegrationEdges(
-      { tooling: mockTooling([{ test: () => true, records: [] }]),
+      mockIntelContext({ tooling: mockTooling([{ test: () => true, records: [] }]),
         soql: mockSoql([
           { test: (s) => s.includes('OmniProcessElement'), records: [
             {
@@ -124,7 +124,7 @@ describe('collectIntegrationEdges', () => {
             },
           ] },
           { test: () => true, records: [] },
-        ]) } as any,
+        ]) }),
       notes,
     );
     expect(out.direct).toContainEqual({
@@ -140,7 +140,7 @@ describe('collectIntegrationEdges', () => {
   it('still chains a "Remote Action" element to its class', async () => {
     const notes: string[] = [];
     const out = await collectIntegrationEdges(
-      { tooling: mockTooling([{ test: () => true, records: [] }]),
+      mockIntelContext({ tooling: mockTooling([{ test: () => true, records: [] }]),
         soql: mockSoql([
           { test: (s) => s.includes('OmniProcessElement'), records: [
             {
@@ -150,7 +150,7 @@ describe('collectIntegrationEdges', () => {
             },
           ] },
           { test: () => true, records: [] },
-        ]) } as any,
+        ]) }),
       notes,
     );
     expect(out.remoteActions).toEqual([{ omniProcess: 'ACME_GetThing', remoteClass: 'ACME_Service' }]);
@@ -162,7 +162,7 @@ describe('collectIntegrationEdges', () => {
     // be labelled `namedCredential`, which asserts a named endpoint was found when none was.
     const notes: string[] = [];
     const out = await collectIntegrationEdges(
-      { tooling: mockTooling([{ test: () => true, records: [] }]),
+      mockIntelContext({ tooling: mockTooling([{ test: () => true, records: [] }]),
         soql: mockSoql([
           { test: (s) => s.includes('OmniProcessElement'), records: [
             {
@@ -172,7 +172,7 @@ describe('collectIntegrationEdges', () => {
             },
           ] },
           { test: () => true, records: [] },
-        ]) } as any,
+        ]) }),
       notes,
     );
     expect(out.omniElementsScanned).toBe(1);
@@ -190,7 +190,7 @@ describe('collectIntegrationEdges', () => {
     // credential must keep detection: namedCredential, not fall through to endpointOnly.
     const notes: string[] = [];
     const out = await collectIntegrationEdges(
-      { tooling: mockTooling([{ test: () => true, records: [] }]),
+      mockIntelContext({ tooling: mockTooling([{ test: () => true, records: [] }]),
         soql: mockSoql([
           { test: (s) => s.includes('OmniProcessElement'), records: [
             {
@@ -200,7 +200,7 @@ describe('collectIntegrationEdges', () => {
             },
           ] },
           { test: () => true, records: [] },
-        ]) } as any,
+        ]) }),
       notes,
     );
     expect(out.direct).toContainEqual({
@@ -215,7 +215,7 @@ describe('collectIntegrationEdges', () => {
   it('emits a remoteActionChain edge with endpoint: null for a Remote Action whose config carries no remoteClass', async () => {
     const notes: string[] = [];
     const out = await collectIntegrationEdges(
-      { tooling: mockTooling([{ test: () => true, records: [] }]),
+      mockIntelContext({ tooling: mockTooling([{ test: () => true, records: [] }]),
         soql: mockSoql([
           { test: (s) => s.includes('OmniProcessElement'), records: [
             {
@@ -225,7 +225,7 @@ describe('collectIntegrationEdges', () => {
             },
           ] },
           { test: () => true, records: [] },
-        ]) } as any,
+        ]) }),
       notes,
     );
     expect(out.omniElementsScanned).toBe(1);
@@ -242,7 +242,7 @@ describe('collectIntegrationEdges', () => {
   it('counts distinct procedure names, not distinct OmniProcess ids, for omniProceduresWithIntegrationElements', async () => {
     const notes: string[] = [];
     const out = await collectIntegrationEdges(
-      { tooling: mockTooling([{ test: () => true, records: [] }]),
+      mockIntelContext({ tooling: mockTooling([{ test: () => true, records: [] }]),
         soql: mockSoql([
           { test: (s) => s.includes('OmniProcessElement'), records: [
             {
@@ -257,7 +257,7 @@ describe('collectIntegrationEdges', () => {
             },
           ] },
           { test: () => true, records: [] },
-        ]) } as any,
+        ]) }),
       notes,
     );
     expect(out.omniProceduresWithIntegrationElements).toBe(1);
@@ -269,7 +269,7 @@ describe('collectIntegrationEdges', () => {
     // still count as one procedure: the field counts procedures, not versions.
     const notes: string[] = [];
     const out = await collectIntegrationEdges(
-      { tooling: mockTooling([{ test: () => true, records: [] }]),
+      mockIntelContext({ tooling: mockTooling([{ test: () => true, records: [] }]),
         soql: mockSoql([
           { test: (s) => s.includes('OmniProcessElement'), records: [
             {
@@ -289,7 +289,7 @@ describe('collectIntegrationEdges', () => {
             },
           ] },
           { test: () => true, records: [] },
-        ]) } as any,
+        ]) }),
       notes,
     );
     expect(out.omniProceduresWithIntegrationElements).toBe(2);
@@ -302,7 +302,7 @@ describe('collectIntegrationEdges', () => {
     // count must key on OmniProcess.Id when the name is absent, since the Id is unique per row.
     const notes: string[] = [];
     const out = await collectIntegrationEdges(
-      { tooling: mockTooling([{ test: () => true, records: [] }]),
+      mockIntelContext({ tooling: mockTooling([{ test: () => true, records: [] }]),
         soql: mockSoql([
           { test: (s) => s.includes('OmniProcessElement'), records: [
             {
@@ -317,7 +317,7 @@ describe('collectIntegrationEdges', () => {
             },
           ] },
           { test: () => true, records: [] },
-        ]) } as any,
+        ]) }),
       notes,
     );
     expect(out.omniProceduresWithIntegrationElements).toBe(2);
@@ -330,7 +330,7 @@ describe('collectIntegrationEdges', () => {
     const notes: string[] = [];
     let capturedQuery = '';
     const out = await collectIntegrationEdges(
-      { tooling: mockTooling([{ test: () => true, records: [] }]),
+      mockIntelContext({ tooling: mockTooling([{ test: () => true, records: [] }]),
         soql: mockSoql([
           { test: (s) => s.includes('COUNT(Id)') && s.includes('OmniProcessElement'), records: [{ expr0: 0 }] },
           { test: (s) => {
@@ -338,7 +338,7 @@ describe('collectIntegrationEdges', () => {
               return s.includes('OmniProcessElement');
             }, records: [] },
           { test: () => true, records: [] },
-        ]) } as any,
+        ]) }),
       notes,
     );
     expect(capturedQuery).toContain('OmniProcess.IsActive = true');
@@ -350,7 +350,7 @@ describe('collectIntegrationEdges', () => {
     // silently dropping evidence. The exclusion must be counted and stated.
     const notes: string[] = [];
     const out = await collectIntegrationEdges(
-      { tooling: mockTooling([{ test: () => true, records: [] }]),
+      mockIntelContext({ tooling: mockTooling([{ test: () => true, records: [] }]),
         soql: mockSoql([
           { test: (s) => s.includes('COUNT(Id)') && s.includes('OmniProcessElement'), records: [{ expr0: 116 }] },
           { test: (s) => s.includes('OmniProcessElement'), records: [
@@ -361,7 +361,7 @@ describe('collectIntegrationEdges', () => {
             },
           ] },
           { test: () => true, records: [] },
-        ]) } as any,
+        ]) }),
       notes,
     );
     expect(out.omniElementsScanned).toBe(1);
@@ -373,7 +373,7 @@ describe('collectIntegrationEdges', () => {
   it('does not add a superseded note when nothing was excluded', async () => {
     const notes: string[] = [];
     const out = await collectIntegrationEdges(
-      { tooling: mockTooling([{ test: () => true, records: [] }]),
+      mockIntelContext({ tooling: mockTooling([{ test: () => true, records: [] }]),
         soql: mockSoql([
           { test: (s) => s.includes('COUNT(Id)') && s.includes('OmniProcessElement'), records: [{ expr0: 0 }] },
           { test: (s) => s.includes('OmniProcessElement'), records: [
@@ -384,7 +384,7 @@ describe('collectIntegrationEdges', () => {
             },
           ] },
           { test: () => true, records: [] },
-        ]) } as any,
+        ]) }),
       notes,
     );
     expect(out.omniElementsSkippedSuperseded).toBe(0);
@@ -394,7 +394,7 @@ describe('collectIntegrationEdges', () => {
   it('counts and notes Integration Procedure Action elements rather than dropping them silently', async () => {
     const notes: string[] = [];
     const out = await collectIntegrationEdges(
-      { tooling: mockTooling([{ test: () => true, records: [] }]),
+      mockIntelContext({ tooling: mockTooling([{ test: () => true, records: [] }]),
         soql: mockSoql([
           { test: (s) => s.includes('OmniProcessElement'), records: [
             {
@@ -404,7 +404,7 @@ describe('collectIntegrationEdges', () => {
             },
           ] },
           { test: () => true, records: [] },
-        ]) } as any,
+        ]) }),
       notes,
     );
     expect(out.omniElementsScanned).toBe(1);
@@ -415,14 +415,14 @@ describe('collectIntegrationEdges', () => {
   it('notes namespaced Apex classes excluded from body scanning rather than letting apexBodiesUnreadable read as complete coverage', async () => {
     const notes: string[] = [];
     const out = await collectIntegrationEdges(
-      { tooling: mockTooling([
+      mockIntelContext({ tooling: mockTooling([
           { test: (s) => s.includes('WHERE NamespacePrefix = null'), records: [
             { Id: '01p1', Name: 'A', Body: 'callout:Payments_API' },
           ] },
           { test: (s) => s.includes('WHERE NamespacePrefix != null'), records: [{ expr0: 42 }] },
           { test: () => true, records: [] },
         ]),
-        soql: mockSoql([{ test: () => true, records: [] }]) } as any,
+        soql: mockSoql([{ test: () => true, records: [] }]) }),
       notes,
     );
     expect(out.apexBodiesScanned).toBe(1);
@@ -434,7 +434,7 @@ describe('collectIntegrationEdges', () => {
   it('records a note and drops the element when Type matches neither branch', async () => {
     const notes: string[] = [];
     const out = await collectIntegrationEdges(
-      { tooling: mockTooling([{ test: () => true, records: [] }]),
+      mockIntelContext({ tooling: mockTooling([{ test: () => true, records: [] }]),
         soql: mockSoql([
           { test: (s) => s.includes('OmniProcessElement'), records: [
             {
@@ -444,7 +444,7 @@ describe('collectIntegrationEdges', () => {
             },
           ] },
           { test: () => true, records: [] },
-        ]) } as any,
+        ]) }),
       notes,
     );
     expect(out.direct).toEqual([]);

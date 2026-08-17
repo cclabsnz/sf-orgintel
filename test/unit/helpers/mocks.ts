@@ -1,4 +1,5 @@
-import type { SoqlClient, ToolingClient, RestClient, MetadataClient, QueryResult } from '@cclabsnz/sf-core';
+import type { SoqlClient, ToolingClient, RestClient, MetadataClient, QueryResult, OrgInfo } from '@cclabsnz/sf-core';
+import type { IntelContext } from '../../../src/lib/wire.js';
 
 export interface SoqlHandler {
   test: (soql: string) => boolean;
@@ -104,3 +105,76 @@ export const noopMetadata: MetadataClient = {
     return null;
   },
 };
+
+function unconfiguredSoql(): SoqlClient {
+  return {
+    async query<T>(): Promise<QueryResult<T>> {
+      throw new Error('mockIntelContext: soql was not provided but was called');
+    },
+    async queryAll<T>(): Promise<T[]> {
+      throw new Error('mockIntelContext: soql was not provided but was called');
+    },
+  };
+}
+
+function unconfiguredTooling(): ToolingClient {
+  return {
+    async query<T>(): Promise<T[]> {
+      throw new Error('mockIntelContext: tooling was not provided but was called');
+    },
+    async getRecord<T>(): Promise<T> {
+      throw new Error('mockIntelContext: tooling was not provided but was called');
+    },
+  };
+}
+
+function unconfiguredRest(): RestClient {
+  return {
+    async get<T>(): Promise<T> {
+      throw new Error('mockIntelContext: rest was not provided but was called');
+    },
+    async getRaw(): Promise<string> {
+      throw new Error('mockIntelContext: rest was not provided but was called');
+    },
+    async getRawToFile(): Promise<number> {
+      throw new Error('mockIntelContext: rest was not provided but was called');
+    },
+  };
+}
+
+function unconfiguredMetadata(): MetadataClient {
+  return {
+    async read<T>(): Promise<T | null> {
+      throw new Error('mockIntelContext: metadata was not provided but was called');
+    },
+  };
+}
+
+const unconfiguredOrgInfo: OrgInfo = {
+  id: 'mockIntelContext: orgInfo was not provided',
+  name: 'mockIntelContext: orgInfo was not provided',
+  type: 'mockIntelContext: orgInfo was not provided',
+  isSandbox: false,
+  instance: 'mockIntelContext: orgInfo was not provided',
+  instanceUrl: 'mockIntelContext: orgInfo was not provided',
+};
+
+/**
+ * Builds a real, compiler-checked IntelContext for anatomy collector tests. Every field the
+ * caller does not supply is filled with a stub that throws a clear error the moment it is
+ * used, so a test that reaches for a client it never configured fails loudly instead of
+ * silently reading undefined. This is what makes a mock whose shape does not match the real
+ * client interface (e.g. reading `.records`/`.totalSize` off ToolingClient.query, which
+ * resolves to a bare array) a build error rather than a runtime surprise.
+ */
+export function mockIntelContext(parts: Partial<IntelContext> = {}): IntelContext {
+  return {
+    soql: parts.soql ?? unconfiguredSoql(),
+    tooling: parts.tooling ?? unconfiguredTooling(),
+    rest: parts.rest ?? unconfiguredRest(),
+    metadata: parts.metadata ?? unconfiguredMetadata(),
+    orgInfo: parts.orgInfo ?? unconfiguredOrgInfo,
+    apiVersion: parts.apiVersion ?? '62.0',
+    namespace: parts.namespace === undefined ? null : parts.namespace,
+  };
+}
