@@ -194,7 +194,8 @@ function renderBand(b: PlacedBand, idx: number, width: number): string {
       // Set in ink, not the dim grey the band title uses. This sentence is the whole finding for
       // an empty band, and it was the faintest thing in the row when it was styled as a caption.
       : `<text x="16" y="${r(b.y + 44)}" font-size="11.5" fill="${INK}">` +
-        `${esc(truncate(statusText, width - 32, LABEL_CHAR_W))}<title>${esc(statusText)}</title></text>`;
+        `${esc(truncate(detailForDrawing(statusText), width - 32, LABEL_CHAR_W))}` +
+        `<title>${esc(oneLine(statusText))}</title></text>`;
 
   // A populated band that was only partly gathered. Without this the drawing quietly asserts a
   // complete inventory: a live org rendered ten site channels as the whole of its channels while
@@ -204,9 +205,10 @@ function renderBand(b: PlacedBand, idx: number, width: number): string {
     b.caveats.length === 0 || b.caveatY === null
       ? ''
       : (() => {
-          const text = `Partly collected. ${b.caveats.join(' ')}`;
+          const text = detailForDrawing(`Partly collected. ${b.caveats.join(' ')}`);
+          const full = oneLine(`Partly collected. ${b.caveats.join(' ')}`);
           return `<text x="16" y="${b.caveatY}" font-size="10" fill="${DIM}">` +
-            `${esc(truncate(text, width - 32, 5.6))}<title>${esc(text)}</title></text>`;
+            `${esc(truncate(text, width - 32, 5.6))}<title>${esc(full)}</title></text>`;
         })();
 
   const maxMetric = b.tiles.reduce((m, t) => Math.max(m, t.tile.metric), 0);
@@ -260,6 +262,51 @@ function renderTile(tile: Tile, x: number, y: number, w: number, h: number, maxM
   const full = `<title>${esc(tile.label)}${tile.sublabel === null ? '' : ` (${esc(tile.sublabel)})`}: ${esc(value)}</title>`;
 
   return `<g>${full}${face}${label}${sublabel}${readout}${bar}</g>`;
+}
+
+/**
+ * Flatten a `coverage.unavailable` detail onto one line before it is drawn.
+ *
+ * The details are written for a human reading a terminal, and where a read failed they carry the
+ * platform's own error text verbatim, which is the right thing for the artifact to record. On a
+ * live org one of them was a multi-line SOQL error, complete with the fragment of the query and
+ * the caret pointing at the offending column. An SVG `<text>` node has no line breaks: every
+ * newline renders as a space, so the band's caveat came out as a smear of query internals, and
+ * the truncation budget was spent on them rather than on the reason the band is qualified.
+ *
+ * Collapsing here rather than in the collector keeps the artifact faithful and the drawing
+ * legible, which are different jobs.
+ */
+function oneLine(s: string): string {
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+/** Where the platform stops echoing the query back and starts saying what was wrong with it. */
+const SOQL_ERROR_MARKER = /ERROR at Row:\d+:Column:\d+\s*/;
+
+/**
+ * The one-line form of an unavailability detail, for drawing on a band.
+ *
+ * Flattening alone was not enough. A malformed-query error from the platform echoes the query
+ * first and gives the reason last, so the flattened caveat opened with a column list and ran out
+ * of width before reaching `sObject type 'OmniProcessElement' is not supported`, which is the
+ * only part a reader needs. The echoed middle is dropped for display: everything up to the
+ * collector's own `...could not be read: ` is kept, then the platform's message from after the
+ * marker.
+ *
+ * Detail that carries no marker is left alone beyond flattening, so this can only ever shorten a
+ * platform error, never rewrite a sentence a collector wrote deliberately. The artifact keeps
+ * the whole thing either way, and so does the `<title>`.
+ */
+function detailForDrawing(s: string): string {
+  const flat = oneLine(s);
+  const marker = SOQL_ERROR_MARKER.exec(flat);
+  if (marker === null) return flat;
+
+  const introEnd = flat.indexOf(': ');
+  if (introEnd === -1 || introEnd > marker.index) return flat;
+
+  return `${flat.slice(0, introEnd + 2)}${flat.slice(marker.index + marker[0].length)}`;
 }
 
 /**
