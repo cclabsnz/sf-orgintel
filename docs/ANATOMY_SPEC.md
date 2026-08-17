@@ -311,7 +311,16 @@ in this codebase is arranged.
 Three rules, carried from the coverage work already shipped in the map report:
 
 - Every number is a measured reading. Licence tiles carry used-of-total as a filled bar,
-  product tiles are sized by component count. No floating figures.
+  product tiles are sized by component count. No floating figures. The one exception is a tile
+  whose count could not be measured at all: `capabilities` and `ops` render a fixed set of
+  tiles every run (an absent capability is a finding, not an omission), so when the read behind
+  one of those counts fails, `Tile.unavailable` is `true` and the tile's `metric` is the
+  placeholder `0` it falls back to, not a measured zero. A renderer must show that tile
+  differently, for example greyed out or hatched rather than filled, precisely because its `0`
+  is a stand-in for "we do not know", the same distinction `not-collected` draws for a whole
+  band, drawn here for one tile inside a band that is otherwise populated. Every tile outside
+  those two fixed sets always carries `unavailable: false`, because it only exists at all when
+  its source record was actually collected.
 - Absence renders explicitly. "No Event Relay configured" gets a slot. A band with no contents
   says it is empty rather than collapsing, because a missing band reads as *not checked*.
 - A coverage section sits above the bands, stating Apex bodies scanned against unreadable,

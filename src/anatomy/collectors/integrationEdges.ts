@@ -128,9 +128,16 @@ export async function collectIntegrationEdges(
       );
     }
   } catch (e) {
+    // Deliberately not pushed to `unavailable`: this count feeds only the informational note
+    // above (how many managed-package classes were never in scope), not `apexCallout` edges or
+    // any other field `edges.apexBodies` would otherwise stand for. That count's *success* note
+    // was already left unstructured for the same reason (a coverage caveat, not an absence);
+    // its failure is the same kind of thing, not a heavier one. Reusing `edges.apexBodies` here
+    // would make this read's failure alone force `integration` and `external` to
+    // `not-collected` even when the main Apex body scan succeeded, which is the same
+    // misreporting this mechanism exists to remove, reintroduced through a shared key.
     const detail = `Namespaced Apex class count unavailable: ${e instanceof Error ? e.message : String(e)}`;
     notes.push(detail);
-    unavailable.push({ scope: 'edges.apexBodies', reason: 'failed', detail });
   }
 
   // NamedCredential and RemoteProxy are Tooling-only objects, same as the counts in

@@ -468,6 +468,33 @@ describe('collectIntegrationEdges', () => {
     expect(notes.join(' ').toLowerCase()).toContain('namespaced');
   });
 
+  it('does not record edges.apexBodies unavailable when only the namespaced-class count fails and the body scan itself succeeds', async () => {
+    // Review finding: edges.apexBodies previously came from two unrelated catch blocks. The
+    // main body scan feeds apexCallout edges directly; the namespaced-class COUNT() feeds only
+    // an informational coverage note and no edge data. Reusing the same scope for both meant a
+    // failure of the count alone forced `integration` and `external` to `not-collected` even
+    // though the body scan that actually produces those bands' evidence had succeeded. The
+    // count's failure must stay unstructured, matching its sibling success note, which is also
+    // never turned into a structured entry.
+    const notes: string[] = [];
+    const unavailable: Unavailable[] = [];
+    const out = await collectIntegrationEdges(
+      mockIntelContext({ tooling: mockTooling([
+          { test: (s) => s.includes('WHERE NamespacePrefix = null'), records: [
+            { Id: '01p1', Name: 'A', Body: 'callout:Payments_API' },
+          ] },
+          { test: (s) => s.includes('WHERE NamespacePrefix != null'), error: new Error('INSUFFICIENT_ACCESS') },
+          { test: () => true, records: [] },
+        ]),
+        soql: mockSoql([{ test: () => true, records: [] }]) }),
+      notes,
+      unavailable,
+    );
+    expect(out.apexBodiesScanned).toBe(1);
+    expect(notes.join(' ')).toContain('Namespaced Apex class count unavailable');
+    expect(unavailable.some((u) => u.scope === 'edges.apexBodies')).toBe(false);
+  });
+
   it('records a note and drops the element when Type matches neither branch', async () => {
     const notes: string[] = [];
     const unavailable: Unavailable[] = [];
