@@ -36,18 +36,23 @@ export interface AnatomyReportInput {
 const r = (n: number): number => Math.round(n * 10) / 10;
 
 /**
- * The neutral graphite ramp from DESIGN_BRIEF.md. Cadmium is reserved for selection and there is
- * no selection in View A, so it appears nowhere here. Tile fill re-encodes the same metric the
- * tile's width already carries, which is the brief's rule: one reading, more than one encoding.
+ * The neutral ramp for tile fill. Cadmium is reserved for selection and there is no selection in
+ * View A, so it appears nowhere here. Fill re-encodes the metric the tile's width already
+ * carries, which is the brief's rule: one reading, more than one encoding.
+ *
+ * These are the light half of DESIGN_BRIEF.md's graphite ramp rather than its full range. The
+ * full range was tried first and read badly on a real org's proportions: `edges` and `products`
+ * put most of their tiles near the band maximum, so most of the drawing came out as black slabs
+ * with reversed text, which is a dark HUD, the one thing the brief says this is not. Keeping to
+ * the light half holds the ranking, keeps every label ink-on-light, and leaves the page a
+ * daylight object.
  */
-const RAMP = ['#C9C5BD', '#8E8A82', '#5E5A53', '#2B2823'];
+const RAMP = ['#E7E3DA', '#D9D3C7', '#C8C1B1', '#B4AC9A'];
 /** Band grounds, alternating, as in the map report's strata drawing. */
 const BAND_FILLS = ['#f4f1ea', '#efece5'];
 const INK = '#2b2823';
 const DIM = '#7a766d';
-const RULE = '#ddd7cb';
-/** Ink for a tile dark enough that INK would not read against it. */
-const REVERSED = '#f4f1ea';
+const RULE = '#a49c8e';
 
 const LABEL_SIZE = 11;
 const SUB_SIZE = 9.5;
@@ -190,7 +195,12 @@ function renderBand(b: PlacedBand, idx: number, width: number): string {
         `${esc(truncate(statusText, width - 32, LABEL_CHAR_W))}<title>${esc(statusText)}</title></text>`;
 
   const maxMetric = b.tiles.reduce((m, t) => Math.max(m, t.tile.metric), 0);
-  const tiles = b.tiles.map((p) => renderTile(p.tile, p.x, p.y, p.w, p.h, maxMetric)).join('');
+  const minMetric = b.tiles.reduce((m, t) => Math.min(m, t.tile.metric), maxMetric);
+  // A band whose readings are all the same has no ranking to show, and shading it by ratio would
+  // paint every tile at the top of the ramp: `channels` scores every surface 1, so a two-site org
+  // came out as two of the heaviest tiles on the page. Flat means flat.
+  const uniform = maxMetric === minMetric;
+  const tiles = b.tiles.map((p) => renderTile(p.tile, p.x, p.y, p.w, p.h, uniform ? 0 : maxMetric)).join('');
 
   return ground + heading + status + tiles;
 }
@@ -199,8 +209,6 @@ function renderTile(tile: Tile, x: number, y: number, w: number, h: number, maxM
   // Same square root as the width scale in bandLayout.ts, so shade and width tell one story.
   const ratio = maxMetric > 0 ? Math.sqrt(Math.max(0, tile.metric) / maxMetric) : 0;
   const shade = RAMP[Math.min(RAMP.length - 1, Math.floor(ratio * RAMP.length))];
-  const ink = tile.unavailable || ratio <= 0.55 ? INK : REVERSED;
-  const sub = tile.unavailable || ratio <= 0.55 ? DIM : '#cfcac1';
 
   const face = tile.unavailable
     ? `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#anatomyUnread)" stroke="${RULE}"/>`
@@ -208,18 +216,23 @@ function renderTile(tile: Tile, x: number, y: number, w: number, h: number, maxM
 
   // A tile whose count failed to read shows the words, not the placeholder zero it fell back to.
   const value = tile.unavailable ? 'not read' : String(tile.metric);
-  const valueW = value.length * (tile.unavailable ? 5.6 : 7.4) + 10;
-  const readout = `<text x="${r(x + w - 7)}" y="${r(y + 17)}" font-size="${tile.unavailable ? 10 : 12.5}" ` +
-    `font-weight="${tile.unavailable ? 400 : 600}" fill="${tile.unavailable ? DIM : ink}" text-anchor="end" ` +
+
+  // The label owns the first line outright and the readout sits under it. Sharing one line was
+  // the first cut, and on a narrow tile the readout took enough of the width that the label
+  // truncated to nothing: the not-read tile rendered as "not read" with no clue what had not
+  // been read. The reading is still the loudest thing in the tile, just below the name of it.
+  const label = `<text x="${r(x + 7)}" y="${r(y + 17)}" font-size="${LABEL_SIZE}" fill="${INK}">` +
+    `${esc(truncate(tile.label, w - 14, LABEL_CHAR_W))}</text>`;
+
+  const readout = `<text x="${r(x + w - 7)}" y="${r(y + 33)}" font-size="${tile.unavailable ? 10 : 13}" ` +
+    `font-weight="${tile.unavailable ? 400 : 600}" fill="${tile.unavailable ? DIM : INK}" text-anchor="end" ` +
     `style="font-variant-numeric:tabular-nums">${esc(value)}</text>`;
 
-  const label = `<text x="${r(x + 7)}" y="${r(y + 17)}" font-size="${LABEL_SIZE}" fill="${ink}">` +
-    `${esc(truncate(tile.label, w - 14 - valueW, LABEL_CHAR_W))}</text>`;
-
+  // Sublabel shares line two with the readout, so it gives up the readout's share of the width.
   const sublabel = tile.sublabel === null
     ? ''
-    : `<text x="${r(x + 7)}" y="${r(y + 31)}" font-size="${SUB_SIZE}" fill="${sub}">` +
-      `${esc(truncate(tile.sublabel, w - 14, SUB_CHAR_W))}</text>`;
+    : `<text x="${r(x + 7)}" y="${r(y + 33)}" font-size="${SUB_SIZE}" fill="${DIM}">` +
+      `${esc(truncate(tile.sublabel, w - 14 - (value.length * 8 + 10), SUB_CHAR_W))}</text>`;
 
   // The filled bar for a proportional reading. No tile carries one yet: no licence-total figure
   // is collected, and inventing the denominator is exactly what this report must not do.
