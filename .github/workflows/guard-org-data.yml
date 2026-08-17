@@ -1,8 +1,10 @@
 name: Guard org data
 
 # Fails the build if anything identifying a real Salesforce org reaches the repository:
-# org ids, sandbox hostnames, or generated audit artefacts. Content AND commit messages are
-# both scanned — the messages are the part people forget.
+# org ids, sandbox hostnames, or generated audit artefacts. Content, commit messages AND the
+# pull request's own title and body are all scanned — the messages are the part people forget,
+# and the pull request body is the part that was not checked at all until an org id reached a
+# public page through it.
 #
 # Test fixtures are excluded by shape: a real org id never contains 'xx' or six consecutive
 # zeros, whereas fixtures conventionally do
@@ -20,6 +22,14 @@ env:
   ORG_ID: '00D[A-Za-z0-9]{12,15}'
   SANDBOX: '[A-Za-z0-9-]+\.sandbox\.my\.salesforce\.com'
   FIXTURE: '00D[A-Za-z0-9]*([xX]{2}|0{6,})'
+  # A part-masked org id, which is what a writer produces when they know the full id does not
+  # belong in prose and reaches for an ellipsis instead. Masking the middle of `00Dxx...000EAA`
+  # leaves twelve of its eighteen characters in place, so it identifies an org very nearly as
+  # well as the whole thing while sailing past a pattern that counts characters. Requires an
+  # alphanumeric run on BOTH sides of the mask, so prose about the `00D...` prefix is not
+  # flagged. The example above is deliberately fixture-shaped: this file has to survive its own
+  # scan, and a guard whose source trips it gets switched off by whoever hits it first.
+  MASKED_ORG_ID: '00D[A-Za-z0-9]*(\.{2,}|…|\*{2,})[A-Za-z0-9]{2,}'
 
 jobs:
   guard:
@@ -32,9 +42,9 @@ jobs:
       - name: Scan tracked content
         run: |
           set -uo pipefail
-          if git grep -InE "$ORG_ID|$SANDBOX" -- . \
+          if git grep -InE "$ORG_ID|$MASKED_ORG_ID|$SANDBOX" -- . \
             | grep -vE "$FIXTURE" | grep -q . ; then
-            git grep -InE "$ORG_ID|$SANDBOX" -- . \
+            git grep -InE "$ORG_ID|$MASKED_ORG_ID|$SANDBOX" -- . \
               | grep -vE "$FIXTURE" | head -10
             echo "::error::Content references a real Salesforce org."
             exit 1
@@ -45,7 +55,7 @@ jobs:
         run: |
           set -uo pipefail
           if git ls-files \
-            | grep -IE '(^|/)(sf-audit-00D[A-Za-z0-9]*-[0-9]+|orgintel-(map|fingerprint)-[A-Za-z0-9]+-[0-9]+)\.(json|html|md)$|(^|/)(coupling-graph|landscape-manifest)\.json$' ; then
+            | grep -IE '(^|/)(sf-audit-00D[A-Za-z0-9]*-[0-9]+|orgintel-(map|fingerprint|anatomy)-[A-Za-z0-9]+-[0-9]+)\.(json|html|md)$|(^|/)(coupling-graph|landscape-manifest|anatomy)\.json$' ; then
             echo "::error::A generated report artefact is tracked. These contain org data."
             exit 1
           fi
@@ -54,9 +64,42 @@ jobs:
       - name: Scan commit messages
         run: |
           set -uo pipefail
-          if git log --format='%H%n%s%n%b' | grep -InE "$ORG_ID|$SANDBOX" | grep -vE "$FIXTURE" | grep -q . ; then
-            git log --format='%H%n%s%n%b' | grep -InE "$ORG_ID|$SANDBOX" | grep -vE "$FIXTURE" | head -10
+          if git log --format='%H%n%s%n%b' | grep -InE "$ORG_ID|$MASKED_ORG_ID|$SANDBOX" | grep -vE "$FIXTURE" | grep -q . ; then
+            git log --format='%H%n%s%n%b' | grep -InE "$ORG_ID|$MASKED_ORG_ID|$SANDBOX" | grep -vE "$FIXTURE" | head -10
             echo "::error::A commit message references a real Salesforce org."
             exit 1
           fi
           echo "commit messages: clean"
+
+  # The pull request's own title and body. Separate job because it has no repository to check
+  # out and does not run on push, and because it is the only scan whose input is attacker
+  # controlled: anyone who can open a pull request writes it.
+  guard-pr-text:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scan the pull request title and body
+        # Both values arrive through the environment, never interpolated into the script. A body
+        # pasted straight into `run` as ${{ }} is executed by the shell, so a pull request could
+        # run commands in this workflow simply by containing them.
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -uo pipefail
+          hits=$(printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" \
+            | grep -nE "$ORG_ID|$MASKED_ORG_ID|$SANDBOX" \
+            | grep -vE "$FIXTURE" || true)
+          if [ -n "$hits" ]; then
+            printf '%s\n' "$hits" | head -10
+            echo "::error::The pull request title or body references a real Salesforce org."
+            echo "Describe shapes and counts instead of names, as ANATOMY_SPEC section 9a does."
+            echo "Part-masking an id does not help: the visible characters still name the org."
+            exit 1
+          fi
+          echo "pull request text: clean"
+
+          # An org alias cannot be recognised structurally: 'acme-uat' and 'my-scratch' are the
+          # same shape, so no pattern separates a client's name from a developer's. The reminder
+          # is the control, and it belongs where the check that cannot cover it runs.
+          echo "::notice::Org ids and sandbox hosts are checked. Aliases are not, and cannot be: an alias names a client as surely as an id does, so keep them out of the title and body too."
