@@ -2,6 +2,7 @@
 // one must not blank the others, because a half-populated registry is still useful and a
 // crashed command is not.
 import type { IntelContext } from '../../lib/wire.js';
+import type { Unavailable } from '../types.js';
 
 export interface RegistrySourceNames {
   apps: string[];
@@ -17,43 +18,55 @@ export interface RegistrySourceNames {
   componentNames: string[];
 }
 
-async function safe<T>(label: string, notes: string[], fn: () => Promise<T[]>): Promise<T[]> {
+async function safe<T>(
+  label: string,
+  scope: string,
+  notes: string[],
+  unavailable: Unavailable[],
+  fn: () => Promise<T[]>,
+): Promise<T[]> {
   try {
     return await fn();
   } catch (e) {
-    notes.push(`${label} could not be read: ${e instanceof Error ? e.message : String(e)}`);
+    const detail = `${label} could not be read: ${e instanceof Error ? e.message : String(e)}`;
+    notes.push(detail);
+    unavailable.push({ scope, reason: 'failed', detail });
     return [];
   }
 }
 
-export async function collectProducts(ctx: IntelContext, notes: string[]): Promise<RegistrySourceNames> {
+export async function collectProducts(
+  ctx: IntelContext,
+  notes: string[],
+  unavailable: Unavailable[],
+): Promise<RegistrySourceNames> {
   // NOTE: ToolingClient.query resolves to T[] directly. It has no `.records` and no
   // `.totalSize`, unlike SoqlClient.query which returns a QueryResult.
-  const apps = await safe('CustomApplication', notes, async () =>
+  const apps = await safe('CustomApplication', 'products.apps', notes, unavailable, async () =>
     (await ctx.tooling.query<{ DeveloperName: string }>(
       'SELECT DeveloperName FROM CustomApplication WHERE NamespacePrefix = null',
     )).map((r) => r.DeveloperName),
   );
 
-  const packages = await safe('InstalledSubscriberPackage', notes, async () =>
+  const packages = await safe('InstalledSubscriberPackage', 'products.packages', notes, unavailable, async () =>
     (await ctx.tooling.query<{ SubscriberPackage: { NamespacePrefix: string | null } }>(
       'SELECT SubscriberPackage.NamespacePrefix FROM InstalledSubscriberPackage',
     )).map((r) => r.SubscriberPackage?.NamespacePrefix ?? '').filter((s) => s.length > 0),
   );
 
-  const recordTypes = await safe('RecordType', notes, async () =>
+  const recordTypes = await safe('RecordType', 'products.recordTypes', notes, unavailable, async () =>
     (await ctx.soql.queryAll<{ DeveloperName: string }>(
       "SELECT DeveloperName FROM RecordType WHERE SobjectType IN ('Case','Account')",
     )).map((r) => r.DeveloperName),
   );
 
-  const apexClassNames = await safe('ApexClass', notes, async () =>
+  const apexClassNames = await safe('ApexClass', 'products.componentNames', notes, unavailable, async () =>
     (await ctx.tooling.query<{ Name: string }>(
       'SELECT Name FROM ApexClass WHERE NamespacePrefix = null',
     )).map((r) => r.Name),
   );
 
-  const flowNames = await safe('FlowDefinition', notes, async () =>
+  const flowNames = await safe('FlowDefinition', 'products.componentNames', notes, unavailable, async () =>
     (await ctx.tooling.query<{ DeveloperName: string }>(
       'SELECT DeveloperName FROM FlowDefinition WHERE NamespacePrefix = null',
     )).map((r) => r.DeveloperName),

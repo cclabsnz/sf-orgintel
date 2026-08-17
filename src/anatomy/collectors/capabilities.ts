@@ -1,7 +1,7 @@
 // What the platform is being used for. Counts, not judgements. An absent capability is
 // recorded as absent rather than left out, because a missing key reads as "not checked".
 import type { IntelContext } from '../../lib/wire.js';
-import type { Capabilities } from '../types.js';
+import type { Capabilities, Unavailable } from '../types.js';
 
 /**
  * Count via a COUNT(Id) aggregate rather than COUNT().
@@ -21,17 +21,30 @@ function isAbsentSObjectError(message: string): boolean {
   return /INVALID_TYPE/i.test(message) || /sObject type '[^']*' is not supported/i.test(message);
 }
 
-async function count(ctx: IntelContext, notes: string[], label: string, soql: string): Promise<number> {
+async function count(
+  ctx: IntelContext,
+  notes: string[],
+  unavailable: Unavailable[],
+  label: string,
+  scope: string,
+  soql: string,
+): Promise<number> {
   try {
     const rows = await ctx.tooling.query<{ expr0?: number }>(soql);
     return Number(rows[0]?.expr0 ?? 0);
   } catch (e) {
-    notes.push(`${label} count unavailable: ${e instanceof Error ? e.message : String(e)}`);
+    const detail = `${label} count unavailable: ${e instanceof Error ? e.message : String(e)}`;
+    notes.push(detail);
+    unavailable.push({ scope, reason: 'failed', detail });
     return 0;
   }
 }
 
-export async function collectCapabilities(ctx: IntelContext, notes: string[]): Promise<Capabilities> {
+export async function collectCapabilities(
+  ctx: IntelContext,
+  notes: string[],
+  unavailable: Unavailable[],
+): Promise<Capabilities> {
   const platformEvents: string[] = [];
   const changeDataCapture: string[] = [];
   try {
@@ -42,7 +55,10 @@ export async function collectCapabilities(ctx: IntelContext, notes: string[]): P
       else if (name.endsWith('ChangeEvent')) changeDataCapture.push(name);
     }
   } catch (e) {
-    notes.push(`sObject list unavailable: ${e instanceof Error ? e.message : String(e)}`);
+    const detail = `sObject list unavailable: ${e instanceof Error ? e.message : String(e)}`;
+    notes.push(detail);
+    unavailable.push({ scope: 'capabilities.platformEvents', reason: 'failed', detail });
+    unavailable.push({ scope: 'capabilities.changeDataCapture', reason: 'failed', detail });
   }
 
   let eventRelayConfigured = false;
@@ -59,19 +75,21 @@ export async function collectCapabilities(ctx: IntelContext, notes: string[]): P
     // uses for a genuinely missing sObject: the INVALID_TYPE error code, or a message of
     // the form "sObject type '...' is not supported".
     if (!isAbsentSObjectError(message)) {
-      notes.push(`EventRelayConfig read unavailable: ${message}`);
+      const detail = `EventRelayConfig read unavailable: ${message}`;
+      notes.push(detail);
+      unavailable.push({ scope: 'capabilities.eventRelayConfigured', reason: 'failed', detail });
     }
   }
 
   return {
-    apexClasses: await count(ctx, notes, 'ApexClass', 'SELECT COUNT(Id) FROM ApexClass'),
-    apexTriggers: await count(ctx, notes, 'ApexTrigger', 'SELECT COUNT(Id) FROM ApexTrigger'),
-    flows: await count(ctx, notes, 'FlowDefinition', 'SELECT COUNT(Id) FROM FlowDefinition'),
-    lwc: await count(ctx, notes, 'LightningComponentBundle', 'SELECT COUNT(Id) FROM LightningComponentBundle'),
-    aura: await count(ctx, notes, 'AuraDefinitionBundle', 'SELECT COUNT(Id) FROM AuraDefinitionBundle'),
-    namedCredentials: await count(ctx, notes, 'NamedCredential', 'SELECT COUNT(Id) FROM NamedCredential'),
-    externalDataSources: await count(ctx, notes, 'ExternalDataSource', 'SELECT COUNT(Id) FROM ExternalDataSource'),
-    remoteSites: await count(ctx, notes, 'RemoteProxy', 'SELECT COUNT(Id) FROM RemoteProxy'),
+    apexClasses: await count(ctx, notes, unavailable, 'ApexClass', 'capabilities.apexClasses', 'SELECT COUNT(Id) FROM ApexClass'),
+    apexTriggers: await count(ctx, notes, unavailable, 'ApexTrigger', 'capabilities.apexTriggers', 'SELECT COUNT(Id) FROM ApexTrigger'),
+    flows: await count(ctx, notes, unavailable, 'FlowDefinition', 'capabilities.flows', 'SELECT COUNT(Id) FROM FlowDefinition'),
+    lwc: await count(ctx, notes, unavailable, 'LightningComponentBundle', 'capabilities.lwc', 'SELECT COUNT(Id) FROM LightningComponentBundle'),
+    aura: await count(ctx, notes, unavailable, 'AuraDefinitionBundle', 'capabilities.aura', 'SELECT COUNT(Id) FROM AuraDefinitionBundle'),
+    namedCredentials: await count(ctx, notes, unavailable, 'NamedCredential', 'capabilities.namedCredentials', 'SELECT COUNT(Id) FROM NamedCredential'),
+    externalDataSources: await count(ctx, notes, unavailable, 'ExternalDataSource', 'capabilities.externalDataSources', 'SELECT COUNT(Id) FROM ExternalDataSource'),
+    remoteSites: await count(ctx, notes, unavailable, 'RemoteProxy', 'capabilities.remoteSites', 'SELECT COUNT(Id) FROM RemoteProxy'),
     platformEvents: platformEvents.sort(),
     changeDataCapture: changeDataCapture.sort(),
     eventRelayConfigured,

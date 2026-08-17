@@ -1,5 +1,6 @@
 import { mockSoql, mockTooling, mockRest } from '../helpers/mocks.js';
 import { runAnatomy } from '../../../src/anatomy/runAnatomy.js';
+import { buildBands } from '../../../src/anatomy/view/bands.js';
 
 const emptyCtx = (): any => ({
   soql: mockSoql([{ test: () => true, records: [], totalSize: 0 }]),
@@ -71,5 +72,58 @@ describe('runAnatomy', () => {
     const a = await runAnatomy(broken(), prov);
     expect(a.coverage.notes.length).toBeGreaterThan(0);
     expect(a.version).toBe(1);
+  });
+
+  it('assembles coverage.unavailable from every collector, sorted by scope', async () => {
+    const broken = (): any => ({
+      soql: mockSoql([{ test: () => true, error: new Error('denied') }]),
+      tooling: mockTooling([{ test: () => true, error: new Error('denied') }]),
+      rest: mockRest([]),
+      metadata: { list: async () => { throw new Error('denied'); } },
+    });
+    const a = await runAnatomy(broken(), prov);
+    expect(a.coverage.unavailable.length).toBeGreaterThan(0);
+    const scopes = a.coverage.unavailable.map((u) => u.scope);
+    expect(scopes).toEqual([...scopes].sort());
+    // Every collector that reads through this context should contribute at least one
+    // structured entry when every read it attempts fails.
+    expect(scopes.some((s) => s.startsWith('products.'))).toBe(true);
+    expect(scopes.some((s) => s === 'personas')).toBe(true);
+    expect(scopes.some((s) => s === 'channels')).toBe(true);
+    expect(scopes.some((s) => s.startsWith('capabilities.'))).toBe(true);
+    expect(scopes.some((s) => s.startsWith('identity.'))).toBe(true);
+    expect(scopes.some((s) => s.startsWith('edges.'))).toBe(true);
+    // Unconditional deferrals still show up even though nothing failed to produce them.
+    expect(scopes).toContain('personas.landingApp');
+    expect(scopes).toContain('channels.network');
+    expect(scopes).toContain('channels.appConsoleApi');
+  });
+
+  it('does not force integration and external to not-collected when only the namespaced-class count fails but the body scan succeeds', async () => {
+    // Fix round 1, finding A: edges.apexBodies previously came from two unrelated catch
+    // blocks in collectIntegrationEdges, so a failure of the namespaced-class COUNT() alone
+    // (which feeds no edge data) forced both bands to not-collected even though the body scan
+    // that actually produces their evidence succeeded. End-to-end pin through runAnatomy and
+    // buildBands together, not just the collector in isolation.
+    const ctx: any = {
+      tooling: mockTooling([
+        { test: (s: string) => s.includes('Body') && s.includes('ApexClass'), records: [
+          { Id: '01p1', Name: 'OrphanService', Body: 'callout:Payments_API' },
+        ] },
+        { test: (s: string) => s.includes('WHERE NamespacePrefix != null'), error: new Error('INSUFFICIENT_ACCESS') },
+        { test: () => true, records: [] },
+      ]),
+      soql: mockSoql([{ test: () => true, records: [], totalSize: 0 }]),
+      rest: mockRest([]),
+      metadata: { list: async () => [] },
+    };
+    const a = await runAnatomy(ctx, prov);
+    expect(a.coverage.notes.join(' ')).toContain('Namespaced Apex class count unavailable');
+    expect(a.coverage.unavailable.some((u) => u.scope === 'edges.apexBodies')).toBe(false);
+    expect(a.edges).toContainEqual(expect.objectContaining({ endpoint: 'Payments_API', detection: 'apexCallout' }));
+
+    const bands = buildBands(a);
+    expect(bands.find((b) => b.id === 'integration')!.emptiness).not.toBe('not-collected');
+    expect(bands.find((b) => b.id === 'external')!.emptiness).not.toBe('not-collected');
   });
 });
