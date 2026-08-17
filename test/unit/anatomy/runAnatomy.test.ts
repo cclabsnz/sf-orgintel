@@ -14,7 +14,7 @@ const prov = { generatedAt: '2026-08-05T00:00:00Z', orgId: '00Dxx0000000000EAA',
 describe('runAnatomy', () => {
   it('produces a complete artifact for an org that yields nothing', async () => {
     const a = await runAnatomy(emptyCtx(), prov);
-    expect(a.version).toBe(1);
+    expect(a.version).toBe(2);
     expect(a.products).toEqual([]);
     expect(a.edges).toEqual([]);
     expect(a.capabilities.eventRelayConfigured).toBe(false);
@@ -71,7 +71,7 @@ describe('runAnatomy', () => {
     });
     const a = await runAnatomy(broken(), prov);
     expect(a.coverage.notes.length).toBeGreaterThan(0);
-    expect(a.version).toBe(1);
+    expect(a.version).toBe(2);
   });
 
   it('assembles coverage.unavailable from every collector, sorted by scope', async () => {

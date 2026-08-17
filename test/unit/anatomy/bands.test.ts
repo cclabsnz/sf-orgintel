@@ -2,7 +2,7 @@ import { buildBands } from '../../../src/anatomy/view/bands.js';
 import type { AnatomyArtifact } from '../../../src/anatomy/types.js';
 
 const artifact = (over: Partial<AnatomyArtifact> = {}): AnatomyArtifact => ({
-  version: 1,
+  version: 2,
   provenance: { generatedAt: '2026-08-12T00:00:00Z', orgId: '00Dxx0000000000EAA', toolVersion: '0.1.0', apiVersion: '62.0' },
   products: [],
   personas: [],

@@ -5,7 +5,7 @@ import type { AnatomyArtifact } from '../../../src/anatomy/types.js';
 // The plan's helper predates `coverage.unavailable`, added in task 1b so bands classify from
 // data rather than prose. It is required now, so the helper supplies an empty list.
 const artifact = (over: Partial<AnatomyArtifact> = {}): AnatomyArtifact => ({
-  version: 1,
+  version: 2,
   provenance: { generatedAt: '2026-08-12T00:00:00Z', orgId: '00Dxx0000000000EAA', toolVersion: '0.1.0', apiVersion: '62.0' },
   products: [],
   personas: [],
