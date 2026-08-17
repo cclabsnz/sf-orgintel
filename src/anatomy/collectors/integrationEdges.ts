@@ -6,7 +6,7 @@
 //
 // OmniStudio is read through the ordinary Data API. Tooling rejects OmniProcess outright.
 import type { IntelContext } from '../../lib/wire.js';
-import type { IntegrationEdge } from '../types.js';
+import type { IntegrationEdge, Unavailable } from '../types.js';
 import type { RemoteActionRef } from '../attribute.js';
 
 export interface IntegrationEdgeInput {
@@ -70,6 +70,7 @@ function remoteClassOf(config: string | null): string | null {
 export async function collectIntegrationEdges(
   ctx: IntelContext,
   notes: string[],
+  unavailable: Unavailable[],
 ): Promise<IntegrationEdgeInput> {
   const direct: IntegrationEdge[] = [];
   const apexCallouts = new Map<string, string[]>();
@@ -105,7 +106,9 @@ export async function collectIntegrationEdges(
       }
     }
   } catch (e) {
-    notes.push(`Apex bodies could not be read: ${e instanceof Error ? e.message : String(e)}`);
+    const detail = `Apex bodies could not be read: ${e instanceof Error ? e.message : String(e)}`;
+    notes.push(detail);
+    unavailable.push({ scope: 'edges.apexBodies', reason: 'failed', detail });
   }
 
   // `NamespacePrefix = null` above is correct (managed bodies are hidden from Tooling), but
@@ -125,7 +128,9 @@ export async function collectIntegrationEdges(
       );
     }
   } catch (e) {
-    notes.push(`Namespaced Apex class count unavailable: ${e instanceof Error ? e.message : String(e)}`);
+    const detail = `Namespaced Apex class count unavailable: ${e instanceof Error ? e.message : String(e)}`;
+    notes.push(detail);
+    unavailable.push({ scope: 'edges.apexBodies', reason: 'failed', detail });
   }
 
   // NamedCredential and RemoteProxy are Tooling-only objects, same as the counts in
@@ -141,7 +146,9 @@ export async function collectIntegrationEdges(
       .filter((n): n is string => typeof n === 'string' && n.length > 0)
       .sort();
   } catch (e) {
-    notes.push(`Named credentials could not be read: ${e instanceof Error ? e.message : String(e)}`);
+    const detail = `Named credentials could not be read: ${e instanceof Error ? e.message : String(e)}`;
+    notes.push(detail);
+    unavailable.push({ scope: 'edges.namedCredentials', reason: 'failed', detail });
   }
 
   let remoteProxies: string[] = [];
@@ -154,7 +161,9 @@ export async function collectIntegrationEdges(
       .filter((n): n is string => typeof n === 'string' && n.length > 0)
       .sort();
   } catch (e) {
-    notes.push(`Remote site settings could not be read: ${e instanceof Error ? e.message : String(e)}`);
+    const detail = `Remote site settings could not be read: ${e instanceof Error ? e.message : String(e)}`;
+    notes.push(detail);
+    unavailable.push({ scope: 'edges.remoteProxies', reason: 'failed', detail });
   }
 
   const remoteActions: RemoteActionRef[] = [];
@@ -275,7 +284,9 @@ export async function collectIntegrationEdges(
       );
     }
   } catch (e) {
-    notes.push(`OmniStudio integration elements could not be read: ${e instanceof Error ? e.message : String(e)}`);
+    const detail = `OmniStudio integration elements could not be read: ${e instanceof Error ? e.message : String(e)}`;
+    notes.push(detail);
+    unavailable.push({ scope: 'edges.omniStudio', reason: 'failed', detail });
   }
 
   direct.sort((a, b) => String(a.endpoint).localeCompare(String(b.endpoint)));

@@ -72,4 +72,29 @@ describe('runAnatomy', () => {
     expect(a.coverage.notes.length).toBeGreaterThan(0);
     expect(a.version).toBe(1);
   });
+
+  it('assembles coverage.unavailable from every collector, sorted by scope', async () => {
+    const broken = (): any => ({
+      soql: mockSoql([{ test: () => true, error: new Error('denied') }]),
+      tooling: mockTooling([{ test: () => true, error: new Error('denied') }]),
+      rest: mockRest([]),
+      metadata: { list: async () => { throw new Error('denied'); } },
+    });
+    const a = await runAnatomy(broken(), prov);
+    expect(a.coverage.unavailable.length).toBeGreaterThan(0);
+    const scopes = a.coverage.unavailable.map((u) => u.scope);
+    expect(scopes).toEqual([...scopes].sort());
+    // Every collector that reads through this context should contribute at least one
+    // structured entry when every read it attempts fails.
+    expect(scopes.some((s) => s.startsWith('products.'))).toBe(true);
+    expect(scopes.some((s) => s === 'personas')).toBe(true);
+    expect(scopes.some((s) => s === 'channels')).toBe(true);
+    expect(scopes.some((s) => s.startsWith('capabilities.'))).toBe(true);
+    expect(scopes.some((s) => s.startsWith('identity.'))).toBe(true);
+    expect(scopes.some((s) => s.startsWith('edges.'))).toBe(true);
+    // Unconditional deferrals still show up even though nothing failed to produce them.
+    expect(scopes).toContain('personas.landingApp');
+    expect(scopes).toContain('channels.network');
+    expect(scopes).toContain('channels.appConsoleApi');
+  });
 });

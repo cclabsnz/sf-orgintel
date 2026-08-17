@@ -124,10 +124,22 @@ Rendering is optional; the JSON is not.
     "omniElementsScanned": 0, "omniProceduresWithIntegrationElements": 0,
     "omniElementsSkippedSuperseded": 0,
     "prefixesUnresolved": ["..."],
-    "notes": ["..."]
+    "notes": ["..."],
+    "unavailable": [
+      { "scope": "channels.network", "reason": "deferred" | "failed", "detail": "..." }
+    ]
   }
 }
 ```
+
+`coverage.unavailable` is the structured counterpart to `notes`, described in full in section 7:
+`notes` stays prose for a human reading the terminal summary, `unavailable` is what a consumer
+like View A keys off. `scope` is a stable, dotted key naming the artifact field affected (for
+example `channels.network`, `capabilities.apexClasses`), `reason` distinguishes a phase that
+never gathers something (`deferred`) from a read that was attempted and refused or errored
+(`failed`), and `detail` carries the human explanation, including the underlying error message
+where there was one. Both `notes` and `unavailable` are populated at every site that produces
+one; neither replaces the other.
 
 ### 4.1 Two axes, not one tier
 
@@ -322,6 +334,48 @@ vanishing is not.
 
 Nothing here escalates to a failed command. An org that yields little should produce a small,
 honest artifact.
+
+### 7.1 Unavailability is data, not prose
+
+Every row in the table above ends the same way: a collector pushes a human-readable line onto
+`coverage.notes`. That line is necessary, it is what an operator reads in the terminal summary,
+but it is not sufficient on its own, because it is the *only* place the "we checked and found
+nothing" versus "we could not check" distinction lived through the first pass at View A. The
+band layer recovered that distinction by matching fragments of note text against a small table
+of regexes, and that broke in two ways once real collectors exercised it:
+
+- **Coverage was incomplete by construction.** Only the `channels` band had a matching rule
+  wired up, because it was the only one anyone thought to add. When `collectProducts`'s reads
+  failed, the `products` band fell through to `emptiness: 'empty'`, which tells a reader the org
+  has no products, while the note explaining the read failure sat unused in `coverage.notes`.
+  The same gap existed for `integration` and `external` whenever edge collection failed. Adding
+  a rule per band as each gap was noticed does not scale to seven bands and does not survive a
+  new collector being added without someone remembering to also add its matching rule.
+- **Matching prose is brittle by construction, not by accident.** A rule keyed on "does this
+  note contain these words" breaks the moment a note is reworded for clarity, and nothing at
+  compile time or in a type signature says so. The two properties this artifact promises,
+  determinism and a reader's ability to trust the distinction between absence and non-collection,
+  cannot rest on a sentence staying phrased exactly one way indefinitely.
+
+`coverage.unavailable` (section 4) exists to fix both. Every collector that pushes a note for a
+failed read or a deliberate deferral also pushes a structured `Unavailable` entry with the same
+information: a stable `scope` naming the artifact field affected, a `reason` of `deferred` or
+`failed`, and a `detail` carrying the human explanation. View A's band and tile classification
+(section 6) reads `coverage.unavailable` exclusively; it never inspects `coverage.notes`. A band
+maps to a fixed, known set of scopes (for example `products` to `products.apps`,
+`products.packages`, `products.recordTypes`, `products.componentNames`), so a band with no
+tiles is `not-collected` whenever a matching entry exists and `empty` otherwise, decided by
+exact key membership rather than a guess about phrasing. The one asymmetry worth calling out
+explicitly: `personas.landingApp` is an unconditional, field-level deferral (this phase never
+gathers a landing app) that must not mark the whole `users` band `not-collected`, because
+`activeUsers`, the metric that band actually renders, is collected for real on every run. The
+scope key stays a dotted, field-level `personas.landingApp` rather than the category-level
+`personas`, and the `users` band's scope list simply never includes it, so the distinction is
+carried by the shape of the key rather than by a special case in the classifier.
+
+`notes` and `unavailable` are complementary, not redundant: `notes` is written for a human,
+`unavailable` for a program, and deleting either would lose something. `notes` keeps its
+existing entries verbatim; nothing here removes a note that was there before.
 
 ## 8. Testing
 

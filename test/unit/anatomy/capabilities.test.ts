@@ -1,21 +1,25 @@
 import { mockSoql, mockTooling, mockRest, mockIntelContext } from '../helpers/mocks.js';
 import { collectCapabilities } from '../../../src/anatomy/collectors/capabilities.js';
+import type { Unavailable } from '../../../src/anatomy/types.js';
 
 describe('collectCapabilities', () => {
   it('reports eventRelayConfigured false when none exist, rather than omitting it', async () => {
     // Absence is a finding: it bounds who can consume the delivery allocation.
     const notes: string[] = [];
+    const unavailable: Unavailable[] = [];
     const out = await collectCapabilities(
       mockIntelContext({ soql: mockSoql([{ test: () => true, records: [], totalSize: 0 }]),
         tooling: mockTooling([{ test: () => true, records: [] }]),
         rest: mockRest([]) }),
       notes,
+      unavailable,
     );
     expect(out.eventRelayConfigured).toBe(false);
   });
 
   it('separates platform events from change data capture by suffix', async () => {
     const notes: string[] = [];
+    const unavailable: Unavailable[] = [];
     const out = await collectCapabilities(
       mockIntelContext({ soql: mockSoql([{ test: () => true, records: [], totalSize: 0 }]),
         tooling: mockTooling([{ test: () => true, records: [] }]),
@@ -23,6 +27,7 @@ describe('collectCapabilities', () => {
           { name: 'Order__e' }, { name: 'AccountChangeEvent' }, { name: 'Account' },
         ]) }),
       notes,
+      unavailable,
     );
     expect(out.platformEvents).toEqual(['Order__e']);
     expect(out.changeDataCapture).toEqual(['AccountChangeEvent']);
@@ -30,12 +35,14 @@ describe('collectCapabilities', () => {
 
   it('reports eventRelayConfigured false with no note when the type is genuinely absent from the org', async () => {
     const notes: string[] = [];
+    const unavailable: Unavailable[] = [];
     const out = await collectCapabilities(
       mockIntelContext({ soql: mockSoql([{ test: (s) => s.includes('EventRelayConfig'),
           error: new Error("INVALID_TYPE: sObject type 'EventRelayConfig' is not supported.") }]),
         tooling: mockTooling([{ test: () => true, records: [] }]),
         rest: mockRest([]) }),
       notes,
+      unavailable,
     );
     expect(out.eventRelayConfigured).toBe(false);
     expect(notes.some((n) => n.toLowerCase().includes('eventrelay'))).toBe(false);
@@ -47,12 +54,14 @@ describe('collectCapabilities', () => {
     // shapes (an INVALID_TYPE code, or "sObject type '...' is not supported") should suppress
     // the note; anything else, including this one, is a failed read and must say so.
     const notes: string[] = [];
+    const unavailable: Unavailable[] = [];
     const out = await collectCapabilities(
       mockIntelContext({ soql: mockSoql([{ test: (s) => s.includes('EventRelayConfig'),
           error: new Error('This feature is not supported for your organization license.') }]),
         tooling: mockTooling([{ test: () => true, records: [] }]),
         rest: mockRest([]) }),
       notes,
+      unavailable,
     );
     expect(out.eventRelayConfigured).toBe(false);
     expect(notes.some((n) => n.toLowerCase().includes('eventrelay'))).toBe(true);
@@ -60,12 +69,14 @@ describe('collectCapabilities', () => {
 
   it('reports eventRelayConfigured false with a note when the read is refused, not absent', async () => {
     const notes: string[] = [];
+    const unavailable: Unavailable[] = [];
     const out = await collectCapabilities(
       mockIntelContext({ soql: mockSoql([{ test: (s) => s.includes('EventRelayConfig'),
           error: new Error('INSUFFICIENT_ACCESS: insufficient access rights on cross-reference id') }]),
         tooling: mockTooling([{ test: () => true, records: [] }]),
         rest: mockRest([]) }),
       notes,
+      unavailable,
     );
     expect(out.eventRelayConfigured).toBe(false);
     expect(notes.some((n) => n.toLowerCase().includes('eventrelay'))).toBe(true);
