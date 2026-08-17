@@ -78,6 +78,17 @@ export interface IntegrationEdge {
   attribution: Attribution;
 }
 
+/** Why a piece of the artifact is absent. `deferred` means this phase never gathers it; `failed` means a read was attempted and refused or errored. */
+export type UnavailableReason = 'deferred' | 'failed';
+
+export interface Unavailable {
+  /** Stable machine key naming what is missing, dotted to match the artifact field it affects, for example 'channels.network' or 'capabilities.apexClasses'. */
+  scope: string;
+  reason: UnavailableReason;
+  /** Human detail, including the underlying error message where there was one. */
+  detail: string;
+}
+
 export interface AnatomyCoverage {
   apexBodiesScanned: number;
   apexBodiesUnreadable: number;
@@ -91,6 +102,13 @@ export interface AnatomyCoverage {
   omniElementsSkippedSuperseded: number;
   prefixesUnresolved: string[];
   notes: string[];
+  /**
+   * The structured counterpart to `notes`: what is missing, as data rather than prose. `notes`
+   * stays prose for a human reading the terminal summary; `unavailable` is what consumers (View
+   * A among them) key off, so a reworded note can never silently break a band's emptiness
+   * classification. Sorted by `scope` for determinism.
+   */
+  unavailable: Unavailable[];
 }
 
 export interface AnatomyArtifact {

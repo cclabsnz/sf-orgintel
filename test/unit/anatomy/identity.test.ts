@@ -1,9 +1,11 @@
 import { mockSoql, mockTooling, mockIntelContext } from '../helpers/mocks.js';
 import { collectIdentity } from '../../../src/anatomy/collectors/identity.js';
+import type { Unavailable } from '../../../src/anatomy/types.js';
 
 describe('collectIdentity', () => {
   it('reports login counts by type as facts, with no grading', async () => {
     const notes: string[] = [];
+    const unavailable: Unavailable[] = [];
     const out = await collectIdentity(
       mockIntelContext({ soql: mockSoql([{ test: (s) => s.includes('LoginHistory'), records: [
           { Application: 'Portal', LoginType: 'Application', expr0: 900 },
@@ -11,6 +13,7 @@ describe('collectIdentity', () => {
         ] }]),
         tooling: mockTooling([{ test: () => true, records: [] }]) }),
       notes,
+      unavailable,
     );
     expect(out.loginsByType).toHaveLength(2);
 
@@ -26,6 +29,7 @@ describe('collectIdentity', () => {
 
   it('sorts ssoConfigs by issuer, null-safe, for deterministic output', async () => {
     const notes: string[] = [];
+    const unavailable: Unavailable[] = [];
     const out = await collectIdentity(
       mockIntelContext({
         soql: mockSoql([{ test: (s) => s.includes('LoginHistory'), records: [] }]),
@@ -37,6 +41,7 @@ describe('collectIdentity', () => {
         ]),
       }),
       notes,
+      unavailable,
     );
     expect(out.ssoConfigs.map((c) => c.issuer)).toEqual([
       null,
@@ -47,11 +52,13 @@ describe('collectIdentity', () => {
 
   it('still returns login data when SSO metadata cannot be retrieved', async () => {
     const notes: string[] = [];
+    const unavailable: Unavailable[] = [];
     const out = await collectIdentity(
       mockIntelContext({ soql: mockSoql([{ test: (s) => s.includes('LoginHistory'), records: [
           { Application: 'X', LoginType: 'Application', expr0: 1 } ] }]),
         tooling: mockTooling([{ test: () => true, error: new Error('no access') }]) }),
       notes,
+      unavailable,
     );
     expect(out.ssoConfigs).toEqual([]);
     expect(out.loginsByType).toHaveLength(1);

@@ -2,12 +2,14 @@ import { mockSoql, mockTooling } from '../helpers/mocks.js';
 import { collectProducts } from '../../../src/anatomy/collectors/products.js';
 import { collectPersonas } from '../../../src/anatomy/collectors/personas.js';
 import { collectChannels } from '../../../src/anatomy/collectors/channels.js';
+import type { Unavailable } from '../../../src/anatomy/types.js';
 
 const ctx = (over: Record<string, unknown>): any => ({ soql: mockSoql([]), tooling: mockTooling([]), ...over });
 
 describe('collectProducts', () => {
   it('returns app, package and record type names', async () => {
     const notes: string[] = [];
+    const unavailable: Unavailable[] = [];
     const out = await collectProducts(
       ctx({
         tooling: mockTooling([
@@ -22,6 +24,7 @@ describe('collectProducts', () => {
         soql: mockSoql([{ test: (s) => s.includes('RecordType'), records: [{ DeveloperName: 'ACME_Request' }] }]),
       }),
       notes,
+      unavailable,
     );
     expect(out.apps).toEqual(['ACME_Console']);
     expect(out.packages).toEqual(['acme']);
@@ -31,12 +34,14 @@ describe('collectProducts', () => {
 
   it('records a note and returns empty rather than throwing', async () => {
     const notes: string[] = [];
+    const unavailable: Unavailable[] = [];
     const out = await collectProducts(
       ctx({
         tooling: mockTooling([{ test: () => true, error: new Error('INSUFFICIENT_ACCESS') }]),
         soql: mockSoql([{ test: () => true, error: new Error('nope') }]),
       }),
       notes,
+      unavailable,
     );
     expect(out).toEqual({ apps: [], packages: [], recordTypes: [], componentNames: [] });
     expect(notes.length).toBeGreaterThan(0);
@@ -45,6 +50,7 @@ describe('collectProducts', () => {
 
   it('feeds componentNames from every Apex class and Flow, sorted, not just callout carriers', async () => {
     const notes: string[] = [];
+    const unavailable: Unavailable[] = [];
     const out = await collectProducts(
       ctx({
         tooling: mockTooling([
@@ -56,6 +62,7 @@ describe('collectProducts', () => {
         soql: mockSoql([{ test: (s) => s.includes('RecordType'), records: [] }]),
       }),
       notes,
+      unavailable,
     );
     expect(out.componentNames).toEqual(['AcmeHelper', 'Acme_Onboarding', 'ZedService']);
   });
@@ -64,6 +71,7 @@ describe('collectProducts', () => {
 describe('collectPersonas', () => {
   it('joins active user counts to licences and sorts deterministically', async () => {
     const notes: string[] = [];
+    const unavailable: Unavailable[] = [];
     const out = await collectPersonas(
       ctx({
         soql: mockSoql([
@@ -74,6 +82,7 @@ describe('collectPersonas', () => {
         ]),
       }),
       notes,
+      unavailable,
     );
     expect(out.map((p) => p.profile)).toEqual(['Alpha', 'Zed']);
     expect(out[0]).toEqual({ profile: 'Alpha', licence: 'Salesforce Platform', activeUsers: 7, landingApp: null });
@@ -84,6 +93,7 @@ describe('collectPersonas', () => {
 
   it('defaults a row missing its profile or licence rather than dropping it', async () => {
     const notes: string[] = [];
+    const unavailable: Unavailable[] = [];
     const out = await collectPersonas(
       ctx({
         soql: mockSoql([
@@ -94,6 +104,7 @@ describe('collectPersonas', () => {
         ]),
       }),
       notes,
+      unavailable,
     );
     expect(out).toHaveLength(2);
     expect(out).toContainEqual({ profile: 'unknown', licence: 'Salesforce', activeUsers: 2, landingApp: null });
@@ -104,18 +115,22 @@ describe('collectPersonas', () => {
 describe('collectChannels', () => {
   it('returns sites as channels', async () => {
     const notes: string[] = [];
+    const unavailable: Unavailable[] = [];
     const out = await collectChannels(
       ctx({ soql: mockSoql([{ test: (s) => s.includes('FROM Site'), records: [{ Name: 'Portal', Status: 'Active' }] }]) }),
       notes,
+      unavailable,
     );
     expect(out).toContainEqual({ type: 'site', name: 'Portal', status: 'Active' });
   });
 
   it('records a note that app, console and api channels and the Network join are not yet collected', async () => {
     const notes: string[] = [];
+    const unavailable: Unavailable[] = [];
     await collectChannels(
       ctx({ soql: mockSoql([{ test: (s) => s.includes('FROM Site'), records: [] }]) }),
       notes,
+      unavailable,
     );
     expect(notes.some((n) => n.toLowerCase().includes('network'))).toBe(true);
   });

@@ -1,7 +1,7 @@
 // Who uses the org, on what licence, and where they land. Entitlement against consumption is
 // the point: a licence count alone says nothing about whether it is used.
 import type { IntelContext } from '../../lib/wire.js';
-import type { Persona } from '../types.js';
+import type { Persona, Unavailable } from '../types.js';
 
 interface UserRow {
   profileName?: string;
@@ -9,11 +9,20 @@ interface UserRow {
   userCount?: number;
 }
 
-export async function collectPersonas(ctx: IntelContext, notes: string[]): Promise<Persona[]> {
+export async function collectPersonas(
+  ctx: IntelContext,
+  notes: string[],
+  unavailable: Unavailable[],
+): Promise<Persona[]> {
   // landingApp is deliberately deferred: it needs the UserAppInfo/AppDefinition join the spec
   // describes, which is not implemented yet. Left silent, a hardcoded null reads as "no
-  // landing app configured" rather than "not attempted", so the deferral is recorded here.
-  notes.push('landingApp is not collected in this phase; the UserAppInfo/AppDefinition join was not attempted.');
+  // landing app configured" rather than "not attempted", so the deferral is recorded here. This
+  // is a field-level deferral, not a category one: `activeUsers`, the metric the `users` band
+  // actually renders, is queried for real on every run, so this must not read as "the users
+  // band was never collected".
+  const landingAppDetail = 'landingApp is not collected in this phase; the UserAppInfo/AppDefinition join was not attempted.';
+  notes.push(landingAppDetail);
+  unavailable.push({ scope: 'personas.landingApp', reason: 'deferred', detail: landingAppDetail });
 
   let rows: UserRow[] = [];
   try {
@@ -29,7 +38,9 @@ export async function collectPersonas(ctx: IntelContext, notes: string[]): Promi
         'FROM User WHERE IsActive = true GROUP BY Profile.Name, Profile.UserLicense.Name',
     );
   } catch (e) {
-    notes.push(`Active user counts could not be read: ${e instanceof Error ? e.message : String(e)}`);
+    const detail = `Active user counts could not be read: ${e instanceof Error ? e.message : String(e)}`;
+    notes.push(detail);
+    unavailable.push({ scope: 'personas', reason: 'failed', detail });
     return [];
   }
 

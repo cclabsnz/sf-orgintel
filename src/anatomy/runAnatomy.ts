@@ -3,7 +3,7 @@
 // turn their raw output into products and attributed edges. Nothing here throws: an org that
 // yields little produces a small, honest artifact rather than a failed command.
 import type { IntelContext } from '../lib/wire.js';
-import type { AnatomyArtifact } from './types.js';
+import type { AnatomyArtifact, Unavailable } from './types.js';
 import { buildPrefixRegistry } from './prefixRegistry.js';
 import { addEndpointOnlyEdges, attributeEdges, resolveChains } from './attribute.js';
 import { collectProducts } from './collectors/products.js';
@@ -25,13 +25,14 @@ export async function runAnatomy(
   provenance: AnatomyProvenance,
 ): Promise<AnatomyArtifact> {
   const notes: string[] = [];
+  const unavailable: Unavailable[] = [];
 
-  const sources = await collectProducts(ctx, notes);
-  const personas = await collectPersonas(ctx, notes);
-  const channels = await collectChannels(ctx, notes);
-  const capabilities = await collectCapabilities(ctx, notes);
-  const identity = await collectIdentity(ctx, notes);
-  const evidence = await collectIntegrationEdges(ctx, notes);
+  const sources = await collectProducts(ctx, notes, unavailable);
+  const personas = await collectPersonas(ctx, notes, unavailable);
+  const channels = await collectChannels(ctx, notes, unavailable);
+  const capabilities = await collectCapabilities(ctx, notes, unavailable);
+  const identity = await collectIdentity(ctx, notes, unavailable);
+  const evidence = await collectIntegrationEdges(ctx, notes, unavailable);
 
   // Component names for the registry: every org-authored Apex class and Flow, the population
   // the frequency floor is calibrated against. Not the (much narrower) set of classes that
@@ -74,6 +75,12 @@ export async function runAnatomy(
       // kept, not alphabetised: it is the order failures occurred in, which is diagnostic
       // information an alphabetical sort would discard for no determinism benefit.
       notes,
+      // Unlike `notes`, `unavailable` is data consumers key off (View A among them), so it is
+      // sorted by scope, with reason and detail as tiebreakers, rather than left in collection
+      // order.
+      unavailable: [...unavailable].sort(
+        (a, b) => a.scope.localeCompare(b.scope) || a.reason.localeCompare(b.reason) || a.detail.localeCompare(b.detail),
+      ),
     },
   };
 }

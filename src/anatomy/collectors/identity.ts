@@ -2,9 +2,13 @@
 // to sf-audit. This collector reports configuration and observed behaviour side by side and
 // draws no conclusion from the gap between them.
 import type { IntelContext } from '../../lib/wire.js';
-import type { Identity, SsoConfig } from '../types.js';
+import type { Identity, SsoConfig, Unavailable } from '../types.js';
 
-export async function collectIdentity(ctx: IntelContext, notes: string[]): Promise<Identity> {
+export async function collectIdentity(
+  ctx: IntelContext,
+  notes: string[],
+  unavailable: Unavailable[],
+): Promise<Identity> {
   const ssoConfigs: SsoConfig[] = [];
   try {
     const rows = await ctx.tooling.query<{ Issuer?: string }>('SELECT Issuer FROM SamlSsoConfig');
@@ -12,7 +16,9 @@ export async function collectIdentity(ctx: IntelContext, notes: string[]): Promi
       ssoConfigs.push({ type: 'saml', issuer: r.Issuer ?? null, identityMapping: null, userProvisioning: false });
     }
   } catch (e) {
-    notes.push(`SSO configuration could not be read: ${e instanceof Error ? e.message : String(e)}`);
+    const detail = `SSO configuration could not be read: ${e instanceof Error ? e.message : String(e)}`;
+    notes.push(detail);
+    unavailable.push({ scope: 'identity.ssoConfigs', reason: 'failed', detail });
   }
 
   const loginsByType: Identity['loginsByType'] = [];
@@ -28,7 +34,9 @@ export async function collectIdentity(ctx: IntelContext, notes: string[]): Promi
       });
     }
   } catch (e) {
-    notes.push(`Login history could not be read: ${e instanceof Error ? e.message : String(e)}`);
+    const detail = `Login history could not be read: ${e instanceof Error ? e.message : String(e)}`;
+    notes.push(detail);
+    unavailable.push({ scope: 'identity.loginsByType', reason: 'failed', detail });
   }
 
   loginsByType.sort((a, b) => a.application.localeCompare(b.application) || a.loginType.localeCompare(b.loginType));
