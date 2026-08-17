@@ -40,26 +40,70 @@ async function count(
   }
 }
 
+/**
+ * Which entities this org actually turned Change Data Capture on for.
+ *
+ * The first version of this counted every sObject in the global describe whose name ended in
+ * `ChangeEvent`. That is not a fact about the org at all: the platform exposes a change event
+ * type for every object that *supports* CDC, so the number grows with the org's object count and
+ * says nothing about whether a single change event is being published. It read 419 on an org
+ * with CDC entirely switched off, and View A drew it as the largest tile in the Ops band.
+ *
+ * `PlatformEventChannelMember` is the object that carries the answer. Per the Tooling API
+ * reference it represents "an entity selected for Change Data Capture notifications on a
+ * standard or custom channel", so the one query covers both the Setup "Selected Entities" list
+ * (channel `ChangeEvents`) and any custom `MyChannel__chn`. Measured across six real orgs, all
+ * six returned zero rows, which is the honest reading the describe was hiding.
+ *
+ * `SelectedEntity` is the change event name, for example `AccountChangeEvent`. De-duplicated
+ * because one entity can be a member of more than one channel, and sorted for determinism.
+ */
+async function collectChangeDataCapture(
+  ctx: IntelContext,
+  notes: string[],
+  unavailable: Unavailable[],
+): Promise<string[]> {
+  try {
+    const rows = await ctx.tooling.query<{ SelectedEntity?: string }>(
+      'SELECT SelectedEntity FROM PlatformEventChannelMember',
+    );
+    const entities = new Set<string>();
+    for (const row of rows) if (row.SelectedEntity) entities.add(row.SelectedEntity);
+    return [...entities].sort();
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    // Same rule as EventRelayConfig below: the platform's absent-sObject shape means the feature
+    // is genuinely not on this org, and absence is the finding, so no note and no unavailable
+    // entry. Anything else is a refused read, which must not be allowed to render as a
+    // confident "no entity has CDC enabled".
+    if (!isAbsentSObjectError(message)) {
+      const detail = `Change Data Capture channel membership unavailable: ${message}`;
+      notes.push(detail);
+      unavailable.push({ scope: 'capabilities.changeDataCapture', reason: 'failed', detail });
+    }
+    return [];
+  }
+}
+
 export async function collectCapabilities(
   ctx: IntelContext,
   notes: string[],
   unavailable: Unavailable[],
 ): Promise<Capabilities> {
   const platformEvents: string[] = [];
-  const changeDataCapture: string[] = [];
   try {
     const all = await ctx.rest.get<{ sobjects?: Array<{ name?: string }> }>('/sobjects/');
     for (const s of all.sobjects ?? []) {
       const name = s.name ?? '';
       if (name.endsWith('__e')) platformEvents.push(name);
-      else if (name.endsWith('ChangeEvent')) changeDataCapture.push(name);
     }
   } catch (e) {
     const detail = `sObject list unavailable: ${e instanceof Error ? e.message : String(e)}`;
     notes.push(detail);
     unavailable.push({ scope: 'capabilities.platformEvents', reason: 'failed', detail });
-    unavailable.push({ scope: 'capabilities.changeDataCapture', reason: 'failed', detail });
   }
+
+  const changeDataCapture = await collectChangeDataCapture(ctx, notes, unavailable);
 
   let eventRelayConfigured = false;
   try {
@@ -91,7 +135,7 @@ export async function collectCapabilities(
     externalDataSources: await count(ctx, notes, unavailable, 'ExternalDataSource', 'capabilities.externalDataSources', 'SELECT COUNT(Id) FROM ExternalDataSource'),
     remoteSites: await count(ctx, notes, unavailable, 'RemoteProxy', 'capabilities.remoteSites', 'SELECT COUNT(Id) FROM RemoteProxy'),
     platformEvents: platformEvents.sort(),
-    changeDataCapture: changeDataCapture.sort(),
+    changeDataCapture,
     eventRelayConfigured,
   };
 }

@@ -56,7 +56,7 @@ export async function runAnatomy(
   );
 
   return {
-    version: 1,
+    version: 2,
     provenance,
     products: registry.products,
     personas,

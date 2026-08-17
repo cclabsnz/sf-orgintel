@@ -49,7 +49,16 @@ export interface Capabilities {
   flows: number;
   lwc: number;
   aura: number;
+  /** Custom platform event sObjects defined in the org, by API name. */
   platformEvents: string[];
+  /**
+   * Change event entities this org has actually selected for Change Data Capture, on the
+   * standard `ChangeEvents` channel or any custom one, read from `PlatformEventChannelMember`.
+   *
+   * Not "every object that supports CDC". Version 1 of this artifact meant the latter, which is
+   * a property of the platform rather than of the org: it read 419 on an org where CDC was
+   * switched off entirely. An empty array here means no entity is publishing change events.
+   */
   changeDataCapture: string[];
   namedCredentials: number;
   externalDataSources: number;
@@ -112,7 +121,13 @@ export interface AnatomyCoverage {
 }
 
 export interface AnatomyArtifact {
-  version: 1;
+  /**
+   * 2 since `capabilities.changeDataCapture` changed meaning from "objects the platform supports
+   * CDC for" to "entities this org enabled CDC on". Bumped because the key kept its name while
+   * the number behind it changed by two orders of magnitude, and a consumer holding both a v1
+   * and a v2 artifact would otherwise read that as CDC having been switched off.
+   */
+  version: 2;
   provenance: { generatedAt: string; orgId: string; toolVersion: string; apiVersion: string };
   products: Product[];
   personas: Persona[];
