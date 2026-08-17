@@ -224,22 +224,22 @@ function renderTile(tile: Tile, x: number, y: number, w: number, h: number, maxM
   const label = `<text x="${r(x + 7)}" y="${r(y + 17)}" font-size="${LABEL_SIZE}" fill="${INK}">` +
     `${esc(truncate(tile.label, w - 14, LABEL_CHAR_W))}</text>`;
 
-  const readout = `<text x="${r(x + w - 7)}" y="${r(y + 33)}" font-size="${tile.unavailable ? 10 : 13}" ` +
+  const readout = `<text x="${r(x + w - 7)}" y="${r(y + 31)}" font-size="${tile.unavailable ? 10 : 13}" ` +
     `font-weight="${tile.unavailable ? 400 : 600}" fill="${tile.unavailable ? DIM : INK}" text-anchor="end" ` +
     `style="font-variant-numeric:tabular-nums">${esc(value)}</text>`;
 
   // Sublabel shares line two with the readout, so it gives up the readout's share of the width.
   const sublabel = tile.sublabel === null
     ? ''
-    : `<text x="${r(x + 7)}" y="${r(y + 33)}" font-size="${SUB_SIZE}" fill="${DIM}">` +
+    : `<text x="${r(x + 7)}" y="${r(y + 31)}" font-size="${SUB_SIZE}" fill="${DIM}">` +
       `${esc(truncate(tile.sublabel, w - 14 - (value.length * 8 + 10), SUB_CHAR_W))}</text>`;
 
   // The filled bar for a proportional reading. No tile carries one yet: no licence-total figure
   // is collected, and inventing the denominator is exactly what this report must not do.
   const bar = tile.fill === null
     ? ''
-    : `<rect x="${r(x + 7)}" y="${r(y + h - 9)}" width="${r(w - 14)}" height="4" fill="#00000018"/>` +
-      `<rect x="${r(x + 7)}" y="${r(y + h - 9)}" width="${r(Math.max(0, Math.min(1, tile.fill)) * (w - 14))}" height="4" fill="${ink}"/>`;
+    : `<rect x="${r(x + 7)}" y="${r(y + h - 7)}" width="${r(w - 14)}" height="4" fill="#00000018"/>` +
+      `<rect x="${r(x + 7)}" y="${r(y + h - 7)}" width="${r(Math.max(0, Math.min(1, tile.fill)) * (w - 14))}" height="4" fill="${INK}"/>`;
 
   // The full, untruncated value, for a reader who hovers a tile that had to be shortened.
   const full = `<title>${esc(tile.label)}${tile.sublabel === null ? '' : ` (${esc(tile.sublabel)})`}: ${esc(value)}</title>`;
