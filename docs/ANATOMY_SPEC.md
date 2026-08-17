@@ -277,8 +277,24 @@ Seven bands of tiles, rendered as inline SVG in the existing report shell, follo
 Bands, top to bottom: users, channels, products, platform capabilities, integration methods,
 external systems, ops and security.
 
-Layout reuses `computeStrataLayout` from `src/map/graph/strata.ts`. View A is a simpler case of
-the band packing already implemented there; a second layout engine is not warranted.
+Layout gets its own small module rather than reusing `computeStrataLayout` from
+`src/map/graph/strata.ts`. An earlier draft of this spec claimed View A was a simpler case of
+that engine. It is not, and the claim rested on a coincidence: both have seven bands.
+
+They are seven different things. `strata.ts` types its input as `Layer`, meaning
+`integration | configuration | business | content | sharing | security | observability`, which
+classifies Salesforce objects. View A's bands classify products, personas and external systems.
+The two sets share no members.
+
+Beyond the taxonomy, `computeStrataLayout` exists to minimise edge crossings by barycentre
+sweeps, and it returns points. View A has no edges between bands to minimise and needs sized
+tiles, not points: product tiles scale by component count and licence tiles carry a
+used-of-total bar. Reusing it would mean widening `StrataObject.layer` into a union meaning two
+unrelated things, and driving a graph engine to lay out a table.
+
+The dedicated module is small: fixed bands, tiles flowed within each band, sized by a supplied
+metric. Pure, so it is testable without rendering any markup, which is how every other layout
+in this codebase is arranged.
 
 Three rules, carried from the coverage work already shipped in the map report:
 
