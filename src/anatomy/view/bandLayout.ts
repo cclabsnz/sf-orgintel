@@ -57,10 +57,18 @@ const HEADER_H = 26;
 /** Breathing room under the last row of a band, before the next band's header. */
 const BAND_PAD_BOTTOM = 12;
 
-/** Narrowest a tile may be drawn. Below roughly this, a label is unreadable and a reading is lost. */
-const FLOOR_W = 64;
+/**
+ * Narrowest a tile may be drawn. Below roughly this, a label is unreadable and a reading is lost.
+ *
+ * Set from the rendered result, not from taste. At the first value tried, 64, the fixed
+ * capability tiles (whose metric is often small or zero, so they always land on the floor)
+ * truncated to `Syste…` and `Even…`, and the hatched not-read tile had no room for a label at
+ * all: a tile saying "not read" without saying what was not read. 112 fits around seventeen
+ * characters beside nothing else, which is enough to tell `Remote Site S…` from `Named Cred…`.
+ */
+const FLOOR_W = 112;
 /** Widest a tile may be drawn, so the largest reading cannot monopolise a row. */
-const CAP_W = 240;
+const CAP_W = 260;
 
 /** One decimal place, matching mapReport.ts, so the same input yields the same bytes of markup. */
 const r = (n: number): number => Math.round(n * 10) / 10;
