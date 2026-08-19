@@ -1,5 +1,13 @@
 # @cclabsnz/sf-orgintel
 
+[![CI](https://github.com/cclabsnz/sf-orgintel/actions/workflows/ci.yml/badge.svg)](https://github.com/cclabsnz/sf-orgintel/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/cclabsnz/sf-orgintel/actions/workflows/codeql.yml/badge.svg)](https://github.com/cclabsnz/sf-orgintel/actions/workflows/codeql.yml)
+[![Semgrep](https://github.com/cclabsnz/sf-orgintel/actions/workflows/semgrep.yml/badge.svg)](https://github.com/cclabsnz/sf-orgintel/actions/workflows/semgrep.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/cclabsnz/sf-orgintel/badge)](https://securityscorecards.dev/viewer/?uri=github.com/cclabsnz/sf-orgintel)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14151/badge)](https://www.bestpractices.dev/projects/14151)
+[![npm version](https://img.shields.io/npm/v/@cclabsnz/sf-orgintel)](https://www.npmjs.com/package/@cclabsnz/sf-orgintel)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 > Understand how a Salesforce org actually works (its processes, people, and couplings) from metadata and behavioral data, entirely locally.
 
 A read-only `sf` CLI plugin that analyses an org's metadata and behavioural tables to reveal
