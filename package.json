@@ -55,6 +55,7 @@
     "/lib",
     "LICENSE",
     "README.md",
+    "CHANGELOG.md",
     "PERMISSIONS.md",
     "!/lib/**/*.map"
   ],
