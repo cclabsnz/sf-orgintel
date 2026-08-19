@@ -26,6 +26,11 @@ const HEIGHT = 660;
  * sensitive findings and is routinely opened offline, and the network-egress invariant fails
  * the build if that ever stops being true.
  */
+/** JSON for embedding in a `<script>` element: identical to `JSON.stringify` but `<`-safe. */
+function jsonForScript(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c');
+}
+
 export function renderStrataViewer(input: StrataViewerInput): string {
   const included = new Set(input.objects);
   const nodes = input.couplingGraph.nodes
@@ -46,7 +51,18 @@ export function renderStrataViewer(input: StrataViewerInput): string {
     degree.set(e.to, (degree.get(e.to) ?? 0) + 1);
   }
 
-  const payload = JSON.stringify({
+  // `<` is escaped to its JSON unicode form on the way out. The payload sits inside
+  // `<script type="application/json">`, and the HTML parser looks for `</script` in that
+  // element's text without caring that the text is JSON: a value containing one would close
+  // the element early and hand the rest of the payload to the HTML parser as markup, in a
+  // file whose whole purpose is to be sent to a client. `JSON.stringify` escapes neither `<`
+  // nor `/`, so it cannot prevent that on its own.
+  //
+  // No Salesforce API name can contain `<` today, so nothing here is currently reachable.
+  // This is the guard rather than the cure: it has to hold for whichever field is added to
+  // the payload next, and `\u003c` is a valid JSON escape for `<`, so the browser's
+  // `JSON.parse` still returns the original string byte for byte.
+  const payload = jsonForScript({
     width: layout.width,
     height: layout.height,
     bands: layout.bands.map((b) => ({ ...b, description: LAYER_DESCRIPTIONS[b.layer] })),
@@ -59,6 +75,7 @@ export function renderStrataViewer(input: StrataViewerInput): string {
     })),
     edges,
   });
+
 
   return `<h2>Explore <span class="muted" style="font-size:13px">(scroll to zoom, drag to pan, click an object)</span></h2>
 <p class="muted">Zooming changes what is shown, not just how big it is: layers and their sizes
