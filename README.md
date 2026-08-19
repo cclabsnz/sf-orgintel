@@ -10,6 +10,8 @@
 
 > Understand how a Salesforce org actually works (its processes, people, and couplings) from metadata and behavioral data, entirely locally.
 
+[Architecture](docs/ARCHITECTURE.md) · [Assurance case](docs/ASSURANCE_CASE.md) · [Governance](GOVERNANCE.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
+
 A read-only `sf` CLI plugin that analyses an org's metadata and behavioural tables to reveal
 how it is actually used. Where a security audit answers *"how secure is this org,"* OrgIntel
 answers *"how does this org work."*
