@@ -187,7 +187,9 @@ describe('retrieveFlows — managed packages and batching', () => {
         metaQueries.push(q);
         inFlight++;
         peak = Math.max(peak, inFlight);
-        await new Promise((r) => setTimeout(r, 5));
+        await new Promise((r) => {
+          setTimeout(r, 5);
+        });
         inFlight--;
         const id = /'([^']+)'/.exec(q)![1];
         return [{ Id: id, Metadata: META }] as T[];

@@ -56,6 +56,8 @@ you are done.
   structures.
 - **Absence renders explicitly.** "We looked and found none" and "we never looked" are
   different findings and must never render the same. See `docs/ANATOMY_SPEC.md` section 6.
+- **Lint is a gate, not a suggestion.** `pnpm run lint` runs oxlint over `src` and `test`
+  with the correctness category set to error, and CI runs it in the required build-test job.
 - **Types are checked separately from tests.** Jest strips types without checking them,
   so a type error will not fail a bare jest run. `pnpm run typecheck` covers `src` and
   `test` together; run it before you push.
@@ -82,10 +84,10 @@ noise that goes stale.
 ## Before you open a pull request
 
 ```bash
-pnpm run typecheck && pnpm test:unit && pnpm build
+pnpm run lint && pnpm run typecheck && pnpm test:unit && pnpm build
 ```
 
-All three must exit 0. Check the exit code rather than reading the last lines of output:
+All four must exit 0. Check the exit code rather than reading the last lines of output:
 piping a compiler into `tail` reports the exit status of `tail`.
 
 Then check your pull request text for org ids, sandbox hostnames and org aliases. The

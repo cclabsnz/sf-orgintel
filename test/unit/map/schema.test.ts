@@ -47,7 +47,7 @@ function emitFromFixtures() {
     apexTriggers: [],
     knownObjects: objects,
     nodeInfo: (o) => ({
-      custom: /__c$/.test(o),
+      custom: o.endsWith('__c'),
       automationCounts: { flows: 2, triggers: 1, approvals: 0 },
       recordCount90d: 1234,
     }),
