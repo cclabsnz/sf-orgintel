@@ -10,7 +10,9 @@ canonical published note and carries the provenance attestation and CycloneDX SB
 
 ## [Unreleased]
 
-Merged to `main`, not yet released.
+Nothing yet.
+
+## [0.2.0] — 2026-08-25
 
 ### Added
 
@@ -73,5 +75,6 @@ Apex, with a branded HTML report behind `--html`.
 publishing was configured for this package. Every release from `0.2.0` onward carries one
 automatically. See [SECURITY.md](SECURITY.md).
 
-[Unreleased]: https://github.com/cclabsnz/sf-orgintel/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/cclabsnz/sf-orgintel/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/cclabsnz/sf-orgintel/releases/tag/v0.2.0
 [0.1.0]: https://github.com/cclabsnz/sf-orgintel/releases/tag/v0.1.0
