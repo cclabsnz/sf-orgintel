@@ -72,6 +72,13 @@ jobs:
         with:
           format: cyclonedx-json
           output-file: sbom.cyclonedx.json
+          # Generate only. This action defaults to attaching its own copy to the release as
+          # well, named after the repo and job rather than the output file, which is how v0.2.0
+          # ended up with sbom.cyclonedx.json and sf-orgintel-publish.cyclonedx.json side by
+          # side: identical bytes, two names, and no way for a consumer to tell which is
+          # canonical. The attach below is the one that ships, because it carries a stable
+          # filename and is gated on the release event.
+          upload-release-assets: false
 
       - name: Attach SBOM to the release
         if: github.event_name == 'release'
