@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "provenance": {
+    "tool": "orgintel",
+    "toolVersion": "0.0.0-test",
+    "generatedAt": "2026-01-01T00:00:00Z",
+    "orgId": "org1"
+  },
+  "levels": {
+    "L0_landscape": {
+      "clusters": [
+        {
+          "id": "cluster-1",
+          "label": "Account",
+          "objects": [
+            "Account",
+            "Case",
+            "Contact",
+            "WorkOrder"
+          ],
+          "layout": {
+            "x": 480,
+            "y": 300
+          },
+          "metrics": {
+            "objects": 4,
+            "automations": 8,
+            "recordCount90d": 400
+          }
+        }
+      ]
+    },
+    "L1_domain": {
+      "perCluster": [
+        {
+          "clusterId": "cluster-1",
+          "graphRef": "coupling-graph.json#cluster-1",
+          "anchorObject": "Account",
+          "layout": {
+            "Account": {
+              "x": 431.7,
+              "y": 560
+            },
+            "Case": {
+              "x": 851.5,
+              "y": 422.9
+            },
+            "Contact": {
+              "x": 40,
+              "y": 560
+            },
+            "WorkOrder": {
+              "x": 920,
+              "y": 40
+            }
+          }
+        }
+      ]
+    },
+    "L2_process": {
+      "perAnchor": [
+        {
+          "anchorObject": "Account",
+          "processGraphRef": null
+        }
+      ]
+    },
+    "L3_transition": {
+      "reserved": true
+    },
+    "L4_component": {
+      "flowSummaryRefs": []
+    }
+  }
+}
