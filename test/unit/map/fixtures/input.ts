@@ -15,6 +15,7 @@ import { parseFlowXml } from '../../../../src/map/flow/parseFlow.js';
 import { assembleCouplingArtifacts, type MapArtifacts } from '../../../../src/map/assemble.js';
 import type { NodeInfo } from '../../../../src/map/graph/couplingGraph.js';
 import type { ApexClassInput, ApexTriggerInput } from '../../../../src/map/apex/apexTypes.js';
+import type { FragmentInput } from '../../../../src/map/fragment.js';
 
 const DIR = join(process.cwd(), 'test/unit/map/fixtures/flows');
 const flow = (f: string, api: string) =>
@@ -75,11 +76,11 @@ export function artifacts(): MapArtifacts {
 }
 
 /**
- * FragmentInput-shaped object for later tasks in the convergence plan (Task 3 defines the real
- * type). Carries the same edges `artifacts()` produced, the same raw facts that fed it, the same
- * nodeInfo, and fixed capture provenance.
+ * The `FragmentInput` for `buildMapFragment`. Carries the same edges `artifacts()` produced, the
+ * same raw facts that fed it, the same nodeInfo, and fixed capture provenance, so the fragment
+ * suite (fragment.test.ts) describes the same org as assemble.test.ts and the golden suite.
  */
-export function input() {
+export function input(): FragmentInput {
   return {
     edges: artifacts().couplingGraph.edges,
     flowSummaries: flowSummaries(),
