@@ -12,11 +12,11 @@ const GOLDEN = join(process.cwd(), 'test/unit/map/fixtures/golden');
 describe('legacy IR artifacts', () => {
   it('produces a byte-identical coupling-graph.json', () => {
     const actual = JSON.stringify(artifacts().couplingGraph, null, 2) + '\n';
-    expect(actual).toBe(readFileSync(join(GOLDEN, 'coupling-graph.json'), 'utf8'));
+    expect(actual).toBe(readFileSync(join(GOLDEN, 'coupling-graph.golden.json'), 'utf8'));
   });
 
   it('produces a byte-identical landscape-manifest.json', () => {
     const actual = JSON.stringify(artifacts().manifest, null, 2) + '\n';
-    expect(actual).toBe(readFileSync(join(GOLDEN, 'landscape-manifest.json'), 'utf8'));
+    expect(actual).toBe(readFileSync(join(GOLDEN, 'landscape-manifest.golden.json'), 'utf8'));
   });
 });
