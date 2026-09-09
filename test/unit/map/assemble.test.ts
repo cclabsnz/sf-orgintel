@@ -1,55 +1,8 @@
 import { describe, it, expect } from '@jest/globals';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { parseFlowXml } from '../../../src/map/flow/parseFlow.js';
-import { assembleCouplingArtifacts } from '../../../src/map/assemble.js';
-import type { NodeInfo } from '../../../src/map/graph/couplingGraph.js';
-import type { ApexClassInput } from '../../../src/map/apex/apexTypes.js';
-
-const DIR = join(process.cwd(), 'test/unit/map/fixtures/flows');
-const flow = (f: string, api: string) => parseFlowXml(readFileSync(join(DIR, `${f}.flow-meta.xml`), 'utf8'), api);
-
-const nodeInfo = (): NodeInfo => ({
-  custom: false,
-  automationCounts: { flows: 1, triggers: 1, approvals: 0 },
-  recordCount90d: 100,
-});
-
-function assemble() {
-  const classes: ApexClassInput[] = [
-    {
-      name: 'AcctContactSync',
-      namespace: null,
-      body: null,
-      symbolTable: { externalReferences: [{ name: 'Account' }, { name: 'Contact' }] },
-    },
-  ];
-  return assembleCouplingArtifacts({
-    flowSummaries: [flow('Case_Router', 'Case_Router'), flow('New_Case_Screen', 'New_Case_Screen')],
-    apexClasses: classes,
-    apexTriggers: [],
-    knownObjects: new Set(['Account', 'Case', 'WorkOrder', 'Contact']),
-    nodeInfo,
-    labelOf: (o) => o,
-    topLayout: 20,
-    couplingProvenance: {
-      tool: 'orgintel',
-      toolVersion: '0.1.0',
-      generatedAt: '2026-07-26T00:00:00.000Z',
-      orgId: '00Dxx',
-      evidenceTier: 'B',
-    },
-    manifestProvenance: {
-      tool: 'orgintel',
-      toolVersion: '0.1.0',
-      generatedAt: '2026-07-26T00:00:00.000Z',
-      orgId: '00Dxx',
-    },
-  });
-}
+import { artifacts } from './fixtures/input.js';
 
 describe('assembleCouplingArtifacts', () => {
-  const a = assemble();
+  const a = artifacts();
 
   it('merges flow + apex edges into an aggregated coupling graph', () => {
     const g = a.couplingGraph;
@@ -83,6 +36,6 @@ describe('assembleCouplingArtifacts', () => {
   });
 
   it('is deterministic', () => {
-    expect(assemble()).toEqual(a);
+    expect(artifacts()).toEqual(a);
   });
 });
