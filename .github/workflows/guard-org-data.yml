@@ -55,7 +55,7 @@ jobs:
         run: |
           set -uo pipefail
           if git ls-files \
-            | grep -IE '(^|/)(sf-audit-00D[A-Za-z0-9]*-[0-9]+|orgintel-(map|fingerprint|anatomy)-[A-Za-z0-9]+-[0-9]+)\.(json|html|md)$|(^|/)(coupling-graph|landscape-manifest|anatomy)\.json$' ; then
+            | grep -IE '(^|/)(sf-audit-00D[A-Za-z0-9]*-[0-9]+|orgintel-(map|fingerprint|anatomy)-[A-Za-z0-9]+-[0-9]+)\.(json|html|md)$|(^|/)(coupling-graph|landscape-manifest|anatomy|graph-fragment)\.json$' ; then
             echo "::error::A generated report artefact is tracked. These contain org data."
             exit 1
           fi

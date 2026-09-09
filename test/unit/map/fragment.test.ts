@@ -18,7 +18,7 @@ import type { ApexTriggerInput } from '../../../src/map/apex/apexTypes.js';
 // assemble.test.ts's `artifacts()` and the golden suite (golden.test.ts), so adding a trigger
 // would change coupling-graph.golden.json and turn a frozen, deliberately-pinned test red. The
 // trigger path gets its own small local fixture below instead.
-import { input } from './fixtures/input.js';
+import { input, artifacts } from './fixtures/input.js';
 
 const fragment = () => buildMapFragment(input());
 
@@ -81,6 +81,19 @@ describe('buildMapFragment', () => {
     // leak) -- it reruns the same input in the same process, so V8 iterates identical structures
     // identically even with every sort removed. The ordering itself is asserted separately above.
     expect(JSON.stringify(buildMapFragment(input()))).toBe(JSON.stringify(buildMapFragment(input())));
+  });
+
+  it('describes exactly the couplings the coupling graph describes', () => {
+    // The two artifacts are rendered from one in-memory edge set, and this is what holds them to
+    // it. If a later change derives one of them differently, this fails before a consumer sees
+    // two files from one run disagreeing about the same org.
+    const { couplingGraph } = artifacts(); // the golden suite's helper
+    const couples = buildMapFragment(input()).edges.filter((e) => e.kind === 'couples');
+    const fromGraph = couplingGraph.edges.map((e) => `${e.from}|${e.to}|${e.weight}`).sort();
+    const fromFragment = couples
+      .map((e) => `${e.from.replace(/^obj\./, '')}|${e.to.replace(/^obj\./, '')}|${String(e.attrs.weight)}`)
+      .sort();
+    expect(fromFragment).toEqual(fromGraph);
   });
 });
 
