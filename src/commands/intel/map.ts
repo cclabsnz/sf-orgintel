@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
-import type { CouplingGraph, LandscapeManifest, EvidenceTier } from '@cclabsnz/sf-core';
+import type { CouplingGraph, LandscapeManifest, CanonicalGraph, EvidenceTier } from '@cclabsnz/sf-core';
 import { resolveBranding, type BrandingOverrides } from '@cclabsnz/sf-core';
 import { resolveOrgInfo, buildIntelContext } from '../../lib/wire.js';
 import { runMap } from '../../map/runMap.js';
@@ -13,6 +13,7 @@ import { TOOL_VERSION, API_VERSION } from '../../version.js';
 interface MapCommandResult {
   couplingGraph: CouplingGraph;
   manifest: LandscapeManifest;
+  fragment: CanonicalGraph;
   flowsAnalyzed: number;
   apexClassesAnalyzed: number;
   apexTriggersAnalyzed: number;
@@ -24,8 +25,9 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
     'Parses Active flows (Flow XML) and Apex (SymbolTable, with a body-regex fallback) to build a cross-object ' +
     'coupling graph: object-pair couplings aggregated across flows, triggers, and classes with weights, ' +
     'operations, contributing components, and confidence. Emits coupling-graph.json and landscape-manifest.json ' +
-    '(versioned IR contracts) and, with --html, a branded report with a static coupling graph. Read-only and ' +
-    'deterministic: same org in, same graph out.';
+    '(versioned IR contracts), plus graph-fragment.json — the same facts rendered as sf-orgintel\'s ' +
+    'contribution to the shared canonical org graph — and, with --html, a branded report with a static coupling ' +
+    'graph. Read-only and deterministic: same org in, same graph out.';
   public static examples = [
     '<%= config.bin %> <%= command.id %> --target-org myOrg',
     '<%= config.bin %> <%= command.id %> --target-org myOrg --html --output ./reports',
@@ -41,7 +43,9 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
     html: Flags.boolean({ summary: 'Also write a branded HTML coupling report.', default: false }),
     output: Flags.string({
       char: 'o',
-      summary: 'Directory to write coupling-graph.json, landscape-manifest.json, and the --html report.',
+      summary:
+        'Directory to write coupling-graph.json, landscape-manifest.json, graph-fragment.json, and the ' +
+        '--html report.',
       default: '.',
     }),
     branding: Flags.string({
@@ -101,10 +105,13 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
     fs.mkdirSync(flags.output, { recursive: true });
     const graphPath = path.join(flags.output, 'coupling-graph.json');
     const manifestPath = path.join(flags.output, 'landscape-manifest.json');
+    const fragmentPath = path.join(flags.output, 'graph-fragment.json');
     fs.writeFileSync(graphPath, JSON.stringify(result.couplingGraph, null, 2), 'utf-8');
     fs.writeFileSync(manifestPath, JSON.stringify(result.manifest, null, 2), 'utf-8');
+    fs.writeFileSync(fragmentPath, JSON.stringify(result.fragment, null, 2), 'utf-8');
     this.log(`IR written: ${graphPath}`);
     this.log(`IR written: ${manifestPath}`);
+    this.log(`IR written: ${fragmentPath}`);
 
     if (flags.html) {
       const overrides = flags.branding
@@ -138,6 +145,7 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
     return {
       couplingGraph: result.couplingGraph,
       manifest: result.manifest,
+      fragment: result.fragment,
       flowsAnalyzed: result.flowsAnalyzed,
       apexClassesAnalyzed: result.apexClassesAnalyzed,
       apexTriggersAnalyzed: result.apexTriggersAnalyzed,

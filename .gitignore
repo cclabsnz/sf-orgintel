@@ -21,6 +21,7 @@ orgintel-*.html
 orgintel-*.json
 coupling-graph.json
 landscape-manifest.json
+graph-fragment.json
 
 # Internal docs — kept locally, never published
 CLAUDE.md
