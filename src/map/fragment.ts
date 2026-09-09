@@ -34,11 +34,27 @@ export interface FragmentInput {
   apexClasses: ApexClassInput[];
   apexTriggers: ApexTriggerInput[];
   nodeInfo: (object: string) => NodeInfo;
+  /**
+   * The sobject catalog's object universe -- the same `known` set `runMap.ts` passes to
+   * `assembleCouplingArtifacts`. This is NOT derived from `edges`: an object can be a real,
+   * known sobject the SymbolTable references without ever forming a coupling pair (a class
+   * touching exactly one object contributes no pairwise edge), and deriving `known` from edges
+   * instead drops that object's `touches` edge here, and separately knocks `analyzeApex` off its
+   * high-confidence SymbolTable branch onto the regex fallback in `apexEdges.ts`.
+   */
+  knownObjects: Set<string>;
+  /** Workflow-rule count per object, from the automation index `runMap.ts` already built. Not
+   * part of `NodeInfo`/`CouplingGraphNode.automationCounts` -- that shape is published and
+   * frozen at three fields -- so this travels to the fragment's contribution separately. */
+  workflowRulesFor: (object: string) => number;
   capturedAt: string;
   orgId: string;
 }
 
 const PRODUCER = 'orgintel' as const;
+
+/** Names the inference `couples` edges encode, for their required `derived.rule`. */
+const COUPLES_RULE = 'map.coupling.pairwise-co-reference';
 
 /** object -> operations a single component touches directly (no subflow/pairwise inference). */
 type TouchMap = Map<string, Set<CouplingOperation>>;
@@ -64,29 +80,28 @@ function directFlowTouches(flow: FlowSummary): TouchMap {
 }
 
 /**
- * The object universe this fragment already knows about, taken from the merged coupling edges.
- * Apex SymbolTable external references need a known-object filter to separate object names from
- * other symbols (classes, custom metadata types, ...) -- the same purpose `known` serves in
- * `deriveApexEdges`. The edge set is exactly the right source: every object that ever produced a
- * coupling is, by construction, an object one of these same components referenced.
+ * Codepoint order, not locale order. `localeCompare` is ICU/collation-dependent -- it orders
+ * `Account_Service` against `AccountService` differently under different `LANG`/ICU data, which
+ * would make this fragment not byte-stable across machines, and would disagree with the merge's
+ * ordering, which sorts by codepoint.
  */
-function knownObjectsFrom(edges: CouplingGraphEdge[]): Set<string> {
-  const known = new Set<string>();
-  for (const e of edges) {
-    known.add(e.from);
-    known.add(e.to);
-  }
-  return known;
-}
-
 function compare(a: string, b: string): number {
-  return a.localeCompare(b);
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /** Pure assembly: parsed automation + merged couplings -> this producer's graph fragment. */
 export function buildMapFragment(input: FragmentInput): CanonicalGraph {
   const provenance: GraphProvenance = { source: 'metadata', capturedAt: input.capturedAt };
-  const known = knownObjectsFrom(input.edges);
+  // `couples` edges are not metadata: they are pairwise co-reference inferences over the
+  // metadata (plus a direction heuristic), so the schema's `derived` provenance -- and the rule
+  // name it requires -- is the honest label. `touches` edges above stay `metadata`: those come
+  // straight from a SymbolTable or Flow XML element, no inference step in between.
+  const couplesProvenance: GraphProvenance = {
+    source: 'derived',
+    rule: COUPLES_RULE,
+    capturedAt: input.capturedAt,
+  };
+  const known = input.knownObjects;
 
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
@@ -179,7 +194,7 @@ export function buildMapFragment(input: FragmentInput): CanonicalGraph {
         // not read as "undirected" (the same distinction CouplingGraphEdge.direction preserves).
         ...(e.direction ? { direction: e.direction } : {}),
       },
-      provenance,
+      provenance: couplesProvenance,
     });
   }
 
@@ -187,7 +202,14 @@ export function buildMapFragment(input: FragmentInput): CanonicalGraph {
     const info = input.nodeInfo(object);
     return {
       nodeId: `obj.${object}`,
-      attrs: { recordCount90d: info.recordCount90d, automationCounts: info.automationCounts },
+      attrs: {
+        recordCount90d: info.recordCount90d,
+        // automationCounts travels as a contribution in its entirety -- all four of flows,
+        // triggers, approvals and workflowRules -- even though NodeInfo/CouplingGraphNode only
+        // carry three: that shape is published and frozen, so the fourth number is threaded in
+        // here rather than widened onto NodeInfo.
+        automationCounts: { ...info.automationCounts, workflowRules: input.workflowRulesFor(object) },
+      },
     };
   });
 

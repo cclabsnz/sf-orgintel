@@ -87,6 +87,10 @@ export function input(): FragmentInput {
     apexClasses: apexClasses(),
     apexTriggers: apexTriggers(),
     nodeInfo,
+    // The exact set artifacts() already builds its coupling graph against -- not a set derived
+    // from the edges above, which is the bug task 1 fixes.
+    knownObjects: knownObjects(),
+    workflowRulesFor: () => 0,
     capturedAt: '2026-01-01T00:00:00Z',
     orgId: 'org1',
   };
