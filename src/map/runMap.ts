@@ -126,6 +126,10 @@ export async function runMap(
     apexClasses: apex.classes,
     apexTriggers: apex.triggers,
     nodeInfo,
+    // The same catalog-backed set assembleCouplingArtifacts got above, not something re-derived
+    // from the coupling edges -- see fragment.ts's FragmentInput.knownObjects doc.
+    knownObjects: known,
+    workflowRulesFor: (object) => automation.countsFor(object).workflowRules,
     capturedAt: provenance.generatedAt,
     orgId: provenance.orgId,
   });

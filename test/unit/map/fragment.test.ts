@@ -5,7 +5,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { ownerOfKind, isKnownGraphKind, layerOfKind, levelOfKind, type GraphNodeKind } from '@cclabsnz/sf-core';
 import { buildMapFragment, type FragmentInput } from '../../../src/map/fragment.js';
-import type { ApexTriggerInput } from '../../../src/map/apex/apexTypes.js';
+import type { ApexClassInput, ApexTriggerInput } from '../../../src/map/apex/apexTypes.js';
 
 // One org, described once. `test/unit/map/fixtures/input.ts` is a new shared helper holding the
 // `FragmentInput` built from the same Flow XML fixtures and the same AcctContactSync class that
@@ -18,7 +18,7 @@ import type { ApexTriggerInput } from '../../../src/map/apex/apexTypes.js';
 // assemble.test.ts's `artifacts()` and the golden suite (golden.test.ts), so adding a trigger
 // would change coupling-graph.golden.json and turn a frozen, deliberately-pinned test red. The
 // trigger path gets its own small local fixture below instead.
-import { input, artifacts } from './fixtures/input.js';
+import { input, artifacts, knownObjects, apexClasses } from './fixtures/input.js';
 
 const fragment = () => buildMapFragment(input());
 
@@ -139,5 +139,83 @@ describe('buildMapFragment: trigger nodes', () => {
     // fixture object itself is never mutated. This re-confirms the base fragment stays
     // trigger-free -- the same fact assemble.test.ts and golden.test.ts depend on via artifacts().
     expect(fragment().nodes.some((n) => n.kind === 'trigger')).toBe(false);
+  });
+});
+
+describe('buildMapFragment: known objects come from the catalog, not the edges', () => {
+  // A local fixture, not the shared one -- adding this class to fixtures/input.ts would change
+  // coupling-graph.golden.json. `OpportunityAudit` references exactly one object, so
+  // deriveApexEdges's pairwise loop (which needs at least two) never emits a coupling for it --
+  // `Opportunity` forms no coupling pair anywhere in this org. Before task 1's fix, `known` was
+  // built from the merged coupling edges, so `Opportunity` would never appear in it, the
+  // SymbolTable intersection would come back empty, and the class would silently lose this
+  // touches edge (and separately fall onto the regex fallback, which a null body also starves).
+  const oppClass: ApexClassInput = {
+    name: 'OpportunityAudit',
+    namespace: null,
+    body: null,
+    symbolTable: { externalReferences: [{ name: 'Opportunity' }] },
+  };
+
+  const withOpportunity = (): FragmentInput => ({
+    ...input(),
+    knownObjects: new Set([...knownObjects(), 'Opportunity']),
+    apexClasses: [...apexClasses(), oppClass],
+  });
+
+  it('still emits a touches edge for an object that forms no coupling pair', () => {
+    const f = buildMapFragment(withOpportunity());
+    const touch = f.edges.find((e) => e.from === 'apexClass.OpportunityAudit' && e.to === 'obj.Opportunity');
+    expect(touch).toBeDefined();
+    expect(touch?.kind).toBe('touches');
+  });
+});
+
+describe('buildMapFragment: provenance', () => {
+  it('marks touches edges as metadata and couples edges as derived with a rule', () => {
+    const f = buildMapFragment(input());
+    const touches = f.edges.filter((e) => e.kind === 'touches');
+    const couples = f.edges.filter((e) => e.kind === 'couples');
+    expect(touches.length).toBeGreaterThan(0);
+    expect(couples.length).toBeGreaterThan(0);
+    for (const e of touches) {
+      expect(e.provenance.source).toBe('metadata');
+    }
+    for (const e of couples) {
+      expect(e.provenance.source).toBe('derived');
+      expect(typeof e.provenance.rule).toBe('string');
+      expect(e.provenance.rule?.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('buildMapFragment: workflowRules in the contribution', () => {
+  it('carries all four automationCounts fields, not just the three NodeInfo has', () => {
+    const withWorkflowRules: FragmentInput = { ...input(), workflowRulesFor: (object) => (object === 'Account' ? 3 : 0) };
+    const f = buildMapFragment(withWorkflowRules);
+    const account = f.contributions?.find((c) => c.nodeId === 'obj.Account');
+    expect(account).toBeDefined();
+    const counts = account?.attrs.automationCounts as Record<string, number>;
+    expect(counts).toEqual({ flows: 1, triggers: 1, approvals: 0, workflowRules: 3 });
+  });
+});
+
+describe('buildMapFragment: ordering is codepoint, not locale', () => {
+  // `AccountService` vs `Account_Service` sort differently under localeCompare (ICU treats `_`
+  // as a low-weight, near-ignorable separator) than under codepoint order (`_` is 0x5F, after
+  // all uppercase letters, so `AccountService` < `Account_Service`). A local fixture, since
+  // adding these class names to the shared fixture would change the golden coupling graph.
+  it('orders apexClass nodes by codepoint even when locale order would disagree', () => {
+    const a: ApexClassInput = { name: 'AccountService', namespace: null, body: null, symbolTable: null };
+    const b: ApexClassInput = { name: 'Account_Service', namespace: null, body: null, symbolTable: null };
+    const withBoth: FragmentInput = { ...input(), apexClasses: [a, b] };
+    const ids = buildMapFragment(withBoth).nodes.map((n) => n.id);
+    const iA = ids.indexOf('apexClass.AccountService');
+    const iB = ids.indexOf('apexClass.Account_Service');
+    expect(iA).toBeGreaterThanOrEqual(0);
+    expect(iB).toBeGreaterThanOrEqual(0);
+    // Under localeCompare this pair sorts the other way round -- a regression to localeCompare
+    // would flip this.
+    expect(iA).toBeLessThan(iB);
   });
 });
