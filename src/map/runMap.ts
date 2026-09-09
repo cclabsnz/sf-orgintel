@@ -1,4 +1,4 @@
-import type { EvidenceTier, CouplingGraph, LandscapeManifest } from '@cclabsnz/sf-core';
+import type { EvidenceTier, CouplingGraph, LandscapeManifest, CanonicalGraph } from '@cclabsnz/sf-core';
 import type { IntelContext } from '../lib/wire.js';
 import type { OrgIntelCache } from '../lib/cache.js';
 import type { Cluster } from './graph/clusters.js';
@@ -12,6 +12,7 @@ import { deriveFlowEdges } from './flow/flowEdges.js';
 import { deriveApexEdges } from './apex/apexEdges.js';
 import { mergeEdges, type NodeInfo } from './graph/couplingGraph.js';
 import { assembleCouplingArtifacts } from './assemble.js';
+import { buildMapFragment } from './fragment.js';
 import type { ObjectTimeline } from './graph/timeline.js';
 
 export interface MapProvenanceInput {
@@ -33,6 +34,8 @@ export interface MapOptions {
 export interface MapRunResult {
   couplingGraph: CouplingGraph;
   manifest: LandscapeManifest;
+  /** sf-orgintel's half of the canonical org graph — the same facts, sf-orgviz's schema. */
+  fragment: CanonicalGraph;
   clusters: Cluster[];
   layout: Map<string, Point>;
   /** Per-object save sequences, ordered by Salesforce's documented order of execution. */
@@ -114,9 +117,23 @@ export async function runMap(
     },
   });
 
+  // Rendered from the same merged edges as couplingGraph (artifacts.couplingGraph.edges is
+  // mergeEdges's output), plus the same raw flow/apex inputs and nodeInfo -- so the fragment and
+  // the coupling graph a single run writes cannot describe different couplings for this org.
+  const fragment = buildMapFragment({
+    edges: artifacts.couplingGraph.edges,
+    flowSummaries: flows,
+    apexClasses: apex.classes,
+    apexTriggers: apex.triggers,
+    nodeInfo,
+    capturedAt: provenance.generatedAt,
+    orgId: provenance.orgId,
+  });
+
   return {
     couplingGraph: artifacts.couplingGraph,
     manifest: artifacts.manifest,
+    fragment,
     clusters: artifacts.clusters,
     layout: artifacts.layout,
     timelines: artifacts.timelines,
