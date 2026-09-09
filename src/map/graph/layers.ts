@@ -1,3 +1,5 @@
+import { roleOf, type ObjectLayer } from '@cclabsnz/sf-core';
+
 /**
  * Architectural layers of a Salesforce org's coupling graph.
  *
@@ -9,17 +11,22 @@
  * permission model) and deleting the objects deletes the finding.
  *
  * Classifying instead of filtering keeps every object, and turns the noise into structure.
+ *
+ * The classifier itself moved to `@cclabsnz/sf-core`'s `roleOf` — sf-orgviz records the same
+ * classification as `attrs.role` on every object node at extraction. Keeping a second copy of
+ * the classifier here is what CONVERGENCE_SPEC section 1 forbids: two implementations of one
+ * classification can disagree about a real org. `Layer` is re-exported under this repo's
+ * existing name so the presentation helpers below — which this repo still owns — keep compiling
+ * unchanged.
  */
-export type Layer =
-  | 'integration'
-  | 'configuration'
-  | 'business'
-  | 'content'
-  | 'sharing'
-  | 'security'
-  | 'observability';
+export type Layer = ObjectLayer;
+export { roleOf };
 
-/** Ordered by distance from the business core — the order layers are drawn in. */
+/**
+ * Ordered by distance from the business core — the order layers are drawn in. This is draw
+ * order, a presentation concern, not part of the classifier, so it stays local even though the
+ * classifier moved.
+ */
 export const LAYERS: readonly Layer[] = [
   'integration',
   'configuration',
@@ -40,37 +47,6 @@ export const LAYER_DESCRIPTIONS: Readonly<Record<Layer, string>> = {
   observability: 'logging and instrumentation',
 };
 
-/**
- * Setup and platform objects. Matched exactly rather than by prefix: `Contract` must not be
- * mistaken for `ContentDocument`, nor `UserStory__c` for `User`.
- */
-const SECURITY_OBJECTS: ReadonlySet<string> = new Set([
-  'User', 'Profile', 'PermissionSet', 'PermissionSetAssignment', 'PermissionSetGroup',
-  'PermissionSetGroupComponent', 'PermissionSetLicense', 'PermissionSetLicenseAssign',
-  'UserRole', 'UserLicense', 'UserRecordAccess', 'UserPermissionAccess', 'SetupEntityAccess',
-  'CustomPermission', 'Organization', 'LoginHistory', 'AuthSession', 'AuthProvider',
-  'ThirdPartyAccountLink', 'CronTrigger', 'AsyncApexJob', 'ApexClass', 'ApexTrigger',
-  'ApexEmailNotification', 'AuraDefinitionBundle', 'FlowDefinitionView', 'FlowVersionView',
-  'Group', 'GroupMember', 'QueueSobject', 'ObjectPermissions', 'FieldPermissions',
-  'EntityDefinition', 'FieldDefinition', 'Identifier', 'StaticResource', 'Topic',
-  'TopicAssignment', 'SetupAuditTrail', 'NetworkMemberGroup',
-]);
-
-const CONTENT_OBJECTS: ReadonlySet<string> = new Set([
-  'Attachment', 'Document', 'EmailMessage', 'EmailTemplate', 'Note',
-]);
-
-/** Which layer an object belongs to. Unrecognised objects are business, never hidden. */
-export function layerOf(object: string): Layer {
-  if (SECURITY_OBJECTS.has(object)) return 'security';
-  if (/^Logger?[A-Z_]/.test(object) || /^Log(Entry|Status|Retention)/.test(object)) return 'observability';
-  if (object.endsWith('__mdt')) return 'configuration';
-  if (object.endsWith('__e') || object.endsWith('__x')) return 'integration';
-  if (/(?:Share|History|Feed|ChangeEvent)$/.test(object)) return 'sharing';
-  if (CONTENT_OBJECTS.has(object) || /^Content[A-Z]/.test(object)) return 'content';
-  return 'business';
-}
-
 export interface LayerSummary {
   layer: Layer;
   count: number;
@@ -81,7 +57,7 @@ export interface LayerSummary {
 export function summariseLayers(objects: readonly string[]): LayerSummary[] {
   const counts = new Map<Layer, number>();
   for (const o of objects) {
-    const l = layerOf(o);
+    const l = roleOf(o);
     counts.set(l, (counts.get(l) ?? 0) + 1);
   }
   return LAYERS.filter((l) => counts.has(l)).map((layer) => ({
@@ -108,8 +84,8 @@ export function crossLayerCoupling(
 ): LayerPair[] {
   const acc = new Map<string, LayerPair>();
   for (const e of edges) {
-    const a = layerOf(e.from);
-    const b = layerOf(e.to);
+    const a = roleOf(e.from);
+    const b = roleOf(e.to);
     // Canonical order so a↔b and b↔a aggregate together, and output is input-order independent.
     const [from, to] = LAYERS.indexOf(a) <= LAYERS.indexOf(b) ? [a, b] : [b, a];
     const key = `${from}|${to}`;
