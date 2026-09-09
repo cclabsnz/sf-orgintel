@@ -1,6 +1,6 @@
 import type { CouplingGraph } from '@cclabsnz/sf-core';
 import { computeStrataLayout } from '../map/graph/strata.js';
-import { layerOf, LAYER_DESCRIPTIONS } from '../map/graph/layers.js';
+import { roleOf, LAYER_DESCRIPTIONS } from '../map/graph/layers.js';
 
 export interface StrataViewerInput {
   couplingGraph: CouplingGraph;
@@ -35,7 +35,7 @@ export function renderStrataViewer(input: StrataViewerInput): string {
   const included = new Set(input.objects);
   const nodes = input.couplingGraph.nodes
     .filter((n) => included.has(n.object))
-    .map((n) => ({ object: n.object, layer: n.layer ?? layerOf(n.object) }));
+    .map((n) => ({ object: n.object, layer: n.layer ?? roleOf(n.object) }));
 
   if (nodes.length === 0) return '';
 

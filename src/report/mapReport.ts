@@ -7,7 +7,7 @@ import { summariseCoverage, coverageHeadline, edgeConfidence } from '../map/grap
 import { computeStrataLayout } from '../map/graph/strata.js';
 import { renderStrataViewer } from './strataViewer.js';
 import { renderExecutionFlow } from './executionFlow.js';
-import { layerOf } from '../map/graph/layers.js';
+import { roleOf } from '../map/graph/layers.js';
 import type { Point } from '../map/graph/layout.js';
 import type { ObjectTimeline } from '../map/graph/timeline.js';
 import { htmlDocument } from './shell.js';
@@ -128,7 +128,7 @@ function graphSection(i: MapReportInput): string {
   const drawn = new Set(i.layout.keys());
   const nodes = i.couplingGraph.nodes
     .filter((n) => drawn.has(n.object))
-    .map((n) => ({ object: n.object, layer: n.layer ?? layerOf(n.object) }));
+    .map((n) => ({ object: n.object, layer: n.layer ?? roleOf(n.object) }));
 
   if (nodes.length === 0) {
     return `<h2>Coupling graph</h2><p class="muted">No coupled objects were found to visualise.</p>`;

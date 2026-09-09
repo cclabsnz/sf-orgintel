@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import { layerOf, LAYERS, summariseLayers, crossLayerCoupling } from '../../../../src/map/graph/layers.js';
+import { roleOf, LAYERS, summariseLayers, crossLayerCoupling } from '../../../../src/map/graph/layers.js';
 
 /**
  * A coupling graph of a real org is dominated by objects that carry no business process:
@@ -8,7 +8,7 @@ import { layerOf, LAYERS, summariseLayers, crossLayerCoupling } from '../../../.
  * the whole graph, ahead of every business-internal pair but one. Classifying into layers
  * keeps them and makes that relationship legible.
  */
-describe('layerOf', () => {
+describe('roleOf', () => {
   it.each([
     ['User', 'security'], ['Profile', 'security'], ['PermissionSetAssignment', 'security'],
     ['LoginHistory', 'security'], ['StaticResource', 'security'],
@@ -19,18 +19,18 @@ describe('layerOf', () => {
     ['ContentDocument', 'content'], ['EmailMessage', 'content'],
     ['Account', 'business'], ['CarePlan', 'business'], ['Invoice__c', 'business'],
   ])('classifies %s as %s', (object, expected) => {
-    expect(layerOf(object)).toBe(expected);
+    expect(roleOf(object)).toBe(expected);
   });
 
   it('defaults to business, so an unrecognised object is never hidden', () => {
-    expect(layerOf('Totally_Unknown_Thing__c')).toBe('business');
+    expect(roleOf('Totally_Unknown_Thing__c')).toBe('business');
   });
 
   it('does not mistake a business object for infrastructure by prefix alone', () => {
     // 'Contract' starts with 'Cont' like ContentDocument; 'Userlike' is not User.
-    expect(layerOf('Contract')).toBe('business');
-    expect(layerOf('UserStory__c')).toBe('business');
-    expect(layerOf('EventBrite__c')).toBe('business');
+    expect(roleOf('Contract')).toBe('business');
+    expect(roleOf('UserStory__c')).toBe('business');
+    expect(roleOf('EventBrite__c')).toBe('business');
   });
 
   it('orders layers from the business core outwards', () => {
