@@ -11,7 +11,7 @@ import { deriveFlowEdges } from './flow/flowEdges.js';
 import { deriveApexEdges } from './apex/apexEdges.js';
 import { mergeEdges, buildNodes, type NodeInfo } from './graph/couplingGraph.js';
 import { clusterByLayer, type LayerCluster } from './graph/clusters.js';
-import { layerOf } from './graph/layers.js';
+import { roleOf } from './graph/layers.js';
 import { computeLayout, type Point } from './graph/layout.js';
 import { buildManifest } from './graph/manifest.js';
 import { objectTimelines, type ObjectTimeline } from './graph/timeline.js';
@@ -73,7 +73,7 @@ export function assembleCouplingArtifacts(input: AssembleInput): MapArtifacts {
   // almost everything — and worse, it fuses genuinely separate business groups by routing them
   // through a shared identity object.
   const clusters = clusterByLayer(
-    nodes.map((n) => ({ object: n.object, layer: n.layer ?? layerOf(n.object) })),
+    nodes.map((n) => ({ object: n.object, layer: n.layer ?? roleOf(n.object) })),
     edges,
     score,
     { targetDomainSize: input.targetDomainSize },
