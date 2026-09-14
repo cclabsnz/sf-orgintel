@@ -2,10 +2,12 @@
 // Assembles the artifact. Collectors run first and independently, then the pure functions
 // turn their raw output into products and attributed edges. Nothing here throws: an org that
 // yields little produces a small, honest artifact rather than a failed command.
+import type { CanonicalGraph } from '@cclabsnz/sf-core';
 import type { IntelContext } from '../lib/wire.js';
 import type { AnatomyArtifact, Unavailable } from './types.js';
 import { buildPrefixRegistry } from './prefixRegistry.js';
 import { addEndpointOnlyEdges, attributeEdges, resolveChains } from './attribute.js';
+import { buildAnatomyFragment } from './fragment.js';
 import { collectProducts } from './collectors/products.js';
 import { collectPersonas } from './collectors/personas.js';
 import { collectChannels } from './collectors/channels.js';
@@ -20,10 +22,21 @@ export interface AnatomyProvenance {
   apiVersion: string;
 }
 
+export interface AnatomyRunResult {
+  artifact: AnatomyArtifact;
+  /**
+   * sf-orgintel's half of the canonical org graph -- the same facts `artifact` carries, rendered
+   * in sf-orgviz's schema. Built from `artifact`'s own fields (not from a second pass over
+   * `ctx`), so the two cannot describe different products, channels or capability counts for one
+   * run: there is only one place either could have come from.
+   */
+  fragment: CanonicalGraph;
+}
+
 export async function runAnatomy(
   ctx: IntelContext,
   provenance: AnatomyProvenance,
-): Promise<AnatomyArtifact> {
+): Promise<AnatomyRunResult> {
   const notes: string[] = [];
   const unavailable: Unavailable[] = [];
 
@@ -55,7 +68,7 @@ export async function runAnatomy(
       a.attribution.localeCompare(b.attribution),
   );
 
-  return {
+  const artifact: AnatomyArtifact = {
     version: 2,
     provenance,
     products: registry.products,
@@ -83,4 +96,20 @@ export async function runAnatomy(
       ),
     },
   };
+
+  // Built from `artifact`'s own fields, not from `sources`/`personas`/... a second time: the
+  // fragment and the artifact a single run writes must be two renderings of one set of values,
+  // not two independently-assembled ones that happen to agree today.
+  const fragment = buildAnatomyFragment({
+    products: artifact.products,
+    personas: artifact.personas,
+    channels: artifact.channels,
+    capabilities: artifact.capabilities,
+    identity: artifact.identity,
+    edges: artifact.edges,
+    capturedAt: provenance.generatedAt,
+    orgId: provenance.orgId,
+  });
+
+  return { artifact, fragment };
 }

@@ -10,7 +10,7 @@
 // `test/unit/map/fixtures/input.ts`, once the anatomy equivalent of `FragmentInput` exists. Room
 // is deliberately left for it; it is not implemented yet because there is nothing for it to feed.
 import { mockSoql, mockTooling, mockRest, mockIntelContext } from '../../helpers/mocks.js';
-import { runAnatomy, type AnatomyProvenance } from '../../../../src/anatomy/runAnatomy.js';
+import { runAnatomy, type AnatomyProvenance, type AnatomyRunResult } from '../../../../src/anatomy/runAnatomy.js';
 import type { AnatomyArtifact } from '../../../../src/anatomy/types.js';
 import type { AnatomyFragmentInput } from '../../../../src/anatomy/fragment.js';
 
@@ -170,9 +170,19 @@ function ctx() {
   });
 }
 
-/** The deterministic `runAnatomy()` call shared by golden.test.ts and any later behavioral test. */
-export async function artifacts(): Promise<AnatomyArtifact> {
+/**
+ * The deterministic `runAnatomy()` call shared by golden.test.ts, the fragment/artifact
+ * consistency suite, and any later behavioral test. One call to `ctx()` and `runAnatomy()`, so
+ * `artifacts()` (the artifact half) and `runResult()` (both halves) describe one run, not two
+ * separately-mocked ones that happen to use the same fixture.
+ */
+export async function runResult(): Promise<AnatomyRunResult> {
   return runAnatomy(ctx(), PROVENANCE);
+}
+
+/** The artifact half of `runResult()` -- what `golden.test.ts` byte-freezes as `anatomy.json`. */
+export async function artifacts(): Promise<AnatomyArtifact> {
+  return (await runResult()).artifact;
 }
 
 /**
