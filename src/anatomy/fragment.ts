@@ -33,6 +33,7 @@ import {
   type GraphEdge,
   type GraphProvenance,
   type AttributeContribution,
+  type GraphUnavailable,
 } from '@cclabsnz/sf-core';
 import type { Product, Persona, Channel, Capabilities, Identity, IntegrationEdge } from './types.js';
 
@@ -94,13 +95,18 @@ export function buildAnatomyFragment(input: AnatomyFragmentInput): CanonicalGrap
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
   const contributions: AttributeContribution[] = [];
+  const unavailable: GraphUnavailable[] = [];
 
   // channels (type 'site') -> site.<Name> nodes, metadata provenance. The other three Channel
   // variants (app/console/api) are never populated by the collector today, so nothing is
-  // emitted for them here -- absence is recorded upstream in AnatomyCoverage, not fabricated as
-  // an empty node.
+  // emitted for them here. Counted below rather than silently dropped: "absence is data" (spec
+  // section 3.2) applies to this fragment's own coverage just as much as to the artifact's.
+  let nonSiteChannels = 0;
   for (const channel of input.channels) {
-    if (channel.type !== 'site') continue;
+    if (channel.type !== 'site') {
+      nonSiteChannels += 1;
+      continue;
+    }
     nodes.push({
       id: `site.${channel.name}`,
       kind: 'site',
@@ -199,28 +205,48 @@ export function buildAnatomyFragment(input: AnatomyFragmentInput): CanonicalGrap
 
   // edges (IntegrationEdge) -> graph edges between the nodes they already name, evidence
   // carried in attrs (CONVERGENCE_SPEC.md 4.2, 3.1). An edge is only emitted when both ends are
-  // expressible under a kind some producer owns:
+  // expressible under a kind some producer owns, and each exclusion is counted, not silently
+  // dropped (spec section 3.2 -- absence is data):
   //   - `from`, once attributed, is a product key -- exactly the node this fragment already
   //     emits as `product.<key>`. An edge with no attribution (`from === null`) has no node to
-  //     anchor it on this side and is left out, same as an unresolved coupling elsewhere in this
-  //     schema: it is not fabricated onto a node that does not exist.
-  //   - `endpoint` is a NamedCredential-shaped destination unless the via chain names a
-  //     RemoteProxy directly (the `endpointOnly` / RemoteProxy path in attribute.ts): a Remote
-  //     Site Setting has no owned kind in the schema yet (that is future work, per
-  //     CONVERGENCE_SPEC.md 4.2's non-goals), and labelling it `namedCredential.*` would assert a
-  //     credentialed system that was never observed. Those edges are left out rather than
-  //     mislabelled.
+  //     anchor it on this side.
+  //   - A via chain naming a RemoteProxy has no owned kind at all: a Remote Site Setting is
+  //     future work (CONVERGENCE_SPEC.md 4.2's non-goals), not something this schema can name
+  //     today.
+  //   - The target id must come from a `NamedCredential` hop's `name` -- the DeveloperName
+  //     sf-orgviz keys its `ncred.<DeveloperName>` nodes on (src/extract/landscape.ts). It must
+  //     NOT come from `edge.endpoint`: that field carries whatever string was found at the call
+  //     site (frequently a URL for `apexCallout`/`remoteActionChain` detections), which is real
+  //     evidence worth keeping in `attrs`, but is not the id the owning producer writes. Using it
+  //     as an id would build an edge that can never resolve, on every real run, rather than one
+  //     that resolves once merged with an extraction -- the difference between the designed
+  //     "unresolved until merged" state and a permanently broken one.
   // The edge itself is `derived`, not `metadata`: it only exists at product granularity because
   // `attributeEdges` traced the calling component back to a product by prefix match, and this
   // fragment emits no node for the component itself.
+  let unattributedEdges = 0;
+  let remoteProxyEdges = 0;
+  let unresolvedTargetEdges = 0;
   for (const edge of input.edges) {
-    if (edge.from === null || edge.endpoint === null) continue;
-    if (edge.via.some((hop) => hop.type === 'RemoteProxy')) continue;
+    if (edge.from === null) {
+      unattributedEdges += 1;
+      continue;
+    }
+    if (edge.via.some((hop) => hop.type === 'RemoteProxy')) {
+      remoteProxyEdges += 1;
+      continue;
+    }
+    const ncredHop = edge.via.find((hop) => hop.type === 'NamedCredential');
+    if (!ncredHop) {
+      unresolvedTargetEdges += 1;
+      continue;
+    }
     edges.push({
       from: `product.${edge.from}`,
-      to: `namedCredential.${edge.endpoint}`,
+      to: `ncred.${ncredHop.name}`,
       kind: 'integrates',
       attrs: {
+        endpoint: edge.endpoint,
         detection: edge.detection,
         attribution: edge.attribution,
         via: edge.via.map((hop) => ({ type: hop.type, name: hop.name })),
@@ -229,9 +255,39 @@ export function buildAnatomyFragment(input: AnatomyFragmentInput): CanonicalGrap
     });
   }
 
+  if (nonSiteChannels > 0) {
+    unavailable.push({
+      scope: 'anatomy.channels.nonSite',
+      reason: 'deferred',
+      detail: `${nonSiteChannels} channel(s) of a type other than 'site' were not emitted as nodes; the collector does not yet populate app/console/api channels.`,
+    });
+  }
+  if (unattributedEdges > 0) {
+    unavailable.push({
+      scope: 'anatomy.edges.unattributed',
+      reason: 'deferred',
+      detail: `${unattributedEdges} integration edge(s) had no product attribution and were left out; there is no node to anchor them to.`,
+    });
+  }
+  if (remoteProxyEdges > 0) {
+    unavailable.push({
+      scope: 'anatomy.edges.remoteProxy',
+      reason: 'deferred',
+      detail: `${remoteProxyEdges} integration edge(s) named a RemoteProxy (Remote Site Setting) destination and were left out; that entity has no owned graph kind yet.`,
+    });
+  }
+  if (unresolvedTargetEdges > 0) {
+    unavailable.push({
+      scope: 'anatomy.edges.unresolvedTarget',
+      reason: 'deferred',
+      detail: `${unresolvedTargetEdges} integration edge(s) were attributed to a product but named no NamedCredential hop, so no node id could be formed for the destination.`,
+    });
+  }
+
   nodes.sort((a, b) => compare(a.id, b.id));
   edges.sort((a, b) => compare(a.from, b.from) || compare(a.to, b.to) || compare(a.kind, b.kind));
   contributions.sort((a, b) => compare(a.nodeId, b.nodeId));
+  unavailable.sort((a, b) => compare(a.scope, b.scope));
 
   return {
     schemaVersion: SUPPORTED_GRAPH_SCHEMA_VERSION,
@@ -239,7 +295,7 @@ export function buildAnatomyFragment(input: AnatomyFragmentInput): CanonicalGrap
     orgId: input.orgId,
     nodes,
     edges,
-    coverage: { notes: [], unavailable: [] },
+    coverage: { notes: [], unavailable },
     producer: PRODUCER,
     contributions,
   };
