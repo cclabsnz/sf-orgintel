@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
-import { resolveBranding, type BrandingOverrides } from '@cclabsnz/sf-core';
+import { resolveBranding, type BrandingOverrides, type CanonicalGraph } from '@cclabsnz/sf-core';
 import { resolveOrgInfo, buildIntelContext } from '../../lib/wire.js';
 import { runAnatomy } from '../../anatomy/runAnatomy.js';
 import { renderAnatomyHtml } from '../../report/anatomyReport.js';
@@ -14,6 +14,18 @@ export function writeArtifact(outputDir: string, artifact: AnatomyArtifact): str
   const artifactPath = path.join(outputDir, 'anatomy.json');
   fs.writeFileSync(artifactPath, JSON.stringify(artifact, null, 2) + '\n', 'utf-8');
   return artifactPath;
+}
+
+/**
+ * Same write path as `writeArtifact` -- two-space indent, trailing newline, directory created if
+ * missing -- so `anatomy-fragment.json` inherits the same diff-cleanly-in-git behaviour as
+ * `anatomy.json` rather than a second, subtly different convention.
+ */
+export function writeFragment(outputDir: string, fragment: CanonicalGraph): string {
+  fs.mkdirSync(outputDir, { recursive: true });
+  const fragmentPath = path.join(outputDir, 'anatomy-fragment.json');
+  fs.writeFileSync(fragmentPath, JSON.stringify(fragment, null, 2) + '\n', 'utf-8');
+  return fragmentPath;
 }
 
 /**
@@ -37,9 +49,11 @@ export default class IntelAnatomyCommand extends SfCommand<AnatomyArtifact> {
     'Collects what products live in the org, who uses it on what licence, what it integrates with, and how ' +
     'people authenticate. Every integration edge records how it was detected and, separately, how it was ' +
     'attributed to a product, so a confirmed call with an unknown owner is reported as exactly that. ' +
+    'Emits anatomy.json (a versioned IR contract), plus anatomy-fragment.json -- the same facts rendered as ' +
+    "sf-orgintel's contribution to the shared canonical org graph. " +
     'With --html, also renders View A, a seven-band layer map of the same artifact, which adds no reads: ' +
     'a band the artifact does not cover says so rather than going to fetch it. ' +
-    'Read-only and deterministic: same org in, same anatomy.json out.';
+    'Read-only and deterministic: same org in, same anatomy.json and anatomy-fragment.json out.';
   public static examples = [
     '<%= config.bin %> <%= command.id %> --target-org myOrg',
     '<%= config.bin %> <%= command.id %> --target-org myOrg --html --output ./reports',
@@ -52,7 +66,7 @@ export default class IntelAnatomyCommand extends SfCommand<AnatomyArtifact> {
     'target-org': Flags.requiredOrg(),
     html: Flags.boolean({ summary: 'Also write a branded HTML report of View A, the seven-band layer map.', default: false }),
     output: Flags.string({
-      summary: 'Directory to write anatomy.json and the --html report to.',
+      summary: 'Directory to write anatomy.json, anatomy-fragment.json, and the --html report to.',
       default: '.',
     }),
     branding: Flags.string({
@@ -74,7 +88,7 @@ export default class IntelAnatomyCommand extends SfCommand<AnatomyArtifact> {
     // One timestamp for the run, reused by the artifact, the report and the report's filename,
     // so the three never disagree about when this was collected.
     const startedAt = new Date();
-    const artifact = await runAnatomy(ctx, {
+    const { artifact, fragment } = await runAnatomy(ctx, {
       generatedAt: startedAt.toISOString(),
       orgId: orgInfo.id,
       toolVersion: TOOL_VERSION,
@@ -83,6 +97,9 @@ export default class IntelAnatomyCommand extends SfCommand<AnatomyArtifact> {
 
     const artifactPath = writeArtifact(flags.output, artifact);
     this.log(`IR written: ${artifactPath}`);
+
+    const fragmentPath = writeFragment(flags.output, fragment);
+    this.log(`IR written: ${fragmentPath}`);
 
     if (flags.html) {
       const overrides = flags.branding
