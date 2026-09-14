@@ -13,7 +13,7 @@ const prov = { generatedAt: '2026-08-05T00:00:00Z', orgId: '00Dxx0000000000EAA',
 
 describe('runAnatomy', () => {
   it('produces a complete artifact for an org that yields nothing', async () => {
-    const a = await runAnatomy(emptyCtx(), prov);
+    const { artifact: a } = await runAnatomy(emptyCtx(), prov);
     expect(a.version).toBe(2);
     expect(a.products).toEqual([]);
     expect(a.edges).toEqual([]);
@@ -55,7 +55,7 @@ describe('runAnatomy', () => {
       rest: mockRest([]),
       metadata: { list: async () => [] },
     };
-    const a = await runAnatomy(ctx, prov);
+    const { artifact: a } = await runAnatomy(ctx, prov);
     expect(a.edges).toHaveLength(2);
     expect(a.edges.every((e) => e.endpoint === null)).toBe(true);
     expect(a.edges.every((e) => e.via[0]?.name === 'Onboarding')).toBe(true);
@@ -69,7 +69,7 @@ describe('runAnatomy', () => {
       rest: mockRest([]),
       metadata: { list: async () => { throw new Error('denied'); } },
     });
-    const a = await runAnatomy(broken(), prov);
+    const { artifact: a } = await runAnatomy(broken(), prov);
     expect(a.coverage.notes.length).toBeGreaterThan(0);
     expect(a.version).toBe(2);
   });
@@ -81,7 +81,7 @@ describe('runAnatomy', () => {
       rest: mockRest([]),
       metadata: { list: async () => { throw new Error('denied'); } },
     });
-    const a = await runAnatomy(broken(), prov);
+    const { artifact: a } = await runAnatomy(broken(), prov);
     expect(a.coverage.unavailable.length).toBeGreaterThan(0);
     const scopes = a.coverage.unavailable.map((u) => u.scope);
     expect(scopes).toEqual([...scopes].sort());
@@ -117,7 +117,7 @@ describe('runAnatomy', () => {
       rest: mockRest([]),
       metadata: { list: async () => [] },
     };
-    const a = await runAnatomy(ctx, prov);
+    const { artifact: a } = await runAnatomy(ctx, prov);
     expect(a.coverage.notes.join(' ')).toContain('Namespaced Apex class count unavailable');
     expect(a.coverage.unavailable.some((u) => u.scope === 'edges.apexBodies')).toBe(false);
     expect(a.edges).toContainEqual(expect.objectContaining({ endpoint: 'Payments_API', detection: 'apexCallout' }));
