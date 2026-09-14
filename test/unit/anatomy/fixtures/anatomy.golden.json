@@ -1,0 +1,254 @@
+{
+  "version": 2,
+  "provenance": {
+    "generatedAt": "2026-01-01T00:00:00Z",
+    "orgId": "org1",
+    "toolVersion": "0.0.0-test",
+    "apiVersion": "62.0"
+  },
+  "products": [
+    {
+      "key": "ACME",
+      "label": "ACME",
+      "source": "app",
+      "componentCount": 5,
+      "prefixes": [
+        "ACME"
+      ]
+    }
+  ],
+  "personas": [
+    {
+      "profile": "Acme Support Agent",
+      "licence": "Salesforce Platform",
+      "activeUsers": 42,
+      "landingApp": null
+    },
+    {
+      "profile": "Community User",
+      "licence": "Customer Community Plus",
+      "activeUsers": 120,
+      "landingApp": null
+    },
+    {
+      "profile": "System Administrator",
+      "licence": "Salesforce",
+      "activeUsers": 5,
+      "landingApp": null
+    }
+  ],
+  "channels": [
+    {
+      "type": "site",
+      "name": "Acme Customer Portal",
+      "status": "Active"
+    },
+    {
+      "type": "site",
+      "name": "Acme Partner Portal",
+      "status": "Inactive"
+    }
+  ],
+  "capabilities": {
+    "apexClasses": 9,
+    "apexTriggers": 4,
+    "flows": 6,
+    "lwc": 12,
+    "aura": 2,
+    "namedCredentials": 2,
+    "externalDataSources": 1,
+    "remoteSites": 2,
+    "platformEvents": [
+      "Acme_Internal_Event__e",
+      "Acme_Order_Event__e",
+      "Acme_Shipment_Event__e"
+    ],
+    "changeDataCapture": [
+      "Acme_Order_Event__e",
+      "Acme_Shipment_Event__e"
+    ],
+    "eventRelayConfigured": true
+  },
+  "identity": {
+    "ssoConfigs": [
+      {
+        "type": "saml",
+        "issuer": "https://acme.okta.com",
+        "identityMapping": null,
+        "userProvisioning": false
+      }
+    ],
+    "loginsByType": [
+      {
+        "application": "Browser",
+        "loginType": "SAML Sso",
+        "count": 340
+      },
+      {
+        "application": "Salesforce for Android",
+        "loginType": "Application",
+        "count": 12
+      }
+    ]
+  },
+  "edges": [
+    {
+      "endpoint": "Acme_ERP_Cred",
+      "from": "ACME",
+      "via": [
+        {
+          "type": "OmniProcess",
+          "name": "AcmeSyncProcedure"
+        }
+      ],
+      "detection": "namedCredential",
+      "attribution": "prefixMatch"
+    },
+    {
+      "endpoint": "Acme_Payment_API",
+      "from": "ACME",
+      "via": [
+        {
+          "type": "OmniProcess",
+          "name": "AcmeCheckoutFlow"
+        },
+        {
+          "type": "ApexClass",
+          "name": "AcmeOrderSync"
+        }
+      ],
+      "detection": "remoteActionChain",
+      "attribution": "prefixMatch"
+    },
+    {
+      "endpoint": "Acme_Payment_API",
+      "from": "ACME",
+      "via": [
+        {
+          "type": "ApexClass",
+          "name": "AcmeOrderSync"
+        }
+      ],
+      "detection": "apexCallout",
+      "attribution": "prefixMatch"
+    },
+    {
+      "endpoint": "Acme_Shipping_API",
+      "from": "ACME",
+      "via": [
+        {
+          "type": "RemoteProxy",
+          "name": "Acme_Shipping_API"
+        }
+      ],
+      "detection": "endpointOnly",
+      "attribution": "prefixMatch"
+    },
+    {
+      "endpoint": "Acme_Shipping_API",
+      "from": "ACME",
+      "via": [
+        {
+          "type": "ApexClass",
+          "name": "AcmeShippingCalc"
+        }
+      ],
+      "detection": "apexCallout",
+      "attribution": "prefixMatch"
+    },
+    {
+      "endpoint": "External_Payments",
+      "from": null,
+      "via": [
+        {
+          "type": "ApexClass",
+          "name": "PayGatewayCallout"
+        }
+      ],
+      "detection": "apexCallout",
+      "attribution": "unattributed"
+    },
+    {
+      "endpoint": "Legacy_SFTP_Cred",
+      "from": null,
+      "via": [
+        {
+          "type": "NamedCredential",
+          "name": "Legacy_SFTP_Cred"
+        }
+      ],
+      "detection": "endpointOnly",
+      "attribution": "unattributed"
+    },
+    {
+      "endpoint": null,
+      "from": "ACME",
+      "via": [
+        {
+          "type": "OmniProcess",
+          "name": "AcmeAuditProcedure"
+        }
+      ],
+      "detection": "endpointOnly",
+      "attribution": "prefixMatch"
+    },
+    {
+      "endpoint": null,
+      "from": "ACME",
+      "via": [
+        {
+          "type": "OmniProcess",
+          "name": "AcmeLegacyProcedure"
+        }
+      ],
+      "detection": "remoteActionChain",
+      "attribution": "prefixMatch"
+    },
+    {
+      "endpoint": "Old_Partner_Site",
+      "from": null,
+      "via": [
+        {
+          "type": "RemoteProxy",
+          "name": "Old_Partner_Site"
+        }
+      ],
+      "detection": "endpointOnly",
+      "attribution": "unattributed"
+    }
+  ],
+  "coverage": {
+    "apexBodiesScanned": 5,
+    "apexBodiesUnreadable": 1,
+    "omniElementsScanned": 5,
+    "omniProceduresWithIntegrationElements": 5,
+    "omniElementsSkippedSuperseded": 3,
+    "prefixesUnresolved": [
+      "ZETA"
+    ],
+    "notes": [
+      "landingApp is not collected in this phase; the UserAppInfo/AppDefinition join was not attempted.",
+      "Channels currently reflect Site only; app, console and api channel types and the Network join were not attempted.",
+      "2 namespaced (managed package) Apex class(es) were not examined; only org-authored bodies are scanned for callouts.",
+      "1 Integration Procedure Action element(s) chain one Integration Procedure to another and carry no endpoint; not represented as edges.",
+      "3 OmniStudio integration element(s) sit on superseded (inactive) Integration Procedure versions and were excluded; only the active version of each procedure is scanned."
+    ],
+    "unavailable": [
+      {
+        "scope": "channels.appConsoleApi",
+        "reason": "deferred",
+        "detail": "The app, console and api channel types were not attempted in this phase; only site is collected."
+      },
+      {
+        "scope": "channels.network",
+        "reason": "deferred",
+        "detail": "The Network join was not attempted in this phase."
+      },
+      {
+        "scope": "personas.landingApp",
+        "reason": "deferred",
+        "detail": "landingApp is not collected in this phase; the UserAppInfo/AppDefinition join was not attempted."
+      }
+    ]
+  }
+}
