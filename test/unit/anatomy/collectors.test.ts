@@ -116,12 +116,40 @@ describe('collectChannels', () => {
   it('returns sites as channels', async () => {
     const notes: string[] = [];
     const unavailable: Unavailable[] = [];
-    const out = await collectChannels(
+    const { channels } = await collectChannels(
       ctx({ soql: mockSoql([{ test: (s) => s.includes('FROM Site'), records: [{ Name: 'Portal', Status: 'Active' }] }]) }),
       notes,
       unavailable,
     );
-    expect(out).toContainEqual({ type: 'site', name: 'Portal', status: 'Active' });
+    expect(channels).toContainEqual({ type: 'site', name: 'Portal', status: 'Active' });
+  });
+
+  it('threads SiteName as channelKeys, aligned with channels, without it appearing on Channel itself', async () => {
+    // The bug this guards against: an id built from `Name` alone (the label) collapses two
+    // unnamed sites onto the identical id `site.unknown`, and `mergeGraphs` returns
+    // `graph: null` for the whole merged graph on that collision, not just the duplicate.
+    const notes: string[] = [];
+    const unavailable: Unavailable[] = [];
+    const { channels, channelKeys } = await collectChannels(
+      ctx({
+        soql: mockSoql([
+          {
+            test: (s) => s.includes('FROM Site'),
+            records: [
+              { SiteName: 'First_Unnamed_Site', Status: 'Active' },
+              { SiteName: 'Second_Unnamed_Site', Status: 'Active' },
+            ],
+          },
+        ]),
+      }),
+      notes,
+      unavailable,
+    );
+    expect(channels.every((c) => c.name === 'unknown')).toBe(true);
+    expect(channels.every((c) => !('SiteName' in c))).toBe(true);
+    expect(channelKeys).toHaveLength(2);
+    expect(new Set(channelKeys).size).toBe(2);
+    expect(channelKeys.sort()).toEqual(['First_Unnamed_Site', 'Second_Unnamed_Site']);
   });
 
   it('records a note that app, console and api channels and the Network join are not yet collected', async () => {

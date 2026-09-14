@@ -35,7 +35,7 @@ import {
   type AttributeContribution,
   type GraphUnavailable,
 } from '@cclabsnz/sf-core';
-import type { Product, Persona, Channel, Capabilities, Identity, IntegrationEdge } from './types.js';
+import type { Product, Persona, Channel, Capabilities, Identity, IntegrationEdge, ChainHop } from './types.js';
 
 /**
  * The collectors' output, shaped for `buildAnatomyFragment`. Deliberately the same six
@@ -44,13 +44,23 @@ import type { Product, Persona, Channel, Capabilities, Identity, IntegrationEdge
  * fragment needs. `capabilities.platformEvents` and `capabilities.namedCredentials` are read by
  * this type but never emitted: both are already derivable from the merged graph (4.2), and
  * emitting them here would duplicate a fact another producer already states.
+ *
+ * `channelKeys` and `ssoConfigKeys` are not artifact fields: `Channel` and `SsoConfig` are frozen
+ * as part of `anatomy.json`, so the unique key each needs to build a collision-safe node id
+ * (`Site.SiteName`, `SamlSsoConfig.DeveloperName`) travels here directly from the collector
+ * instead, the way `workflowRulesFor` is threaded past `map/fragment.ts`'s published shapes.
+ * `channelKeys[i]` names `channels[i]`; `ssoConfigKeys[i]` names `identity.ssoConfigs[i]`. Both
+ * are the same length as the array they key, in the same order, because their collectors sort
+ * both arrays together as pairs (see channels.ts/identity.ts).
  */
 export interface AnatomyFragmentInput {
   products: Product[];
   personas: Persona[];
   channels: Channel[];
+  channelKeys: string[];
   capabilities: Capabilities;
   identity: Identity;
+  ssoConfigKeys: string[];
   edges: IntegrationEdge[];
   capturedAt: string;
   orgId: string;
@@ -78,6 +88,28 @@ function compare(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
+/**
+ * The object a Change Data Capture event name publishes for, per the platform's own naming
+ * convention (Change Data Capture Developer Guide): a standard object's change event is its name
+ * with `ChangeEvent` appended (`Account` -> `AccountChangeEvent`); a custom object's replaces the
+ * trailing `__c` with `__ChangeEvent` (`Order__c` -> `Order__ChangeEvent`, not
+ * `Order__cChangeEvent`). `collectCapabilities`'s `changeDataCapture` already holds the event name
+ * (`SelectedEntity` from `PlatformEventChannelMember`), not the object -- contributing straight to
+ * `obj.<entity>` targets a node no producer emits (`obj.AccountChangeEvent`) and states a
+ * tautology (`changeDataCapture: true` on the change-event object itself) instead of the fact
+ * §4.2 actually asks for: that `Account` publishes change events. Returns null for a name that
+ * fits neither shape, rather than guessing at an object this fragment cannot name.
+ */
+function objectForChangeEvent(changeEventName: string): string | null {
+  if (changeEventName.endsWith('__ChangeEvent')) {
+    return changeEventName.slice(0, -'__ChangeEvent'.length) + '__c';
+  }
+  if (changeEventName.endsWith('ChangeEvent')) {
+    return changeEventName.slice(0, -'ChangeEvent'.length);
+  }
+  return null;
+}
+
 /** Pure assembly: the collectors' output -> this producer's graph fragment. */
 export function buildAnatomyFragment(input: AnatomyFragmentInput): CanonicalGraph {
   const metadata: GraphProvenance = { source: 'metadata', capturedAt: input.capturedAt };
@@ -97,18 +129,37 @@ export function buildAnatomyFragment(input: AnatomyFragmentInput): CanonicalGrap
   const contributions: AttributeContribution[] = [];
   const unavailable: GraphUnavailable[] = [];
 
-  // channels (type 'site') -> site.<Name> nodes, metadata provenance. The other three Channel
-  // variants (app/console/api) are never populated by the collector today, so nothing is
-  // emitted for them here. Counted below rather than silently dropped: "absence is data" (spec
-  // section 3.2) applies to this fragment's own coverage just as much as to the artifact's.
+  // channels (type 'site') -> site.<SiteName> nodes, metadata provenance. Keyed on
+  // `channelKeys` (`Site.SiteName`, the site's unique technical name), not on `channel.name`
+  // (`Site.Name`, the label): the label is user-editable, not guaranteed unique, and two unnamed
+  // sites both default to the identical literal 'unknown' -- either would put a duplicate id in
+  // the same graph `mergeGraphs` refuses whole (`MERGE_ID_COLLISION`, `graph: null`), which loses
+  // every node in every fragment being merged, not just the duplicate. Falls back to the label
+  // only if the key itself is unavailable. The other three Channel variants (app/console/api) are
+  // never populated by the collector today, so nothing is emitted for them here. Counted below
+  // rather than silently dropped: "absence is data" (spec section 3.2) applies to this fragment's
+  // own coverage just as much as to the artifact's.
   let nonSiteChannels = 0;
-  for (const channel of input.channels) {
+  let siteIdCollisions = 0;
+  const seenSiteIds = new Set<string>();
+  for (let i = 0; i < input.channels.length; i++) {
+    const channel = input.channels[i];
     if (channel.type !== 'site') {
       nonSiteChannels += 1;
       continue;
     }
+    const key = input.channelKeys[i] || channel.name;
+    const id = `site.${key}`;
+    // Never two nodes sharing an id: if the key still collides (an empty `SiteName` on more than
+    // one row, or a genuine duplicate), the second site is collapsed into the first node rather
+    // than emitted as a second one, and the collapse is recorded below, not silently dropped.
+    if (seenSiteIds.has(id)) {
+      siteIdCollisions += 1;
+      continue;
+    }
+    seenSiteIds.add(id);
     nodes.push({
-      id: `site.${channel.name}`,
+      id,
       kind: 'site',
       layer: layerOfKind('site'),
       level: levelOfKind('site'),
@@ -139,11 +190,26 @@ export function buildAnatomyFragment(input: AnatomyFragmentInput): CanonicalGrap
     });
   }
 
-  // identity.ssoConfigs -> ssoConfig.<issuer> nodes, metadata provenance. Falls back to the
-  // config's type when the issuer is absent (a SamlSsoConfig or AuthProvider row is not
-  // guaranteed to carry one), rather than collapsing every issuer-less config onto one id.
-  for (const sso of input.identity.ssoConfigs) {
-    const id = `ssoConfig.${sso.issuer ?? sso.type}`;
+  // identity.ssoConfigs -> ssoConfig.<DeveloperName> nodes, metadata provenance. Keyed on
+  // `ssoConfigKeys` (`SamlSsoConfig.DeveloperName`), not on `sso.issuer ?? sso.type`: `issuer` is
+  // absent on plenty of real configs (every issuer-less config would then collapse onto the
+  // single id `ssoConfig.saml`), and two SAML configs legitimately pointing at the same IdP -- an
+  // internal one plus an Experience Cloud one -- would collapse onto one id even with an issuer
+  // present. Either puts a duplicate id in the graph `mergeGraphs` refuses whole
+  // (`MERGE_ID_COLLISION`, `graph: null`). Falls back to `issuer`/`type` only if the key itself is
+  // unavailable.
+  let ssoConfigIdCollisions = 0;
+  const seenSsoConfigIds = new Set<string>();
+  for (let i = 0; i < input.identity.ssoConfigs.length; i++) {
+    const sso = input.identity.ssoConfigs[i];
+    const key = input.ssoConfigKeys[i] || sso.issuer || sso.type;
+    const id = `ssoConfig.${key}`;
+    // Never two nodes sharing an id: see the identical rule in the channels loop above.
+    if (seenSsoConfigIds.has(id)) {
+      ssoConfigIdCollisions += 1;
+      continue;
+    }
+    seenSsoConfigIds.add(id);
     nodes.push({
       id,
       kind: 'ssoConfig',
@@ -174,18 +240,34 @@ export function buildAnatomyFragment(input: AnatomyFragmentInput): CanonicalGrap
     });
   }
 
-  // capabilities.changeDataCapture -> contributions on the obj.<Entity> nodes sf-orgviz already
-  // emits. A property of an object, recorded on the object, not a list living nowhere.
+  // capabilities.changeDataCapture -> contributions on the obj.<Object> nodes sf-orgviz already
+  // emits. A property of an object, recorded on the object, not a list living nowhere. The value
+  // this collection actually carries is the *change event name* (`SelectedEntity` from
+  // `PlatformEventChannelMember`, e.g. `AccountChangeEvent`), not the object -- contributing to
+  // `obj.${entity}` directly targets a node no producer emits and states a tautology
+  // (`changeDataCapture: true` on the change-event object) instead of the fact (CDC is on for
+  // `Account`) this is meant to record. `objectForChangeEvent` maps the name back to its base
+  // object first. A name matching neither the standard nor the custom shape cannot be mapped, and
+  // is counted below rather than guessed at or silently dropped.
+  let unrecognizedChangeEvents = 0;
   for (const entity of [...input.capabilities.changeDataCapture].sort(compare)) {
-    contributions.push({ nodeId: `obj.${entity}`, attrs: { changeDataCapture: true } });
+    const object = objectForChangeEvent(entity);
+    if (object === null) {
+      unrecognizedChangeEvents += 1;
+      continue;
+    }
+    contributions.push({ nodeId: `obj.${object}`, attrs: { changeDataCapture: true } });
   }
 
   // capabilities scalars, eventRelayConfigured and identity.loginsByType describe the org rather
   // than any entity in it, so they land as one contribution on org.root (CONVERGENCE_SPEC.md
-  // 3.3, 4.2). platformEvents and namedCredentials are deliberately excluded: both are already
-  // derivable from the merged graph (every `__e` platform event is already an `obj.*` node, and
-  // sf-orgviz extracts every named credential), so emitting them here would duplicate a fact
-  // another producer already states. The seven counts stay measurements, not a query over the
+  // 3.3, 4.2). platformEvents and namedCredentials are deliberately excluded, and -- unlike every
+  // other declined population in this file -- that exclusion gets no `coverage.unavailable` entry
+  // of its own. That asymmetry is a decision, not an oversight: both are already derivable from
+  // the merged graph (every `__e` platform event is already an `obj.*` node, and sf-orgviz
+  // extracts every named credential), so this is not a fact going unrecorded, it is a fact
+  // recorded exactly once, by the producer that already states it -- emitting it again here would
+  // duplicate, not restore, coverage. The seven counts stay measurements, not a query over the
   // graph: `intel map` only ever sees active flows and can lose ApexClass access entirely, so a
   // graph-derived count would silently understate what the org actually contains.
   contributions.push({
@@ -210,9 +292,11 @@ export function buildAnatomyFragment(input: AnatomyFragmentInput): CanonicalGrap
   //   - `from`, once attributed, is a product key -- exactly the node this fragment already
   //     emits as `product.<key>`. An edge with no attribution (`from === null`) has no node to
   //     anchor it on this side.
-  //   - A via chain naming a RemoteProxy has no owned kind at all: a Remote Site Setting is
-  //     future work (CONVERGENCE_SPEC.md 4.2's non-goals), not something this schema can name
-  //     today.
+  //   - A via chain naming a RemoteProxy has no owned kind at all, and an edge with no
+  //     NamedCredential hop has no id to name its target with -- neither is something this schema
+  //     can resolve today (CONVERGENCE_SPEC.md 4.2, "Integration edges join nodes that already
+  //     exist, when the destination resolves to one"; carrying these through is what the
+  //     end-state projection that section describes would still need).
   //   - The target id must come from a `NamedCredential` hop's `name` -- the DeveloperName
   //     sf-orgviz keys its `ncred.<DeveloperName>` nodes on (src/extract/landscape.ts). It must
   //     NOT come from `edge.endpoint`: that field carries whatever string was found at the call
@@ -224,6 +308,26 @@ export function buildAnatomyFragment(input: AnatomyFragmentInput): CanonicalGrap
   // The edge itself is `derived`, not `metadata`: it only exists at product granularity because
   // `attributeEdges` traced the calling component back to a product by prefix match, and this
   // fragment emits no node for the component itself.
+  //
+  // Several `IntegrationEdge`s commonly collapse onto the same `from`/`to`/`kind` -- a product
+  // with forty Apex classes all calling one credential produces forty raw edges between the same
+  // two nodes, differing only in which class made the call and what literal it called with.
+  // Nothing downstream de-duplicates a `CanonicalGraph`'s edges, so emitting all forty verbatim
+  // would leave forty identical-looking edges in the merged graph. Grouped here by
+  // `from|to|kind` instead, with the evidence that would otherwise be lost in the collapse carried
+  // forward as sets rather than a single value: `endpoints` (every distinct endpoint literal seen,
+  // sorted), `via` (every distinct hop chain seen, deduplicated and sorted), `detections` and
+  // `attributions` (every distinct value of each seen). A group of one still gets this shape, so
+  // "one edge" and "one edge that happens to have been alone" read identically.
+  interface EdgeEvidenceGroup {
+    from: string;
+    to: string;
+    endpoints: Set<string>;
+    viaChains: Map<string, Array<{ type: ChainHop['type']; name: string }>>;
+    detections: Set<string>;
+    attributions: Set<string>;
+  }
+  const edgeGroups = new Map<string, EdgeEvidenceGroup>();
   let unattributedEdges = 0;
   let remoteProxyEdges = 0;
   let unresolvedTargetEdges = 0;
@@ -241,15 +345,30 @@ export function buildAnatomyFragment(input: AnatomyFragmentInput): CanonicalGrap
       unresolvedTargetEdges += 1;
       continue;
     }
+    const from = `product.${edge.from}`;
+    const to = `ncred.${ncredHop.name}`;
+    const groupKey = `${from}|${to}|integrates`;
+    let group = edgeGroups.get(groupKey);
+    if (!group) {
+      group = { from, to, endpoints: new Set(), viaChains: new Map(), detections: new Set(), attributions: new Set() };
+      edgeGroups.set(groupKey, group);
+    }
+    if (edge.endpoint !== null) group.endpoints.add(edge.endpoint);
+    const hops = edge.via.map((hop) => ({ type: hop.type, name: hop.name }));
+    group.viaChains.set(JSON.stringify(hops), hops);
+    group.detections.add(edge.detection);
+    group.attributions.add(edge.attribution);
+  }
+  for (const group of edgeGroups.values()) {
     edges.push({
-      from: `product.${edge.from}`,
-      to: `ncred.${ncredHop.name}`,
+      from: group.from,
+      to: group.to,
       kind: 'integrates',
       attrs: {
-        endpoint: edge.endpoint,
-        detection: edge.detection,
-        attribution: edge.attribution,
-        via: edge.via.map((hop) => ({ type: hop.type, name: hop.name })),
+        endpoints: [...group.endpoints].sort(compare),
+        via: [...group.viaChains.values()].sort((a, b) => compare(JSON.stringify(a), JSON.stringify(b))),
+        detections: [...group.detections].sort(compare),
+        attributions: [...group.attributions].sort(compare),
       },
       provenance: derivedEdge,
     });
@@ -260,6 +379,27 @@ export function buildAnatomyFragment(input: AnatomyFragmentInput): CanonicalGrap
       scope: 'anatomy.channels.nonSite',
       reason: 'deferred',
       detail: `${nonSiteChannels} channel(s) of a type other than 'site' were not emitted as nodes; the collector does not yet populate app/console/api channels.`,
+    });
+  }
+  if (siteIdCollisions > 0) {
+    unavailable.push({
+      scope: 'anatomy.channels.idCollision',
+      reason: 'deferred',
+      detail: `${siteIdCollisions} site(s) resolved to an id already used by another site (an empty or duplicate SiteName) and were collapsed into one node rather than emitted as a second node sharing that id.`,
+    });
+  }
+  if (ssoConfigIdCollisions > 0) {
+    unavailable.push({
+      scope: 'anatomy.identity.ssoConfigIdCollision',
+      reason: 'deferred',
+      detail: `${ssoConfigIdCollisions} SSO config(s) resolved to an id already used by another config (an empty or duplicate DeveloperName) and were collapsed into one node rather than emitted as a second node sharing that id.`,
+    });
+  }
+  if (unrecognizedChangeEvents > 0) {
+    unavailable.push({
+      scope: 'anatomy.capabilities.changeDataCaptureUnrecognized',
+      reason: 'deferred',
+      detail: `${unrecognizedChangeEvents} change data capture entity/entities did not match either change-event naming shape (standard '<Object>ChangeEvent' or custom '<Object>__ChangeEvent'), so no object node could be identified for them.`,
     });
   }
   if (unattributedEdges > 0) {

@@ -86,4 +86,153 @@ describe('buildAnatomyFragment', () => {
       expect(u.detail.length).toBeGreaterThan(0);
     }
   });
+
+  describe('ssoConfig/site node ids (finding 1: collision destroys the whole merged graph)', () => {
+    it('gives two issuer-less, same-type SSO configs distinct node ids from distinct keys', () => {
+      const base = input();
+      const f = buildAnatomyFragment({
+        ...base,
+        identity: {
+          ...base.identity,
+          ssoConfigs: [
+            { type: 'saml', issuer: null, identityMapping: null, userProvisioning: false },
+            { type: 'saml', issuer: null, identityMapping: null, userProvisioning: false },
+          ],
+        },
+        ssoConfigKeys: ['Internal_IdP', 'Experience_Cloud_IdP'],
+      });
+      const ids = f.nodes.filter((n) => n.kind === 'ssoConfig').map((n) => n.id);
+      expect(ids).toEqual(['ssoConfig.Experience_Cloud_IdP', 'ssoConfig.Internal_IdP']);
+    });
+
+    it('collapses two SSO configs onto one node, never two nodes sharing an id, when their keys still collide', () => {
+      const base = input();
+      const f = buildAnatomyFragment({
+        ...base,
+        identity: {
+          ...base.identity,
+          ssoConfigs: [
+            { type: 'saml', issuer: null, identityMapping: null, userProvisioning: false },
+            { type: 'saml', issuer: null, identityMapping: null, userProvisioning: false },
+          ],
+        },
+        ssoConfigKeys: ['', ''],
+      });
+      const ssoNodes = f.nodes.filter((n) => n.kind === 'ssoConfig');
+      const ids = ssoNodes.map((n) => n.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(ssoNodes).toHaveLength(1);
+      expect(f.coverage.unavailable.map((u) => u.scope)).toContain('anatomy.identity.ssoConfigIdCollision');
+    });
+
+    it('gives two unnamed sites distinct node ids from distinct keys', () => {
+      const base = input();
+      const f = buildAnatomyFragment({
+        ...base,
+        channels: [
+          { type: 'site', name: 'unknown', status: 'Active' },
+          { type: 'site', name: 'unknown', status: 'Active' },
+        ],
+        channelKeys: ['First_Unnamed_Site', 'Second_Unnamed_Site'],
+      });
+      const ids = f.nodes.filter((n) => n.kind === 'site').map((n) => n.id);
+      expect(ids).toEqual(['site.First_Unnamed_Site', 'site.Second_Unnamed_Site']);
+    });
+
+    it('collapses two sites onto one node, never two nodes sharing an id, when their keys still collide', () => {
+      const base = input();
+      const f = buildAnatomyFragment({
+        ...base,
+        channels: [
+          { type: 'site', name: 'unknown', status: 'Active' },
+          { type: 'site', name: 'unknown', status: 'Active' },
+        ],
+        channelKeys: ['', ''],
+      });
+      const siteNodes = f.nodes.filter((n) => n.kind === 'site');
+      const ids = siteNodes.map((n) => n.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(siteNodes).toHaveLength(1);
+      expect(f.coverage.unavailable.map((u) => u.scope)).toContain('anatomy.channels.idCollision');
+    });
+  });
+
+  describe('changeDataCapture contributions (finding 2: CDC must target the base object)', () => {
+    it('maps a standard change event name back to its object', () => {
+      const f = buildAnatomyFragment({
+        ...input(),
+        capabilities: { ...input().capabilities, changeDataCapture: ['AccountChangeEvent'] },
+      });
+      const c = (f.contributions ?? []).find((x) => x.nodeId === 'obj.Account');
+      expect(c).toBeDefined();
+      expect(c!.attrs).toEqual({ changeDataCapture: true });
+      // Never the tautological target the bug produced.
+      expect((f.contributions ?? []).some((x) => x.nodeId === 'obj.AccountChangeEvent')).toBe(false);
+    });
+
+    it('maps a custom change event name back to its __c object', () => {
+      const f = buildAnatomyFragment({
+        ...input(),
+        capabilities: { ...input().capabilities, changeDataCapture: ['Order__ChangeEvent'] },
+      });
+      const c = (f.contributions ?? []).find((x) => x.nodeId === 'obj.Order__c');
+      expect(c).toBeDefined();
+      expect(c!.attrs).toEqual({ changeDataCapture: true });
+    });
+
+    it('drops a change-data-capture entity matching neither naming shape, recorded, not silently', () => {
+      const f = buildAnatomyFragment({
+        ...input(),
+        capabilities: { ...input().capabilities, changeDataCapture: ['NotAChangeEventName'] },
+      });
+      expect((f.contributions ?? []).some((x) => x.nodeId.includes('NotAChangeEventName'))).toBe(false);
+      expect(f.coverage.unavailable.map((u) => u.scope)).toContain(
+        'anatomy.capabilities.changeDataCaptureUnrecognized',
+      );
+    });
+  });
+
+  describe('integration edge de-duplication (finding 4: identical edges emitted repeatedly)', () => {
+    it('collapses two edges sharing from/to/kind into one, carrying both endpoints as evidence', () => {
+      const base = input();
+      const f = buildAnatomyFragment({
+        ...base,
+        edges: [
+          {
+            endpoint: 'https://acme-erp.example.invalid/api/v1',
+            from: 'acme',
+            via: [{ type: 'ApexClass', name: 'AcmeOrderSync' }, { type: 'NamedCredential', name: 'Acme_ERP_Cred' }],
+            detection: 'apexCallout',
+            attribution: 'prefixMatch',
+          },
+          {
+            endpoint: 'https://acme-erp.example.invalid/api/v2',
+            from: 'acme',
+            via: [{ type: 'ApexClass', name: 'AcmeInvoiceBuilder' }, { type: 'NamedCredential', name: 'Acme_ERP_Cred' }],
+            detection: 'apexCallout',
+            attribution: 'prefixMatch',
+          },
+        ],
+      });
+      expect(f.edges).toHaveLength(1);
+      const edge = f.edges[0];
+      expect(edge.from).toBe('product.acme');
+      expect(edge.to).toBe('ncred.Acme_ERP_Cred');
+      expect(edge.attrs.endpoints).toEqual([
+        'https://acme-erp.example.invalid/api/v1',
+        'https://acme-erp.example.invalid/api/v2',
+      ]);
+      // Both call sites are still visible, not collapsed away.
+      expect(edge.attrs.via).toEqual([
+        [
+          { type: 'ApexClass', name: 'AcmeInvoiceBuilder' },
+          { type: 'NamedCredential', name: 'Acme_ERP_Cred' },
+        ],
+        [
+          { type: 'ApexClass', name: 'AcmeOrderSync' },
+          { type: 'NamedCredential', name: 'Acme_ERP_Cred' },
+        ],
+      ]);
+    });
+  });
 });
