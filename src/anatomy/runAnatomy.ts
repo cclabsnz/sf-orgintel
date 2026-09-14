@@ -4,7 +4,7 @@
 // yields little produces a small, honest artifact rather than a failed command.
 import type { CanonicalGraph } from '@cclabsnz/sf-core';
 import type { IntelContext } from '../lib/wire.js';
-import type { AnatomyArtifact, Unavailable } from './types.js';
+import type { AnatomyArtifact, Identity, Unavailable } from './types.js';
 import { buildPrefixRegistry } from './prefixRegistry.js';
 import { addEndpointOnlyEdges, attributeEdges, resolveChains } from './attribute.js';
 import { buildAnatomyFragment } from './fragment.js';
@@ -42,9 +42,12 @@ export async function runAnatomy(
 
   const sources = await collectProducts(ctx, notes, unavailable);
   const personas = await collectPersonas(ctx, notes, unavailable);
-  const channels = await collectChannels(ctx, notes, unavailable);
+  const { channels, channelKeys } = await collectChannels(ctx, notes, unavailable);
   const capabilities = await collectCapabilities(ctx, notes, unavailable);
-  const identity = await collectIdentity(ctx, notes, unavailable);
+  const { ssoConfigs, ssoConfigKeys, loginsByType } = await collectIdentity(ctx, notes, unavailable);
+  // The published `Identity` shape only -- `ssoConfigKeys` never joins it, or it would move
+  // `anatomy.json`'s golden. Threaded to the fragment separately below.
+  const identity: Identity = { ssoConfigs, loginsByType };
   const evidence = await collectIntegrationEdges(ctx, notes, unavailable);
 
   // Component names for the registry: every org-authored Apex class and Flow, the population
@@ -104,8 +107,13 @@ export async function runAnatomy(
     products: artifact.products,
     personas: artifact.personas,
     channels: artifact.channels,
+    // Not part of `artifact` -- `channelKeys`/`ssoConfigKeys` never join the published
+    // `Channel`/`SsoConfig` shapes (see channels.ts/identity.ts), so they travel from the
+    // collectors straight to the fragment rather than through the artifact's own fields.
+    channelKeys,
     capabilities: artifact.capabilities,
     identity: artifact.identity,
+    ssoConfigKeys,
     edges: artifact.edges,
     capturedAt: provenance.generatedAt,
     orgId: provenance.orgId,

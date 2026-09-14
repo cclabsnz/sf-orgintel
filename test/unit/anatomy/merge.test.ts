@@ -137,6 +137,46 @@ describe('the anatomy fragment in a merge', () => {
     expect(account.attrs.role).toBe(roleOf('Account'));
   });
 
+  it('still merges clean when two issuer-less SSO configs would have collided under the old id formula', () => {
+    // Finding 1's acceptance: two distinct-keyed, issuer-less configs must not just get distinct
+    // node ids (fragment.test.ts already pins that) -- the graph they land in must actually
+    // merge, since a real `MERGE_ID_COLLISION` returns `graph: null` for the whole thing.
+    const base = input();
+    const fragment = buildAnatomyFragment({
+      ...base,
+      identity: {
+        ...base.identity,
+        ssoConfigs: [
+          { type: 'saml', issuer: null, identityMapping: null, userProvisioning: false },
+          { type: 'saml', issuer: null, identityMapping: null, userProvisioning: false },
+        ],
+      },
+      ssoConfigKeys: ['Internal_IdP', 'Experience_Cloud_IdP'],
+    });
+    const ids = idsOwnedByOtherProducer(fragment);
+    const result = mergeGraphs([extraction(ids, fragment.capturedAt, fragment.orgId), fragment]);
+    expect(result.findings).toEqual([]);
+    expect(validateGraph(result.graph!)).toEqual([]);
+    expect(result.graph!.nodes.filter((n) => n.kind === 'ssoConfig')).toHaveLength(2);
+  });
+
+  it('still merges clean when two unnamed sites would have collided under the old id formula', () => {
+    const base = input();
+    const fragment = buildAnatomyFragment({
+      ...base,
+      channels: [
+        { type: 'site', name: 'unknown', status: 'Active' },
+        { type: 'site', name: 'unknown', status: 'Active' },
+      ],
+      channelKeys: ['First_Unnamed_Site', 'Second_Unnamed_Site'],
+    });
+    const ids = idsOwnedByOtherProducer(fragment);
+    const result = mergeGraphs([extraction(ids, fragment.capturedAt, fragment.orgId), fragment]);
+    expect(result.findings).toEqual([]);
+    expect(validateGraph(result.graph!)).toEqual([]);
+    expect(result.graph!.nodes.filter((n) => n.kind === 'site')).toHaveLength(2);
+  });
+
   it('reports an unresolved edge endpoint when the extraction is absent', () => {
     // The fragment is deliberately not standalone-valid: its `integrates` edges point at
     // named credentials it never declares, and its contributions point at objects, profiles and

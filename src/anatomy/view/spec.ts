@@ -156,10 +156,9 @@ export interface ResolvedBand {
 
 /**
  * Local resolver: not general, and not meant to be. It exists so this task's equivalence test has
- * something to resolve `ANATOMY_VIEW` against, per the controller ruling recorded in
- * docs/ANATOMY_SPEC.md's convergence ledger -- there is no shared resolver to call, and building
- * a general one (over an actual merged `CanonicalGraph`) is the follow-on work the module header
- * describes, not this task.
+ * something to resolve `ANATOMY_VIEW` against -- there is no shared resolver to call yet, and
+ * building a general one (over an actual merged `CanonicalGraph`) is the follow-on work the
+ * module header describes, not this task.
  *
  * Reuses `classify` from `bands.ts` rather than re-deriving the empty/not-collected rule, so the
  * two can never quietly disagree about which `coverage.unavailable` scopes matter to which band.
