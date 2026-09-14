@@ -91,9 +91,17 @@ function isUnavailable(unavailable: readonly Unavailable[], scope: string): bool
   return unavailable.some((u) => u.scope === scope);
 }
 
-function classify(
+/**
+ * Exported so `src/anatomy/view/spec.ts`'s local resolver can classify emptiness the same way
+ * `buildBands` does, from one shared implementation, rather than duplicating `BAND_SCOPES` and
+ * this rule in a second place where the two could drift. Takes a tile *count* rather than
+ * `Tile[]` because that is all this ever read from the array; the resolver has band membership
+ * as a list of item ids, not `Tile` objects, and building fake `Tile`s just to get a length past
+ * this function would be needless indirection.
+ */
+export function classify(
   id: BandId,
-  tiles: Tile[],
+  tileCount: number,
   unavailable: readonly Unavailable[],
 ): { emptiness: BandContent['emptiness']; note: string | null; caveats: string[] } {
   const scopes = BAND_SCOPES[id];
@@ -104,7 +112,7 @@ function classify(
   // Tiles present, so the band is populated, but "populated" is not "complete". Anything the
   // band's own scopes reported missing is carried as a caveat rather than dropped, because the
   // reader cannot tell a partial inventory from a whole one by looking at it.
-  if (tiles.length > 0) {
+  if (tileCount > 0) {
     return { emptiness: 'populated', note: null, caveats: matches.map((m) => m.detail) };
   }
 
@@ -126,7 +134,7 @@ function buildUsersBand(artifact: AnatomyArtifact): BandContent {
       unavailable: false,
     })),
   );
-  const { emptiness, note, caveats } = classify('users', tiles, artifact.coverage.unavailable);
+  const { emptiness, note, caveats } = classify('users', tiles.length, artifact.coverage.unavailable);
   return { id: 'users', title: 'Users', tiles, emptiness, note, caveats };
 }
 
@@ -142,7 +150,7 @@ function buildChannelsBand(artifact: AnatomyArtifact): BandContent {
       unavailable: false,
     })),
   );
-  const { emptiness, note, caveats } = classify('channels', tiles, artifact.coverage.unavailable);
+  const { emptiness, note, caveats } = classify('channels', tiles.length, artifact.coverage.unavailable);
   return { id: 'channels', title: 'Channels', tiles, emptiness, note, caveats };
 }
 
@@ -157,7 +165,7 @@ function buildProductsBand(artifact: AnatomyArtifact): BandContent {
       unavailable: false,
     })),
   );
-  const { emptiness, note, caveats } = classify('products', tiles, artifact.coverage.unavailable);
+  const { emptiness, note, caveats } = classify('products', tiles.length, artifact.coverage.unavailable);
   return { id: 'products', title: 'Products', tiles, emptiness, note, caveats };
 }
 
@@ -179,7 +187,7 @@ function buildCapabilitiesBand(artifact: AnatomyArtifact): BandContent {
     { id: 'externalDataSources', label: 'External Data Sources', sublabel: null, metric: c.externalDataSources, fill: null, unavailable: isUnavailable(u, 'capabilities.externalDataSources') },
     { id: 'remoteSites', label: 'Remote Site Settings', sublabel: null, metric: c.remoteSites, fill: null, unavailable: isUnavailable(u, 'capabilities.remoteSites') },
   ]);
-  const { emptiness, note, caveats } = classify('capabilities', tiles, u);
+  const { emptiness, note, caveats } = classify('capabilities', tiles.length, u);
   return { id: 'capabilities', title: 'Platform Capabilities', tiles, emptiness, note, caveats };
 }
 
@@ -196,7 +204,7 @@ function buildIntegrationBand(artifact: AnatomyArtifact): BandContent {
       unavailable: false,
     })),
   );
-  const { emptiness, note, caveats } = classify('integration', tiles, artifact.coverage.unavailable);
+  const { emptiness, note, caveats } = classify('integration', tiles.length, artifact.coverage.unavailable);
   return { id: 'integration', title: 'Integration Methods', tiles, emptiness, note, caveats };
 }
 
@@ -216,7 +224,7 @@ function buildExternalBand(artifact: AnatomyArtifact): BandContent {
       unavailable: false,
     })),
   );
-  const { emptiness, note, caveats } = classify('external', tiles, artifact.coverage.unavailable);
+  const { emptiness, note, caveats } = classify('external', tiles.length, artifact.coverage.unavailable);
   return { id: 'external', title: 'External Systems', tiles, emptiness, note, caveats };
 }
 
@@ -230,7 +238,7 @@ function buildOpsBand(artifact: AnatomyArtifact): BandContent {
     { id: 'platformEvents', label: 'Platform Events', sublabel: null, metric: c.platformEvents.length, fill: null, unavailable: isUnavailable(u, 'capabilities.platformEvents') },
     { id: 'changeDataCapture', label: 'Change Data Capture', sublabel: null, metric: c.changeDataCapture.length, fill: null, unavailable: isUnavailable(u, 'capabilities.changeDataCapture') },
   ]);
-  const { emptiness, note, caveats } = classify('ops', tiles, u);
+  const { emptiness, note, caveats } = classify('ops', tiles.length, u);
   return { id: 'ops', title: 'Ops and Security', tiles, emptiness, note, caveats };
 }
 
