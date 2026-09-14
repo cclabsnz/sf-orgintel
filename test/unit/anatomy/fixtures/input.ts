@@ -12,6 +12,7 @@
 import { mockSoql, mockTooling, mockRest, mockIntelContext } from '../../helpers/mocks.js';
 import { runAnatomy, type AnatomyProvenance } from '../../../../src/anatomy/runAnatomy.js';
 import type { AnatomyArtifact } from '../../../../src/anatomy/types.js';
+import type { AnatomyFragmentInput } from '../../../../src/anatomy/fragment.js';
 
 /**
  * Fixed provenance. `generatedAt` and `toolVersion` are the only fields that would otherwise
@@ -172,4 +173,91 @@ function ctx() {
 /** The deterministic `runAnatomy()` call shared by golden.test.ts and any later behavioral test. */
 export async function artifacts(): Promise<AnatomyArtifact> {
   return runAnatomy(ctx(), PROVENANCE);
+}
+
+/**
+ * The `AnatomyFragmentInput` for `buildAnatomyFragment` (fragment.test.ts). A plain literal, not
+ * `artifacts()`'s output sliced apart: `input()` must be synchronous (`buildAnatomyFragment` is a
+ * pure function over already-collected data, not over an `IntelContext`), while `artifacts()` is
+ * `runAnatomy()` awaiting six collectors. The two fixtures tell a smaller version of the same
+ * "Acme" story on purpose -- a product with a real prefix match, a persona pair, a site channel
+ * alongside a non-site one the fragment must skip, one CDC-enabled object, one SSO config, and
+ * three integration edges exercising the three edge outcomes: attributed-with-endpoint (emitted),
+ * a bare RemoteProxy endpoint (no owned kind yet, skipped), and a fully unattributed chain with
+ * no endpoint at all (skipped). Does not touch `ctx()`, `PROVENANCE` or `artifacts()` -- none of
+ * the golden's values move.
+ */
+export function input(): AnatomyFragmentInput {
+  return {
+    products: [
+      { key: 'acme', label: 'Acme', source: 'package', componentCount: 8, prefixes: ['ACME'] },
+      { key: 'ops-portal', label: 'Ops Portal', source: 'app', componentCount: 2, prefixes: ['OPS'] },
+    ],
+    personas: [
+      { profile: 'SystemAdministrator', licence: 'Salesforce', activeUsers: 5, landingApp: 'Acme_Console' },
+      { profile: 'AcmeSupportAgent', licence: 'Salesforce Platform', activeUsers: 42, landingApp: null },
+    ],
+    channels: [
+      { type: 'site', name: 'Acme_Customer_Portal', status: 'Active' },
+      { type: 'site', name: 'Acme_Partner_Portal', status: 'Inactive' },
+      // Not yet a population the collector fills in -- exercises the fragment's "only site"
+      // filter, per CONVERGENCE_SPEC.md 4.2 ("channels are sites, today").
+      { type: 'app', name: 'Acme_Mobile', status: 'Active' },
+    ],
+    capabilities: {
+      apexClasses: 9,
+      apexTriggers: 4,
+      flows: 6,
+      lwc: 12,
+      aura: 2,
+      // Read by the fragment's input type but never emitted -- already derivable from the merged
+      // graph per CONVERGENCE_SPEC.md 4.2.
+      platformEvents: ['Acme_Order_Event__e', 'Acme_Shipment_Event__e'],
+      changeDataCapture: ['Account', 'Case'],
+      namedCredentials: 2,
+      externalDataSources: 1,
+      remoteSites: 2,
+      eventRelayConfigured: true,
+    },
+    identity: {
+      ssoConfigs: [
+        { type: 'saml', issuer: 'https://acme.okta.com', identityMapping: 'Federation Id', userProvisioning: true },
+      ],
+      loginsByType: [
+        { application: 'Salesforce for Android', loginType: 'Application', count: 12 },
+        { application: 'Browser', loginType: 'SAML Sso', count: 340 },
+      ],
+    },
+    edges: [
+      // Attributed, with an endpoint that names no RemoteProxy -- the one shape that becomes a
+      // graph edge.
+      {
+        endpoint: 'Acme_ERP_Cred',
+        from: 'acme',
+        via: [{ type: 'ApexClass', name: 'AcmeOrderSync' }],
+        detection: 'apexCallout',
+        attribution: 'prefixMatch',
+      },
+      // A bare RemoteProxy destination: real evidence, but Remote Site Settings have no owned
+      // graph kind yet, so this is left out rather than mislabelled as a namedCredential.
+      {
+        endpoint: 'Old_Partner_Site',
+        from: null,
+        via: [{ type: 'RemoteProxy', name: 'Old_Partner_Site' }],
+        detection: 'endpointOnly',
+        attribution: 'unattributed',
+      },
+      // Reached out, but neither attributed to a product nor resolved to an endpoint -- nothing
+      // on either side to anchor a graph edge to.
+      {
+        endpoint: null,
+        from: null,
+        via: [{ type: 'OmniProcess', name: 'AcmeLegacyProcedure' }],
+        detection: 'remoteActionChain',
+        attribution: 'unattributed',
+      },
+    ],
+    capturedAt: '2026-01-01T00:00:00Z',
+    orgId: 'org1',
+  };
 }
