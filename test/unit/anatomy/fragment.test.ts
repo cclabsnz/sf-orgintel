@@ -58,4 +58,32 @@ describe('buildAnatomyFragment', () => {
     const contribs = (f.contributions ?? []).map((c) => c.nodeId);
     expect(contribs).toEqual([...contribs].sort());
   });
+
+  it('never targets an integration edge at an id no producer emits', () => {
+    // sf-orgviz writes named credentials as `ncred.<DeveloperName>` (src/extract/landscape.ts),
+    // not `namedCredential.<endpoint>` -- `endpoint` is frequently a URL, not the DeveloperName
+    // the owning producer keys on. An edge built on the wrong id/prefix never resolves, on every
+    // real run, which is a permanently broken graph rather than the designed "unresolved until
+    // merged" state.
+    const f = fragment();
+    expect(f.edges.length).toBeGreaterThan(0);
+    for (const e of f.edges) {
+      expect(e.from.startsWith('product.')).toBe(true);
+      expect(e.to.startsWith('ncred.')).toBe(true);
+    }
+  });
+
+  it('records every integration edge it declines to emit, never silently', () => {
+    // Absence is data (CONVERGENCE_SPEC.md 3.2): an edge dropped for lack of a resolvable
+    // endpoint must show up in this fragment's own coverage, not vanish as if it never existed.
+    const unavailable = fragment().coverage.unavailable;
+    const scopes = unavailable.map((u) => u.scope);
+    expect(scopes).toContain('anatomy.edges.unattributed');
+    expect(scopes).toContain('anatomy.edges.remoteProxy');
+    expect(scopes).toContain('anatomy.edges.unresolvedTarget');
+    for (const u of unavailable) {
+      expect(u.reason).toBe('deferred');
+      expect(u.detail.length).toBeGreaterThan(0);
+    }
+  });
 });
