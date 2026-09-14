@@ -182,10 +182,12 @@ export async function artifacts(): Promise<AnatomyArtifact> {
  * `runAnatomy()` awaiting six collectors. The two fixtures tell a smaller version of the same
  * "Acme" story on purpose -- a product with a real prefix match, a persona pair, a site channel
  * alongside a non-site one the fragment must skip, one CDC-enabled object, one SSO config, and
- * three integration edges exercising the three edge outcomes: attributed-with-endpoint (emitted),
- * a bare RemoteProxy endpoint (no owned kind yet, skipped), and a fully unattributed chain with
- * no endpoint at all (skipped). Does not touch `ctx()`, `PROVENANCE` or `artifacts()` -- none of
- * the golden's values move.
+ * four integration edges exercising the four edge outcomes: a NamedCredential hop (emitted,
+ * targeting `ncred.<DeveloperName>`), an attributed edge with no NamedCredential hop to name the
+ * destination (`anatomy.edges.unresolvedTarget`), a RemoteProxy destination with no owned kind
+ * yet (`anatomy.edges.remoteProxy`), and a fully unattributed chain with no endpoint at all
+ * (`anatomy.edges.unattributed`). Does not touch `ctx()`, `PROVENANCE` or `artifacts()` -- none
+ * of the golden's values move.
  */
 export function input(): AnatomyFragmentInput {
   return {
@@ -228,27 +230,41 @@ export function input(): AnatomyFragmentInput {
         { application: 'Browser', loginType: 'SAML Sso', count: 340 },
       ],
     },
+    // Exercises all four edge outcomes `buildAnatomyFragment` distinguishes: emitted, and the
+    // three distinct reasons an edge is left out (each counted in the fragment's own
+    // `coverage.unavailable`, never silently dropped).
     edges: [
-      // Attributed, with an endpoint that names no RemoteProxy -- the one shape that becomes a
-      // graph edge.
+      // Attributed, and its via chain names a NamedCredential hop directly -- the one shape
+      // that becomes a graph edge, targeting `ncred.<DeveloperName>` (the id sf-orgviz's
+      // extraction actually writes), not `edge.endpoint` (a URL here, not an id).
       {
-        endpoint: 'Acme_ERP_Cred',
+        endpoint: 'https://acme-erp.example.invalid/api',
+        from: 'acme',
+        via: [{ type: 'NamedCredential', name: 'Acme_ERP_Cred' }],
+        detection: 'endpointOnly',
+        attribution: 'prefixMatch',
+      },
+      // Attributed, with real endpoint evidence, but no NamedCredential hop names the
+      // destination -- `edge.endpoint` here is a raw callout-literal, not a DeveloperName, so no
+      // node id can be formed for it. Left out as `anatomy.edges.unresolvedTarget`.
+      {
+        endpoint: 'Acme_Payment_API',
         from: 'acme',
         via: [{ type: 'ApexClass', name: 'AcmeOrderSync' }],
         detection: 'apexCallout',
         attribution: 'prefixMatch',
       },
-      // A bare RemoteProxy destination: real evidence, but Remote Site Settings have no owned
-      // graph kind yet, so this is left out rather than mislabelled as a namedCredential.
+      // Attributed, but the via chain names a RemoteProxy (Remote Site Setting) destination,
+      // which has no owned graph kind yet. Left out as `anatomy.edges.remoteProxy`.
       {
         endpoint: 'Old_Partner_Site',
-        from: null,
+        from: 'ops-portal',
         via: [{ type: 'RemoteProxy', name: 'Old_Partner_Site' }],
         detection: 'endpointOnly',
-        attribution: 'unattributed',
+        attribution: 'prefixMatch',
       },
       // Reached out, but neither attributed to a product nor resolved to an endpoint -- nothing
-      // on either side to anchor a graph edge to.
+      // on either side to anchor a graph edge to. Left out as `anatomy.edges.unattributed`.
       {
         endpoint: null,
         from: null,
