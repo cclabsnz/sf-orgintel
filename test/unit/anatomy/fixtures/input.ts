@@ -88,9 +88,10 @@ function ctx() {
         records: [{ DeveloperName: 'Acme_ERP_Cred' }, { DeveloperName: 'Legacy_SFTP_Cred' }] },
       { test: (s) => s === 'SELECT SiteName FROM RemoteProxy ORDER BY SiteName',
         records: [{ SiteName: 'Acme_Shipping_API' }, { SiteName: 'Old_Partner_Site' }] },
-      // -- identity.ts --
-      { test: (s) => s === 'SELECT Issuer FROM SamlSsoConfig',
-        records: [{ Issuer: 'https://acme.okta.com' }] },
+      // -- identity.ts -- DeveloperName is fixture-only: it never joins the published SsoConfig
+      // shape (see identity.ts's CollectedIdentity doc), so it does not appear in anatomy.json.
+      { test: (s) => s === 'SELECT DeveloperName, Issuer FROM SamlSsoConfig',
+        records: [{ DeveloperName: 'Acme_Okta', Issuer: 'https://acme.okta.com' }] },
       // -- capabilities.ts: COUNT(Id) aggregates. Each is an exact, distinct query string, so
       // no two of these -- or the two ApexClass queries above -- can collide on a substring
       // match the way `s.includes('ApexClass')` would.
@@ -102,11 +103,18 @@ function ctx() {
       { test: (s) => s === 'SELECT COUNT(Id) FROM NamedCredential', records: [{ expr0: 2 }] },
       { test: (s) => s === 'SELECT COUNT(Id) FROM ExternalDataSource', records: [{ expr0: 1 }] },
       { test: (s) => s === 'SELECT COUNT(Id) FROM RemoteProxy', records: [{ expr0: 2 }] },
+      // Realistic change-event names, per collectors/capabilities.ts's own doc: `SelectedEntity`
+      // is the change event name (e.g. `AccountChangeEvent`), never the platform event/object
+      // name it publishes for. One standard object and one custom object, so
+      // `objectForChangeEvent` (fragment.ts) exercises both naming shapes it maps back to an
+      // `obj.*` id -- `AccountChangeEvent` -> `Account`, `Acme_Config__ChangeEvent` ->
+      // `Acme_Config__c` (the custom object already named in this fixture's REST sobject list
+      // below). A duplicate row proves the de-duplication in collectCapabilities still holds.
       { test: (s) => s === 'SELECT SelectedEntity FROM PlatformEventChannelMember',
         records: [
-          { SelectedEntity: 'Acme_Order_Event__e' },
-          { SelectedEntity: 'Acme_Shipment_Event__e' },
-          { SelectedEntity: 'Acme_Order_Event__e' },
+          { SelectedEntity: 'AccountChangeEvent' },
+          { SelectedEntity: 'Acme_Config__ChangeEvent' },
+          { SelectedEntity: 'AccountChangeEvent' },
         ] },
     ]),
     soql: mockSoql([
@@ -121,11 +129,12 @@ function ctx() {
           { profileName: 'Acme Support Agent', licenceName: 'Salesforce Platform', userCount: 42 },
           { profileName: 'Community User', licenceName: 'Customer Community Plus', userCount: 120 },
         ] },
-      // -- channels.ts --
-      { test: (s) => s === 'SELECT Name, Status FROM Site',
+      // -- channels.ts -- SiteName is fixture-only: it never joins the published Channel shape
+      // (see channels.ts's CollectedChannels doc), so it does not appear in anatomy.json.
+      { test: (s) => s === 'SELECT Name, SiteName, Status FROM Site',
         records: [
-          { Name: 'Acme Customer Portal', Status: 'Active' },
-          { Name: 'Acme Partner Portal', Status: 'Inactive' },
+          { Name: 'Acme Customer Portal', SiteName: 'Acme_Customer_Portal', Status: 'Active' },
+          { Name: 'Acme Partner Portal', SiteName: 'Acme_Partner_Portal', Status: 'Inactive' },
         ] },
       // -- capabilities.ts --
       { test: (s) => s === 'SELECT Id FROM EventRelayConfig LIMIT 1',
@@ -191,13 +200,18 @@ export async function artifacts(): Promise<AnatomyArtifact> {
  * pure function over already-collected data, not over an `IntelContext`), while `artifacts()` is
  * `runAnatomy()` awaiting six collectors. The two fixtures tell a smaller version of the same
  * "Acme" story on purpose -- a product with a real prefix match, a persona pair, a site channel
- * alongside a non-site one the fragment must skip, one CDC-enabled object, one SSO config, and
- * four integration edges exercising the four edge outcomes: a NamedCredential hop (emitted,
- * targeting `ncred.<DeveloperName>`), an attributed edge with no NamedCredential hop to name the
- * destination (`anatomy.edges.unresolvedTarget`), a RemoteProxy destination with no owned kind
- * yet (`anatomy.edges.remoteProxy`), and a fully unattributed chain with no endpoint at all
- * (`anatomy.edges.unattributed`). Does not touch `ctx()`, `PROVENANCE` or `artifacts()` -- none
- * of the golden's values move.
+ * alongside a non-site one the fragment must skip, two CDC-enabled objects (one standard, one
+ * custom, so `objectForChangeEvent`'s two naming branches both get exercised through this fixture
+ * too), one SSO config, and four integration edges exercising the four edge outcomes: a
+ * NamedCredential hop (emitted, targeting `ncred.<DeveloperName>`), an attributed edge with no
+ * NamedCredential hop to name the destination (`anatomy.edges.unresolvedTarget`), a RemoteProxy
+ * destination with no owned kind yet (`anatomy.edges.remoteProxy`), and a fully unattributed
+ * chain with no endpoint at all (`anatomy.edges.unattributed`). `channelKeys`/`ssoConfigKeys`
+ * (`Site.SiteName`/`SamlSsoConfig.DeveloperName`, see fragment.ts's `AnatomyFragmentInput` doc)
+ * are distinct per entry here precisely because they never join `channels`/`identity.ssoConfigs`
+ * -- the collision path itself is exercised separately, in fragment.test.ts, with its own
+ * minimal literals. Does not touch `ctx()`, `PROVENANCE` or `artifacts()` -- none of the golden's
+ * values move.
  */
 export function input(): AnatomyFragmentInput {
   return {
@@ -213,9 +227,13 @@ export function input(): AnatomyFragmentInput {
       { type: 'site', name: 'Acme_Customer_Portal', status: 'Active' },
       { type: 'site', name: 'Acme_Partner_Portal', status: 'Inactive' },
       // Not yet a population the collector fills in -- exercises the fragment's "only site"
-      // filter, per CONVERGENCE_SPEC.md 4.2 ("channels are sites, today").
+      // filter, per CONVERGENCE_SPEC.md 4.2 ("channels are sites, today"). Its key is never read
+      // (non-site channels never reach `channelKeys` lookups), but every entry needs one to keep
+      // `channelKeys` the same length and order as `channels`.
       { type: 'app', name: 'Acme_Mobile', status: 'Active' },
     ],
+    // `Site.SiteName`, aligned by position with `channels` -- see the module doc above.
+    channelKeys: ['Acme_Customer_Portal', 'Acme_Partner_Portal', ''],
     capabilities: {
       apexClasses: 9,
       apexTriggers: 4,
@@ -225,7 +243,10 @@ export function input(): AnatomyFragmentInput {
       // Read by the fragment's input type but never emitted -- already derivable from the merged
       // graph per CONVERGENCE_SPEC.md 4.2.
       platformEvents: ['Acme_Order_Event__e', 'Acme_Shipment_Event__e'],
-      changeDataCapture: ['Account', 'Case'],
+      // The change-event name (`PlatformEventChannelMember.SelectedEntity`), not the object --
+      // one standard shape and one custom shape, so `objectForChangeEvent` maps both
+      // `AccountChangeEvent` -> `Account` and `Order__ChangeEvent` -> `Order__c`.
+      changeDataCapture: ['AccountChangeEvent', 'Order__ChangeEvent'],
       namedCredentials: 2,
       externalDataSources: 1,
       remoteSites: 2,
@@ -240,6 +261,8 @@ export function input(): AnatomyFragmentInput {
         { application: 'Browser', loginType: 'SAML Sso', count: 340 },
       ],
     },
+    // `SamlSsoConfig.DeveloperName`, aligned by position with `identity.ssoConfigs`.
+    ssoConfigKeys: ['Acme_Okta'],
     // Exercises all four edge outcomes `buildAnatomyFragment` distinguishes: emitted, and the
     // three distinct reasons an edge is left out (each counted in the fragment's own
     // `coverage.unavailable`, never silently dropped).

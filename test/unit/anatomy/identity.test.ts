@@ -21,7 +21,9 @@ describe('collectIdentity', () => {
     // field for such a word to land in, so the scan would pass even if a severity field
     // were added. Pin the exact shape instead: adding a judgement field to the type or the
     // collector fails this test, which is the behaviour worth protecting.
-    expect(Object.keys(out).sort()).toEqual(['loginsByType', 'ssoConfigs']);
+    // `ssoConfigKeys` is the one legitimate addition to this shape: `DeveloperName`, threaded
+    // to the fragment only (see identity.ts's `CollectedIdentity` doc), never a judgement field.
+    expect(Object.keys(out).sort()).toEqual(['loginsByType', 'ssoConfigKeys', 'ssoConfigs']);
     for (const entry of out.loginsByType) {
       expect(Object.keys(entry).sort()).toEqual(['application', 'count', 'loginType']);
     }
@@ -48,6 +50,34 @@ describe('collectIdentity', () => {
       'https://acme.example.com',
       'https://zed.example.com',
     ]);
+  });
+
+  it('gives two issuer-less configs distinct keys from DeveloperName, aligned with ssoConfigs', async () => {
+    // The bug this guards against: an id built from `issuer ?? type` alone collapses every
+    // issuer-less SamlSsoConfig row onto one id (`ssoConfig.saml`), and `mergeGraphs` returns
+    // `graph: null` for the whole merged graph on that collision, not just the duplicate.
+    const notes: string[] = [];
+    const unavailable: Unavailable[] = [];
+    const out = await collectIdentity(
+      mockIntelContext({
+        soql: mockSoql([{ test: (s) => s.includes('LoginHistory'), records: [] }]),
+        tooling: mockTooling([
+          {
+            test: (s) => s.includes('SamlSsoConfig'),
+            records: [
+              { DeveloperName: 'Internal_IdP', Issuer: null },
+              { DeveloperName: 'Experience_Cloud_IdP', Issuer: null },
+            ],
+          },
+        ]),
+      }),
+      notes,
+      unavailable,
+    );
+    expect(out.ssoConfigs.every((c) => c.issuer === null)).toBe(true);
+    expect(out.ssoConfigKeys).toHaveLength(2);
+    expect(new Set(out.ssoConfigKeys).size).toBe(2);
+    expect(out.ssoConfigKeys.sort()).toEqual(['Experience_Cloud_IdP', 'Internal_IdP']);
   });
 
   it('still returns login data when SSO metadata cannot be retrieved', async () => {

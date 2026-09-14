@@ -64,8 +64,8 @@
       "Acme_Shipment_Event__e"
     ],
     "changeDataCapture": [
-      "Acme_Order_Event__e",
-      "Acme_Shipment_Event__e"
+      "AccountChangeEvent",
+      "Acme_Config__ChangeEvent"
     ],
     "eventRelayConfigured": true
   },
