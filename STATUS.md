@@ -1,6 +1,12 @@
 # OrgIntel M5 hardening status
 
-Working repo: `cclabsnz/sf-orgintel`. Depends on `@cclabsnz/sf-core` from npm (^0.3.0).
+Working repo: `cclabsnz/sf-orgintel`. Depends on `@cclabsnz/sf-core` from npm (^0.6.0).
+
+**M5 is complete and this page is history.** The work that followed it is the three-plan
+convergence onto one canonical org graph, shipped in `0.3.0`: `intel map` and `intel anatomy`
+each emit a graph fragment in the schema `sf-orgviz` also writes, and the three legacy IR
+artifacts are deprecated pending 1.0. Current direction lives in [ROADMAP.md](ROADMAP.md);
+what shipped lives in [CHANGELOG.md](CHANGELOG.md).
 
 | Task | State |
 | --- | --- |

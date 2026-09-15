@@ -27,6 +27,7 @@ no analytics. Same org in, same findings out.
 | `sf intel probe` | *What can this org tell us about itself?* A capability & evidence-coverage probe. |
 | `sf intel discover` | *Where do this org's business processes live?* Anchor-object ranking + domain fingerprint. |
 | `sf intel map` | *Which objects are coupled into cross-cutting processes, and by what automation?* |
+| `sf intel anatomy` | *What is in this org one level above coupling?* Products, personas, channels and integrations. |
 
 Every command supports `--json` (machine output) and `--target-org` per `sf` convention, and
 is strictly read-only against the org (SOQL / Tooling / Metadata reads and describes only).
@@ -94,13 +95,18 @@ fallback) into an object-pair coupling graph, then partitions it into domains.
 | `--branding <file>` / `--prepared-for <name>` | Report branding |
 | `--refresh` | Ignore cached analysis and recompute |
 
-Emits two versioned IR contracts, validated against the JSON Schemas published in
-`@cclabsnz/sf-core`:
+Emits three artifacts, all validated against JSON Schemas published in `@cclabsnz/sf-core`:
 
 | File | Contents |
 | --- | --- |
+| `graph-fragment.json` | The couplings as a canonical graph fragment, in the schema `sf-orgviz` also writes. Carries no object nodes: `sobject` is a kind `sf-orgviz` owns, so `couples` edges stay unresolved until an extraction is merged in |
 | `coupling-graph.json` | Objects with automation counts and 90-day volumes; coupled pairs with weight, operations, contributing components and confidence |
 | `landscape-manifest.json` | Semantic-zoom navigation: L0 domains positioned against each other, L1 objects positioned within each domain |
+
+> **`coupling-graph.json` and `landscape-manifest.json` are deprecated as of `0.3.0`.** They keep
+> their shapes, byte for byte, for the whole `0.x` line and are pinned by golden tests. `1.0`
+> retires them in favour of `graph-fragment.json`, which carries the same facts in a schema shared
+> with `sf-orgviz`. Move consumers across during `0.x`.
 
 **Clustering picks its algorithm by graph density.** A sparse org is often a tree, where
 modularity has no community structure to find and shatters a chain into pairs; a mature org has
@@ -112,6 +118,35 @@ modularity runs with its resolution tuned to `--domain-size`.
 (parsed structure) or `approximate` (regex fallback), and any source that could not be read
 (an unqueryable object, a managed-package flow, a capped record-count sweep) appears in the
 run's notes rather than being silently dropped.
+
+### `sf intel anatomy`
+
+*What is in this org one level above coupling?* Collects which products live in it, who uses it
+on what licence, what it integrates with, and how people authenticate.
+
+| Flag | Effect |
+| --- | --- |
+| `--html` | Also render View A, a seven-band layer map of the same artifact |
+| `--output <dir>` | Where to write the IR and report |
+| `--branding <file>` / `--prepared-for <name>` | Report branding |
+| `--refresh` | Ignore cached analysis and recompute |
+
+| File | Contents |
+| --- | --- |
+| `anatomy-fragment.json` | The anatomy as a canonical graph fragment. Emits only the kinds this tool owns — `site`, `product` and `ssoConfig`. Personas, change data capture and the org-wide counts travel as attribute contributions on nodes `sf-orgviz` owns |
+| `anatomy.json` | Products, personas, channels, capabilities, identity and integration edges in the per-tool IR |
+
+> **`anatomy.json` is deprecated as of `0.3.0`**, on the same terms as `intel map`'s two files:
+> byte-stable for the whole `0.x` line, retired at `1.0` in favour of `anatomy-fragment.json`.
+
+**Detection and attribution are recorded separately.** Every integration edge says how it was
+found and, as a distinct fact, how it was attributed to a product, so a confirmed call with an
+unknown owner is reported as exactly that rather than being assigned to a plausible owner.
+
+**View A adds no org reads.** It renders `anatomy.json` and nothing else. A band whose facts
+were never collected says `not-collected` rather than drawing as empty, and a band with tiles
+still declares what it did not gather — the distinction between "there is nothing here" and
+"nobody looked" is never rounded away.
 
 ## Caching
 

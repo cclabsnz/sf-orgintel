@@ -63,7 +63,8 @@ cover an individual package.
    notes, design docs and generated reports out of the tarball. npm does not read `.gitignore`,
    and it certainly does not read a global one, so a file that never appears in `git status`
    can still ship. This repo generates HTML reports containing real org data; anything outside
-   `lib/`, `LICENSE`, `README.md` and `PERMISSIONS.md` in that listing is a bug.
+   `lib/`, `LICENSE`, `README.md`, `CHANGELOG.md`, `PERMISSIONS.md` and `package.json` in that
+   listing is a bug.
 4. Cut the release. The tag convention is `v` plus the exact `package.json` version:
    ```sh
    gh release create v0.1.0 --target main --title "v0.1.0: <summary>" --notes "<notes>"
@@ -133,8 +134,11 @@ through trusted publishing. Treat it as the same misconfiguration.
 The tarball is an allowlist, not an ignore list:
 
 ```jsonc
-"files": ["/lib", "LICENSE", "README.md", "PERMISSIONS.md", "!/lib/**/*.map"]
+"files": ["/lib", "LICENSE", "README.md", "CHANGELOG.md", "PERMISSIONS.md", "!/lib/**/*.map"]
 ```
+
+`package.json` also appears in the listing no matter what the allowlist says: npm always ships
+it, along with `README`, `LICENSE` and `CHANGELOG`. Those five plus `lib/` are the whole tarball.
 
 `docs/`, `DESIGN_BRIEF.md`, `STATUS.md` and every generated report are deliberately absent.
 Reports produced by this tool contain real object names, record volumes and org structure, and

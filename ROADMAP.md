@@ -3,14 +3,22 @@
 What this plugin intends to do next, and what it does not intend to do. This is a statement
 of current direction, not a set of commitments or dates.
 
-Current published version: **0.1.0**. Substantial work has landed on `main` since, listed in
-[CHANGELOG.md](CHANGELOG.md) under Unreleased.
+Current published version: **0.3.0**. Everything on `main` is released; see
+[CHANGELOG.md](CHANGELOG.md).
 
 ## Now
 
-- **Release 0.2.0.** `0.1.0` is the only published version and carries no provenance
-  attestation, so every installable copy today is unverifiable. Everything needed is already
-  configured; the release simply has to be cut. This is the single highest-value open item.
+- **Cut 1.0 and retire the legacy outputs.** `coupling-graph.json`,
+  `landscape-manifest.json` and `anatomy.json` are deprecated as of `0.3.0` and duplicate facts
+  the canonical fragments already carry. Holding two representations of the same org is the cost
+  §1.4 of `CONVERGENCE_SPEC.md` accepted deliberately, and 1.0 is where it is paid off. This is
+  the single highest-value open item, and it is a breaking change: the `0.x` line is the
+  migration window.
+- **Give the seven counts real producers.** `flows`, `apexClasses`, `apexTriggers`, `lwc`,
+  `aura`, `externalDataSources` and `remoteSites` travel as measurements contributed onto
+  `org.root`, not as projections over nodes anyone owns. Until they have producers, `anatomy` is
+  a report carrying seven numbers rather than a projection by construction. This is the work that
+  finishes the convergence, and it should land before 1.0 freezes what the fragments promise.
 - **View A hardening on more orgs.** Three of View A's paths are still exercised only by
   fixtures, because neither verification org triggered them: the empty band, the
   not-collected band, and the hatched not-read tile. They need an org that is missing a
