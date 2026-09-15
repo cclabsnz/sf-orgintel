@@ -24,10 +24,10 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
   public static description =
     'Parses Active flows (Flow XML) and Apex (SymbolTable, with a body-regex fallback) to build a cross-object ' +
     'coupling graph: object-pair couplings aggregated across flows, triggers, and classes with weights, ' +
-    'operations, contributing components, and confidence. Emits coupling-graph.json and landscape-manifest.json ' +
-    '(versioned IR contracts), plus graph-fragment.json — the same facts rendered as sf-orgintel\'s ' +
-    'contribution to the shared canonical org graph — and, with --html, a branded report with a static coupling ' +
-    'graph. Read-only and deterministic: same org in, same graph out.';
+    'operations, contributing components, and confidence. Emits graph-fragment.json, sf-orgintel\'s contribution ' +
+    'to the shared canonical org graph, plus coupling-graph.json and landscape-manifest.json — the same facts ' +
+    'in the older per-tool IR, deprecated since 0.3.0 and retired at 1.0 — and, with --html, a branded ' +
+    'report with a static coupling graph. Read-only and deterministic: same org in, same graph out.';
   public static examples = [
     '<%= config.bin %> <%= command.id %> --target-org myOrg',
     '<%= config.bin %> <%= command.id %> --target-org myOrg --html --output ./reports',

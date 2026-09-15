@@ -12,6 +12,101 @@ canonical published note and carries the provenance attestation and CycloneDX SB
 
 Nothing yet.
 
+## [0.3.0] — 2026-09-15
+
+Both analysis commands now emit their findings a second time as a **canonical graph fragment**,
+in the schema `@cclabsnz/sf-orgviz` also writes, so the two tools describe one org instead of two.
+This release is additive: `coupling-graph.json`, `landscape-manifest.json` and `anatomy.json` are
+byte-identical to `0.2.0`, pinned by golden tests, and a consumer that does not know about the
+fragments is unaffected.
+
+### Added
+
+- **`graph-fragment.json`, written by `sf intel map`** alongside the two existing artifacts. The
+  coupling analysis is unchanged — that analysis is the command — but its output is now also
+  rendered as a `CanonicalGraph` fragment. The fragment carries no object nodes on purpose:
+  `sobject` is a kind `sf-orgviz` owns and the merge refuses a fragment emitting a kind belonging
+  to someone else, so `couples` edges point at ids this fragment never declares. It therefore does
+  not validate standalone; every such endpoint stays unresolved until an extraction is merged in,
+  which is the normal case rather than a defect. (#22)
+- **`anatomy-fragment.json`, written by `sf intel anatomy`**, emitting only the three kinds
+  `sf-orgintel` owns: `site` (channels of type `site`), `product` (derived, carrying a rule that
+  names `buildPrefixRegistry`'s mining) and `ssoConfig`. Personas, change data capture and the
+  seven org-wide counts travel as attribute contributions on `profile.*`, `obj.*` and `org.root`
+  rather than as new nodes, because those entities belong to `sf-orgviz` or measure the org as a
+  whole. Built from the artifact's own assembled fields, so the two files cannot describe
+  different products, channels or capability counts for one run. (#23)
+- **The seven anatomy bands are now a view spec** — a saved selector plus band order in
+  `src/anatomy/view/spec.ts` — proven to reproduce exactly the band membership, emptiness, note
+  and caveats that `buildBands` produces from the same artifact. A band whose facts nobody
+  collected still reads `not-collected` rather than rendering as empty. No rendering behaviour
+  changed. (#23)
+- **Every declined integration edge is now counted.** Unattributed edges, `RemoteProxy`
+  destinations, edges with no `NamedCredential` hop to resolve a target from, and non-site
+  channels each record a scope, reason and detail in `coverage.unavailable` instead of being
+  silently dropped. (#23)
+- Golden tests pinning `coupling-graph.json`, `landscape-manifest.json` and `anatomy.json` byte
+  for byte, with provenance fixed in the fixture so the comparison is not a test of the clock.
+  These are the load-bearing evidence that deriving the artifacts alongside a graph lost nothing.
+  (#22, #23)
+
+### Changed
+
+- **Objects are classified by `@cclabsnz/sf-core`'s `roleOf`, not by a local copy.** The two
+  implementations were the same function, and two implementations of one classification can
+  disagree about a real org. The golden artifacts are unchanged, which is the evidence that this
+  deleted a copy rather than altered a behaviour. (#22)
+- `@cclabsnz/sf-core` raised to `^0.6.0` for the three new graph kinds. The golden anatomy fixture
+  is byte-identical across the bump, so it is inert. (#23)
+- `capabilities.changeDataCapture` contributions now target the object a change event publishes
+  for, not `obj.<change-event-name>`. Both the standard and custom event naming shapes are mapped
+  back to the base object. (#23)
+
+### Fixed
+
+- **Anatomy fragment node ids no longer collide.** `ssoConfig` and `site` ids were built from
+  issuer and name, which are neither unique nor guaranteed present, and two issuer-less SSO
+  configs or two unnamed sites collapsed onto one id — which makes `mergeGraphs` return a null
+  graph for the entire merge. Both collectors now thread a stable key
+  (`SamlSsoConfig.DeveloperName`, `Site.SiteName`), and a still-colliding pair becomes one node
+  with a `coverage.unavailable` entry rather than two nodes sharing an id. (#23)
+- **Integration edges resolve to a target that exists.** The fragment targeted
+  `namedCredential.<endpoint>`, but `sf-orgviz` writes named credentials as
+  `ncred.<DeveloperName>` and the endpoint is frequently a URL. Every such edge could never
+  resolve, on every real run. An edge is emitted only where its via chain carries a
+  `NamedCredential` hop, whose DeveloperName is the target; the endpoint travels as evidence. (#23)
+- **`intel map`'s fragment used the wrong known-object set.** It derived `known` from the merged
+  coupling edges rather than the sobject catalog `runMap` already holds, which dropped `touches`
+  edges for objects that never formed a coupling pair and knocked `analyzeApex` off its
+  SymbolTable branch onto the regex fallback — letting a body that merely mentions an object in
+  dynamic SOQL assert a coupling the coupling graph never made. (#22)
+- **`couples` edges carry honest provenance.** They were marked `source: 'metadata'`, but they are
+  pairwise co-reference inferences plus a direction heuristic, not facts read off a SymbolTable or
+  Flow XML. They now carry `source: 'derived'` with the rule `map.coupling.pairwise-co-reference`,
+  which is what the schema's validator already required. (#22)
+- `automationCounts` contributed three of its four fields; `workflowRules` was computed and then
+  dropped. (#22)
+- Integration edges sharing from, to and kind are grouped into one edge carrying the union of
+  their endpoints, via chains, detections and attributions, instead of one edge per raw
+  `IntegrationEdge`. (#23)
+- Fragment nodes, edges and contributions sort by codepoint comparison rather than `localeCompare`,
+  matching the merge's own ordering. (#22, #23)
+- `couplingGraph.ts` is no longer treated by git as a binary file. (#22)
+
+### Security
+
+- `fast-uri` pin raised to `^3.1.6`, clearing four high advisories. (#21)
+- A release attaches one CycloneDX SBOM, not two. (#20)
+
+### Deprecated
+
+- **`coupling-graph.json`, `landscape-manifest.json` and `anatomy.json` are deprecated.** They
+  keep their shapes and their byte-for-byte guarantee for the whole `0.x` line, and are now
+  computed alongside the canonical graph rather than from a private model. `sf-orgintel` 1.0 will
+  retire them in favour of `graph-fragment.json` and `anatomy-fragment.json`, which carry the same
+  facts in a schema shared with `sf-orgviz`. See `CONVERGENCE_SPEC.md` §1.4. Consumers should move
+  to the fragments during `0.x`; this notice is the migration window.
+
 ## [0.2.0] — 2026-08-25
 
 ### Added
@@ -75,6 +170,7 @@ Apex, with a branded HTML report behind `--html`.
 publishing was configured for this package. Every release from `0.2.0` onward carries one
 automatically. See [SECURITY.md](SECURITY.md).
 
-[Unreleased]: https://github.com/cclabsnz/sf-orgintel/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/cclabsnz/sf-orgintel/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/cclabsnz/sf-orgintel/releases/tag/v0.3.0
 [0.2.0]: https://github.com/cclabsnz/sf-orgintel/releases/tag/v0.2.0
 [0.1.0]: https://github.com/cclabsnz/sf-orgintel/releases/tag/v0.1.0
