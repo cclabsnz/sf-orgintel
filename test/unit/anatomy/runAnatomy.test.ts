@@ -126,4 +126,38 @@ describe('runAnatomy', () => {
     expect(bands.find((b) => b.id === 'integration')!.emptiness).not.toBe('not-collected');
     expect(bands.find((b) => b.id === 'external')!.emptiness).not.toBe('not-collected');
   });
+  it('marks a refused capability census in the fragment, not only in the artifact', async () => {
+    // The end-to-end guard on the unmarked-zero path. `collectCapabilities` returns 0 from a
+    // refused COUNT(Id) and records the refusal in `artifact.coverage.unavailable`; the fragment
+    // contributes that 0 to `org.root` as `flows`. The fragment's own `unavailable` list used to
+    // be built fresh from locally derived pushes only, so the refusal never crossed over and the
+    // graph carried a zero indistinguishable from a measured one -- while spec 2.1 invites a
+    // consumer to subtract `intel map`'s analysed count from exactly that number.
+    //
+    // Driven through `runAnatomy` rather than by handing `buildAnatomyFragment` a list, so it
+    // fails if the plumbing between the two is ever removed.
+    const ctx: any = {
+      tooling: mockTooling([
+        { test: (s: string) => s.includes('COUNT(Id) FROM FlowDefinition'), error: new Error('INSUFFICIENT_ACCESS') },
+        { test: () => true, records: [] },
+      ]),
+      soql: mockSoql([{ test: () => true, records: [], totalSize: 0 }]),
+      rest: mockRest([]),
+      metadata: { list: async () => [] },
+    };
+
+    const { artifact, fragment } = await runAnatomy(ctx, prov);
+
+    // The census reads 0 and the org.root contribution repeats it -- neither is wrong on its
+    // own, and neither is interpretable without the marker.
+    expect(artifact.capabilities.flows).toBe(0);
+    const root = fragment.contributions?.find((c) => c.nodeId === 'org.root');
+    expect(root?.attrs.flows).toBe(0);
+
+    const marked = fragment.coverage.unavailable.find((u) => u.scope === 'capabilities.flows');
+    expect(marked).toBeDefined();
+    expect(marked?.reason).toBe('failed');
+    // The artifact already said so; the point is that the fragment now says so too.
+    expect(artifact.coverage.unavailable.some((u) => u.scope === 'capabilities.flows')).toBe(true);
+  });
 });
