@@ -43,9 +43,9 @@ export interface RetrievalCensus {
   /**
    * What was actually parsed and therefore reached the graph -- never simply "what was
    * listed". A flow whose metadata could not be read, or whose XML would not parse, is
-   * listed but not analysed, and so is a trigger whose object could not be resolved. Each
-   * such drop is noted, so the gap between the two numbers is always explained somewhere
-   * in the run's notes.
+   * listed but not analysed; so is an Apex class with neither a body nor a SymbolTable, and
+   * a trigger whose object could not be resolved. Each such drop is noted, so the gap
+   * between the two numbers is always explained somewhere in the run's notes.
    */
   analysed: number;
 }
@@ -153,7 +153,7 @@ export async function retrieveApex(
     // SymbolTable instead; one with neither is not cacheable and is passed through.
     const listed = await apex.listClasses();
     classesListed = listed.length;
-    classes = await Promise.all(
+    const resolved = await Promise.all(
       listed.map(async (c) => {
         const input: ApexClassInput = {
           name: c.name,
@@ -166,6 +166,25 @@ export async function retrieveApex(
         return cache.memoize('apex', key, () => input);
       }),
     );
+    // A class with neither a body nor a SymbolTable cannot be analysed at all: `analyzeApex`
+    // has nothing to regex and nothing to walk, so it yields no objects, contributes no
+    // coupling edge and no `touches` edge to the fragment. The usual cause is managed-package
+    // code, whose body the platform returns as the literal `(hidden)` (normalised to null by
+    // sf-core's `usableApexBody`) and whose SymbolTable is frequently withheld too. Counting
+    // those as analysed made `analysed` a copy of `listed` and "Apex classes: 412 of 412" a
+    // tautology on every successful run, hiding exactly the half of the coverage gap spec 2
+    // calls "the classes nobody could read". They are dropped from the analysed population the
+    // same way an unresolvable trigger is, with one aggregated note rather than one per class:
+    // a managed-heavy org has hundreds of them, and hundreds of near-identical lines would
+    // drown the very report this is meant to qualify (same rule as the managed-flow note above).
+    const unreadable = resolved.filter((c) => !c.body && !c.symbolTable);
+    if (unreadable.length > 0) {
+      notes.push(
+        `${unreadable.length} Apex class(es) have neither a readable body nor a SymbolTable ` +
+          '(typically managed-package code); excluded from coupling.',
+      );
+    }
+    classes = resolved.filter((c) => !!c.body || !!c.symbolTable);
   } catch (e) {
     notes.push(`ApexClass is not queryable; class coupling skipped. (${describeSalesforceError(e)})`);
   }
@@ -180,6 +199,13 @@ export async function retrieveApex(
       body: t.body,
       symbolTable: null,
     }));
+    // Deliberately NOT the class predicate above. A trigger whose body is withheld but whose
+    // object resolves has still been analysed in the only sense that matters here: it reaches
+    // the graph as a `trigger.<name>` node carrying the object it fires on, and it takes its
+    // place in that object's order-of-execution timeline (`objectTimelines`). The object is
+    // the analysable fact about a trigger; the body only adds the objects it goes on to touch.
+    // A trigger whose object cannot be resolved has nowhere to sit in either structure, which
+    // is why that, and only that, is the drop.
     for (const t of resolved) {
       if (!t.object) {
         notes.push(`Trigger ${t.name} has no resolvable object; excluded from coupling.`);

@@ -163,6 +163,58 @@ describe('retrieveApex', () => {
     expect(notes.join(' ')).toContain('OrphanTrigger');
   });
 
+  it('does not count a class it could not read as a class it analysed', async () => {
+    // A managed-package class comes back with its body withheld (the platform returns the
+    // literal '(hidden)', which sf-core normalises to null) and frequently no SymbolTable
+    // either. `analyzeApex` has nothing to work from, so it yields no objects and the class
+    // contributes no edge anywhere. Counting it as analysed made `analysed` a copy of `listed`
+    // and "Apex classes: N of N" a tautology on every successful run — which hid precisely the
+    // "classes nobody could read" half of the coverage gap. Spec 2.
+    const tooling = mockTooling([
+      {
+        test: (q) => q.includes('FROM ApexClass'),
+        records: [
+          { Name: 'Svc', NamespacePrefix: null, Body: 'class Svc {}', SymbolTable: null },
+          { Name: 'Sealed', NamespacePrefix: 'mp', Body: '(hidden)', SymbolTable: null },
+          { Name: 'StructureOnly', NamespacePrefix: 'mp', Body: '(hidden)', SymbolTable: { tableDeclaration: {} } },
+        ],
+      },
+      { test: (q) => q.includes('FROM ApexTrigger'), records: [] },
+    ]);
+    const notes: string[] = [];
+
+    const { classes, classCensus } = await retrieveApex(ctxOf(mockSoql([]), tooling), resolver, notes);
+
+    // Listed all three. Analysed the two that carried something to analyse: a body, or a
+    // SymbolTable standing in for one.
+    expect(classCensus).toEqual({ listed: 3, analysed: 2 });
+    expect(classes.map((c) => c.name)).toEqual(['Svc', 'mp__StructureOnly']);
+    // One aggregated note, not one per class: a managed-heavy org has hundreds of these.
+    const dropped = notes.filter((n) => /neither a readable body nor a SymbolTable/.test(n));
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0]).toContain('1 Apex class');
+  });
+
+  it('still counts a body-less trigger as analysed when its object resolves', async () => {
+    // Deliberately not the class rule. A trigger whose body is withheld still reaches the
+    // graph: it becomes a `trigger.<name>` node carrying the object it fires on, and it takes
+    // its place in that object's order-of-execution timeline. The object is the analysable
+    // fact about a trigger, so only an unresolvable object is a real drop.
+    const tooling = mockTooling([
+      { test: (q) => q.includes('FROM ApexClass'), records: [] },
+      {
+        test: (q) => q.includes('FROM ApexTrigger'),
+        records: [{ Name: 'Sealed', NamespacePrefix: 'mp', TableEnumOrId: 'Account', Body: '(hidden)' }],
+      },
+    ]);
+    const notes: string[] = [];
+
+    const { triggers, triggerCensus } = await retrieveApex(ctxOf(mockSoql([]), tooling), resolver, notes);
+
+    expect(triggerCensus).toEqual({ listed: 1, analysed: 1 });
+    expect(triggers[0].object).toBe('Account');
+  });
+
   it('leaves both Apex denominators unset when both listing reads are refused', async () => {
     // Same rule as the flow path: a refused read reports no denominator at all. Before this,
     // both counters were initialised to 0 and the catch blocks left them there, so a refused
