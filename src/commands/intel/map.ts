@@ -17,6 +17,10 @@ interface MapCommandResult {
   flowsAnalyzed: number;
   apexClassesAnalyzed: number;
   apexTriggersAnalyzed: number;
+  /** Same names as MapReportInput's, so the --html and --json paths cannot drift apart. */
+  flowsListed?: number;
+  apexClassesListed?: number;
+  apexTriggersListed?: number;
 }
 
 /**
@@ -50,6 +54,27 @@ export function buildMapReportInput(params: {
     apexTriggersListed: result.apexTriggersListed,
     generatedAt: result.couplingGraph.provenance.generatedAt,
     branding,
+  };
+}
+
+/**
+ * Assembles the --json result from a run result. Same reasoning as `buildMapReportInput`: a
+ * plain function the field-forwarding can be tested against, rather than something only visible
+ * inside a live command invocation. Reuses the same field names as `MapReportInput` on purpose --
+ * the HTML and JSON outputs describe the same run, and a name drift between them is how one path
+ * quietly stops telling the truth the other one does.
+ */
+export function buildMapCommandResult(result: MapRunResult): MapCommandResult {
+  return {
+    couplingGraph: result.couplingGraph,
+    manifest: result.manifest,
+    fragment: result.fragment,
+    flowsAnalyzed: result.flowsAnalyzed,
+    apexClassesAnalyzed: result.apexClassesAnalyzed,
+    apexTriggersAnalyzed: result.apexTriggersAnalyzed,
+    flowsListed: result.flowsListed,
+    apexClassesListed: result.apexClassesListed,
+    apexTriggersListed: result.apexTriggersListed,
   };
 }
 
@@ -162,14 +187,7 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
     this.printSummary(result, evidenceTier);
     for (const note of result.notes) this.log(`  note: ${note}`);
 
-    return {
-      couplingGraph: result.couplingGraph,
-      manifest: result.manifest,
-      fragment: result.fragment,
-      flowsAnalyzed: result.flowsAnalyzed,
-      apexClassesAnalyzed: result.apexClassesAnalyzed,
-      apexTriggersAnalyzed: result.apexTriggersAnalyzed,
-    };
+    return buildMapCommandResult(result);
   }
 
   private printSummary(result: { couplingGraph: CouplingGraph; clusters: unknown[] }, tier: EvidenceTier | null): void {
