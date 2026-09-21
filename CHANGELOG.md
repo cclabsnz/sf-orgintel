@@ -17,8 +17,10 @@ already known at retrieval time on both sides, so this costs no extra org read.
 
 **If you are upgrading, expect numbers to move for an unchanged org.** `Apex classes: 412 of 412`
 becomes something like `398 of 412`, because a class nobody could read is no longer counted as one
-that was analysed. Nothing about the coupling analysis changed and no artifact's bytes moved; what
-changed is what the tool claims about its own coverage.
+that was analysed. Nothing about the coupling analysis changed; the three deprecated artifacts
+(`coupling-graph.json`, `landscape-manifest.json`, `anatomy.json`) remain byte-identical, but the
+fragments do change. On a managed-heavy org, `graph-fragment.json` will show fewer `apexClass`
+nodes because classes that could never be read are no longer counted as analysed.
 
 ### Added
 
