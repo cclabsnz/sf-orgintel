@@ -12,12 +12,41 @@ export interface RetrieveFlowOptions {
   includeInactive?: boolean;
 }
 
-/** What a retrieval listed versus what it could analyse. Both numbers are already known at
- *  retrieval time; neither costs an extra org read. */
+/**
+ * What a retrieval listed versus what it could analyse. Both numbers are already known at
+ * retrieval time; neither costs an extra org read.
+ *
+ * This is `intel map`'s own denominator, NOT the org-wide census `intel anatomy` reports.
+ * The two measure different SObjects and will legitimately disagree:
+ *   - `listed` here is the row count of what THIS user's session could read from
+ *     `FlowDefinitionView` / `ApexClass` / `ApexTrigger` through the Tooling and data APIs.
+ *   - `intel anatomy`'s `capabilities.flows` is `SELECT COUNT(Id) FROM FlowDefinition`
+ *     (src/anatomy/collectors/capabilities.ts), a different object with different row
+ *     visibility rules.
+ * Neither is a defective version of the other, and neither should be substituted for the
+ * other. Spec 2 and 2.1.
+ */
 export interface RetrievalCensus {
-  /** Everything the org returned for this kind. */
-  listed: number;
-  /** What survived selection and parsing, and therefore reached the graph. */
+  /**
+   * Everything the org returned for this kind to THIS user, on this run.
+   *
+   * Optional on purpose, and the single most load-bearing decision in this type. When the
+   * listing read is refused there is no denominator, and `0` is not the answer: it asserts
+   * the org contains none of this kind, and alongside `analysed: 0` it further asserts that
+   * all of them were analysed. Absent means "not measured", which is the truth on every
+   * catch path, and it is what every downstream optional (`MapRunResult.flowsListed?`,
+   * `MapReportInput.flowsListed?`, `MapCommandResult.flowsListed?`) and `analysedOf`'s
+   * undefined branch in src/report/mapReport.ts were built to carry. Leave it unset rather
+   * than defaulting it anywhere.
+   */
+  listed?: number;
+  /**
+   * What was actually parsed and therefore reached the graph -- never simply "what was
+   * listed". A flow whose metadata could not be read, or whose XML would not parse, is
+   * listed but not analysed, and so is a trigger whose object could not be resolved. Each
+   * such drop is noted, so the gap between the two numbers is always explained somewhere
+   * in the run's notes.
+   */
   analysed: number;
 }
 
@@ -54,7 +83,10 @@ export async function retrieveFlows(
     definitions = await flows.listDefinitions();
   } catch (e) {
     notes.push(`FlowDefinitionView is not queryable; flow coupling skipped. (${describeSalesforceError(e)})`);
-    return { summaries: [], census: { listed: 0, analysed: 0 } };
+    // No `listed`. The read was refused, so nothing was counted; reporting 0 here would
+    // render as "0 of 0" -- the org has no flows, and we analysed all of them -- which is a
+    // stronger and more wrong claim than the bare, uninformative 0 that `analysed` alone gives.
+    return { summaries: [], census: { analysed: 0 } };
   }
 
   const { versions, managedSkipped } = FlowRepository.selectVersions(definitions, opts);
@@ -111,8 +143,9 @@ export async function retrieveApex(
   const apex = new ApexRepository(ctx.tooling);
   let classes: ApexClassInput[] = [];
   let triggers: ApexTriggerInput[] = [];
-  let classesListed = 0;
-  let triggersListed = 0;
+  // Undefined, not 0: an unset denominator on the catch paths below. See `RetrievalCensus.listed`.
+  let classesListed: number | undefined;
+  let triggersListed: number | undefined;
 
   try {
     // Bodies are cheap to fetch but not to analyse, so the derived shape is memoised by a
