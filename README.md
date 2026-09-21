@@ -103,10 +103,11 @@ Emits three artifacts, all validated against JSON Schemas published in `@cclabsn
 | `coupling-graph.json` | Objects with automation counts and 90-day volumes; coupled pairs with weight, operations, contributing components and confidence |
 | `landscape-manifest.json` | Semantic-zoom navigation: L0 domains positioned against each other, L1 objects positioned within each domain |
 
-> **`coupling-graph.json` and `landscape-manifest.json` are deprecated as of `0.3.0`.** They keep
-> their shapes, byte for byte, for the whole `0.x` line and are pinned by golden tests. `1.0`
-> retires them in favour of `graph-fragment.json`, which carries the same facts in a schema shared
-> with `sf-orgviz`. Move consumers across during `0.x`.
+> **`coupling-graph.json` and `landscape-manifest.json` are deprecated as of `0.3.0`**, on
+> different terms. `coupling-graph.json` is carried field for field by `graph-fragment.json`;
+> move consumers across during `0.x`. `landscape-manifest.json` is not, and cannot be: it holds
+> computed layout coordinates, which the canonical graph deliberately does not store. At 1.0 its
+> levels become a view resolved from the merged graph at render time.
 
 **Clustering picks its algorithm by graph density.** A sparse org is often a tree, where
 modularity has no community structure to find and shatters a chain into pairs; a mature org has
@@ -136,8 +137,8 @@ on what licence, what it integrates with, and how people authenticate.
 | `anatomy-fragment.json` | The anatomy as a canonical graph fragment. Emits only the kinds this tool owns — `site`, `product` and `ssoConfig`. Personas, change data capture and the org-wide counts travel as attribute contributions on nodes `sf-orgviz` owns |
 | `anatomy.json` | Products, personas, channels, capabilities, identity and integration edges in the per-tool IR |
 
-> **`anatomy.json` is deprecated as of `0.3.0`**, on the same terms as `intel map`'s two files:
-> byte-stable for the whole `0.x` line, retired at `1.0` in favour of `anatomy-fragment.json`.
+> **`anatomy.json` is deprecated as of `0.3.0`.** It is carried by `anatomy-fragment.json` plus
+> the band view spec, byte-stable for the whole `0.x` line, and retired at 1.0.
 
 **Detection and attribution are recorded separately.** Every integration edge says how it was
 found and, as a distinct fact, how it was attributed to a product, so a confirmed call with an
