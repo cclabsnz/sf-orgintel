@@ -85,6 +85,22 @@ describe('retrieveFlows', () => {
     // permissions problem from a wrong-API bug, which is what hid this for a whole milestone.
     expect(notes.some((n) => n.includes('INSUFFICIENT_ACCESS'))).toBe(true);
   });
+
+  it('leaves the census denominator unset when the listing read is refused', async () => {
+    // The whole reason `listed` is optional. A refused read has measured nothing, so there is
+    // no denominator. Reporting 0 renders as "0 of 0" downstream, which asserts two false
+    // things at once: that the org holds no flows, and that every one of them was analysed.
+    // Absent is the only honest value, and `analysedOf` already drops the denominator for it.
+    const soql = mockSoql([
+      { test: (q) => q.includes('FROM FlowDefinitionView'), error: new Error('INSUFFICIENT_ACCESS') },
+    ]);
+
+    const { census } = await retrieveFlows(ctxOf(soql, toolingRejectingStandardObjects([])), {}, []);
+
+    expect(census.listed).toBeUndefined();
+    expect(census).not.toHaveProperty('listed', 0);
+    expect(census.analysed).toBe(0);
+  });
 });
 
 describe('retrieveApex', () => {
@@ -145,6 +161,26 @@ describe('retrieveApex', () => {
     expect(triggers.map((t) => t.name)).toEqual(['GoodTrigger']);
     expect(triggerCensus).toEqual({ listed: 2, analysed: 1 });
     expect(notes.join(' ')).toContain('OrphanTrigger');
+  });
+
+  it('leaves both Apex denominators unset when both listing reads are refused', async () => {
+    // Same rule as the flow path: a refused read reports no denominator at all. Before this,
+    // both counters were initialised to 0 and the catch blocks left them there, so a refused
+    // ApexClass read rendered "0 of 0" and emitted "apexClassesListed": 0 in --json.
+    const tooling = mockTooling([
+      { test: (q) => q.includes('FROM ApexClass'), error: new Error('INSUFFICIENT_ACCESS') },
+      { test: (q) => q.includes('FROM ApexTrigger'), error: new Error('INSUFFICIENT_ACCESS') },
+    ]);
+    const notes: string[] = [];
+
+    const { classCensus, triggerCensus } = await retrieveApex(ctxOf(mockSoql([]), tooling), resolver, notes);
+
+    expect(classCensus.listed).toBeUndefined();
+    expect(triggerCensus.listed).toBeUndefined();
+    expect(classCensus.analysed).toBe(0);
+    expect(triggerCensus.analysed).toBe(0);
+    expect(notes.some((n) => n.includes('ApexClass is not queryable'))).toBe(true);
+    expect(notes.some((n) => n.includes('ApexTrigger is not queryable'))).toBe(true);
   });
 });
 
