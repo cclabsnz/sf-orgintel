@@ -109,6 +109,19 @@ describe('the map fragment in a merge', () => {
     expect(account.attrs.role).toBe(roleOf('Account'));
   });
 
+  it('lands the analysed counts on org.root, namespaced under orgintel', () => {
+    const fragment = buildMapFragment(input());
+    const ids = idsOwnedByOtherProducer(fragment);
+    const { graph, findings } = mergeGraphs([extraction(ids, fragment.capturedAt, fragment.orgId), fragment]);
+    expect(findings).toEqual([]);
+    const root = graph!.nodes.find((n) => n.id === 'org.root')!;
+    // Namespaced, so "who asserted this" stays answerable, same as the object contributions
+    // above -- and so the census intel anatomy contributes to this node (unnamespaced today,
+    // or under its own namespace) is never overwritten by this fragment's number.
+    expect(root.attrs.orgintel).toMatchObject({ analysed: { flows: 2, apexClasses: 1, apexTriggers: 0 } });
+    expect(root.attrs).not.toHaveProperty('analysed');
+  });
+
   it('reports every endpoint as unresolved when the extraction is absent', () => {
     // The fragment is deliberately not standalone-valid: its coupling and touches edges point at
     // objects it never declares, because `sobject` belongs to the other producer. This pins that
