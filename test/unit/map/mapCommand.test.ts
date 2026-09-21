@@ -1,7 +1,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { DEFAULT_BRANDING } from '@cclabsnz/sf-core';
 import type { CouplingGraph } from '@cclabsnz/sf-core';
-import { buildMapReportInput } from '../../../src/commands/intel/map.js';
+import { buildMapReportInput, buildMapCommandResult } from '../../../src/commands/intel/map.js';
 import { renderMapHtml } from '../../../src/report/mapReport.js';
 import type { MapRunResult } from '../../../src/map/runMap.js';
 
@@ -96,5 +96,48 @@ describe('buildMapReportInput', () => {
 
     expect(html).toContain('210');
     expect(html).not.toContain('210 of');
+  });
+});
+
+/**
+ * `buildMapCommandResult` is the JSON-path counterpart to `buildMapReportInput`: what `run()`
+ * returns for `--json` (and for `this.printSummary` consumers reading the resolved value). Spec
+ * 2.1 states both numbers "wherever it states a count" -- `MapCommandResult` states
+ * `flowsAnalyzed`, so it owes the same denominator the HTML report now carries. Same rationale as
+ * above: this is the exact function `run()` calls for the returned/`--json` shape, so a caller
+ * that stops forwarding the listed fields fails here without needing a live org connection.
+ */
+describe('buildMapCommandResult', () => {
+  it('forwards the listed counts from the run result onto the JSON result', () => {
+    const commandResult = buildMapCommandResult(baseResult());
+
+    expect(commandResult.flowsListed).toBe(340);
+    expect(commandResult.apexClassesListed).toBe(9);
+    expect(commandResult.apexTriggersListed).toBe(4);
+  });
+
+  it('leaves the listed fields undefined, not zeroed, when the run result carries no census', () => {
+    const result = baseResult();
+    result.flowsListed = undefined;
+    result.apexClassesListed = undefined;
+    result.apexTriggersListed = undefined;
+
+    const commandResult = buildMapCommandResult(result);
+
+    expect(commandResult.flowsListed).toBeUndefined();
+    expect(commandResult.apexClassesListed).toBeUndefined();
+    expect(commandResult.apexTriggersListed).toBeUndefined();
+  });
+
+  it('still carries the analysed counts and the IR artifacts untouched', () => {
+    const result = baseResult();
+    const commandResult = buildMapCommandResult(result);
+
+    expect(commandResult.flowsAnalyzed).toBe(210);
+    expect(commandResult.apexClassesAnalyzed).toBe(3);
+    expect(commandResult.apexTriggersAnalyzed).toBe(2);
+    expect(commandResult.couplingGraph).toBe(result.couplingGraph);
+    expect(commandResult.manifest).toBe(result.manifest);
+    expect(commandResult.fragment).toBe(result.fragment);
   });
 });
