@@ -12,6 +12,27 @@ export interface RetrieveFlowOptions {
   includeInactive?: boolean;
 }
 
+/** What a retrieval listed versus what it could analyse. Both numbers are already known at
+ *  retrieval time; neither costs an extra org read. */
+export interface RetrievalCensus {
+  /** Everything the org returned for this kind. */
+  listed: number;
+  /** What survived selection and parsing, and therefore reached the graph. */
+  analysed: number;
+}
+
+export interface FlowRetrieval {
+  summaries: FlowSummary[];
+  census: RetrievalCensus;
+}
+
+export interface ApexRetrieval {
+  classes: ApexClassInput[];
+  triggers: ApexTriggerInput[];
+  classCensus: RetrievalCensus;
+  triggerCensus: RetrievalCensus;
+}
+
 /** Concurrent Tooling requests in flight while fetching flow metadata. */
 const FLOW_CONCURRENCY = 8;
 
@@ -25,7 +46,7 @@ export async function retrieveFlows(
   opts: RetrieveFlowOptions,
   notes: string[],
   cache?: OrgIntelCache,
-): Promise<FlowSummary[]> {
+): Promise<FlowRetrieval> {
   const flows = new FlowRepository(ctx.soql, ctx.tooling);
 
   let definitions;
@@ -33,7 +54,7 @@ export async function retrieveFlows(
     definitions = await flows.listDefinitions();
   } catch (e) {
     notes.push(`FlowDefinitionView is not queryable; flow coupling skipped. (${describeSalesforceError(e)})`);
-    return [];
+    return { summaries: [], census: { listed: 0, analysed: 0 } };
   }
 
   const { versions, managedSkipped } = FlowRepository.selectVersions(definitions, opts);
@@ -73,7 +94,8 @@ export async function retrieveFlows(
 
   // Deterministic regardless of cache-hit and completion ordering.
   notes.sort();
-  return summaries.sort((a, b) => a.apiName.localeCompare(b.apiName));
+  summaries.sort((a, b) => a.apiName.localeCompare(b.apiName));
+  return { summaries, census: { listed: definitions.length, analysed: summaries.length } };
 }
 
 /**
@@ -85,17 +107,21 @@ export async function retrieveApex(
   resolver: ObjectResolver,
   notes: string[],
   cache?: OrgIntelCache,
-): Promise<{ classes: ApexClassInput[]; triggers: ApexTriggerInput[] }> {
+): Promise<ApexRetrieval> {
   const apex = new ApexRepository(ctx.tooling);
   let classes: ApexClassInput[] = [];
   let triggers: ApexTriggerInput[] = [];
+  let classesListed = 0;
+  let triggersListed = 0;
 
   try {
     // Bodies are cheap to fetch but not to analyse, so the derived shape is memoised by a
     // hash of the source. A class whose body is withheld (managed package) is keyed by its
     // SymbolTable instead; one with neither is not cacheable and is passed through.
+    const listed = await apex.listClasses();
+    classesListed = listed.length;
     classes = await Promise.all(
-      (await apex.listClasses()).map(async (c) => {
+      listed.map(async (c) => {
         const input: ApexClassInput = {
           name: c.name,
           namespace: c.namespace,
@@ -112,18 +138,29 @@ export async function retrieveApex(
   }
 
   try {
-    triggers = (await apex.listTriggers())
-      .map((t) => ({
-        name: t.name,
-        namespace: t.namespace,
-        object: resolver.resolve(t.tableEnumOrId) ?? t.tableEnumOrId,
-        body: t.body,
-        symbolTable: null,
-      }))
-      .filter((t) => !!t.object);
+    const listed = await apex.listTriggers();
+    triggersListed = listed.length;
+    const resolved = listed.map((t) => ({
+      name: t.name,
+      namespace: t.namespace,
+      object: resolver.resolve(t.tableEnumOrId) ?? t.tableEnumOrId,
+      body: t.body,
+      symbolTable: null,
+    }));
+    for (const t of resolved) {
+      if (!t.object) {
+        notes.push(`Trigger ${t.name} has no resolvable object; excluded from coupling.`);
+      }
+    }
+    triggers = resolved.filter((t) => !!t.object);
   } catch (e) {
     notes.push(`ApexTrigger is not queryable; trigger coupling skipped. (${describeSalesforceError(e)})`);
   }
 
-  return { classes, triggers };
+  return {
+    classes,
+    triggers,
+    classCensus: { listed: classesListed, analysed: classes.length },
+    triggerCensus: { listed: triggersListed, analysed: triggers.length },
+  };
 }

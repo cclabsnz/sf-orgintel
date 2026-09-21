@@ -65,7 +65,7 @@ describe('retrieveFlows', () => {
     ]);
     const notes: string[] = [];
 
-    const flows = await retrieveFlows(ctxOf(soql, tooling), {}, notes);
+    const { summaries: flows } = await retrieveFlows(ctxOf(soql, tooling), {}, notes);
 
     expect(notes.filter((n) => n.includes('FlowDefinitionView'))).toEqual([]);
     expect(flows).toHaveLength(1);
@@ -78,7 +78,7 @@ describe('retrieveFlows', () => {
     ]);
     const notes: string[] = [];
 
-    const flows = await retrieveFlows(ctxOf(soql, toolingRejectingStandardObjects([])), {}, notes);
+    const { summaries: flows } = await retrieveFlows(ctxOf(soql, toolingRejectingStandardObjects([])), {}, notes);
 
     expect(flows).toEqual([]);
     // A degraded run must say *why* — "not queryable" alone cannot distinguish a
@@ -121,6 +121,31 @@ describe('retrieveApex', () => {
     expect(classes).toHaveLength(1);
     expect(seen.some((q) => q.includes('FROM ApexClass') && q.includes('SymbolTable'))).toBe(true);
   });
+
+  it('records a trigger whose object cannot be resolved instead of dropping it silently', async () => {
+    // resolver knows Account and nothing else, so the second trigger resolves to nothing. Before
+    // this change a bare .filter() removed it with no note anywhere.
+    const tooling = mockTooling([
+      {
+        test: (q) => q.includes('FROM ApexClass'),
+        records: [],
+      },
+      {
+        test: (q) => q.includes('FROM ApexTrigger'),
+        records: [
+          { Name: 'GoodTrigger', NamespacePrefix: null, TableEnumOrId: 'Account', Body: 'trigger t {}' },
+          { Name: 'OrphanTrigger', NamespacePrefix: null, TableEnumOrId: '', Body: 'trigger t {}' },
+        ],
+      },
+    ]);
+    const notes: string[] = [];
+
+    const { triggers, triggerCensus } = await retrieveApex(ctxOf(mockSoql([]), tooling), resolver, notes);
+
+    expect(triggers.map((t) => t.name)).toEqual(['GoodTrigger']);
+    expect(triggerCensus).toEqual({ listed: 2, analysed: 1 });
+    expect(notes.join(' ')).toContain('OrphanTrigger');
+  });
 });
 
 describe('retrieveFlows — managed packages and batching', () => {
@@ -158,7 +183,7 @@ describe('retrieveFlows — managed packages and batching', () => {
     };
     const notes: string[] = [];
 
-    const flows = await retrieveFlows(ctxOf(soql, tooling), {}, notes);
+    const { summaries: flows } = await retrieveFlows(ctxOf(soql, tooling), {}, notes);
 
     expect(flows.map((f) => f.apiName)).toEqual(['Case_Router']);
     // No malformed id may ever reach a SOQL WHERE clause.
@@ -198,7 +223,7 @@ describe('retrieveFlows — managed packages and batching', () => {
     };
     const notes: string[] = [];
 
-    const flows = await retrieveFlows(ctxOf(defs(rows), tooling), {}, notes);
+    const { summaries: flows } = await retrieveFlows(ctxOf(defs(rows), tooling), {}, notes);
 
     expect(flows).toHaveLength(12);
     // One row per query — never an IN clause, which the platform rejects outright.
@@ -206,6 +231,34 @@ describe('retrieveFlows — managed packages and batching', () => {
     expect(metaQueries).toHaveLength(12);
     // But not serial: several requests must be in flight at once.
     expect(peak).toBeGreaterThan(1);
+  });
+
+  it('reports every flow definition listed, not only the ones analysed', async () => {
+    // Two definitions, one of which has no readable metadata, so it is listed but never analysed.
+    // The gap between the two numbers is the whole point: the census counts what the org has,
+    // this counts what reached the graph. Spec 2.1.
+    const soql = defs([
+      ['Case_Router', '30109000000AbCdEAA'],
+      ['Unreadable_Flow', '30109000000ZzZzZAA'],
+    ]);
+    const tooling = toolingRejectingStandardObjects([
+      {
+        test: (q) => /FROM Flow\b/.test(q) && q.includes('30109000000AbCdEAA'),
+        records: [
+          {
+            Id: '30109000000AbCdEAA',
+            Metadata: { processType: 'AutoLaunchedFlow', status: 'Active', start: {}, recordUpdates: [] },
+          },
+        ],
+      },
+      { test: (q) => /FROM Flow\b/.test(q), records: [] },
+    ]);
+    const notes: string[] = [];
+
+    const { census } = await retrieveFlows(ctxOf(soql, tooling), {}, notes);
+
+    expect(census.listed).toBe(2);
+    expect(census.analysed).toBe(1);
   });
 });
 
