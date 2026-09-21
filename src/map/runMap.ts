@@ -67,8 +67,14 @@ export async function runMap(
   const automation = await buildAutomationIndex(ctx.soql, ctx.tooling, resolver, catalog);
   notes.push(...automation.notes);
 
-  const flows = await retrieveFlows(ctx, { includeInactive: opts.includeInactive }, notes, opts.cache);
-  const apex = await retrieveApex(ctx, resolver, notes, opts.cache);
+  const { summaries: flows, census: flowCensus } = await retrieveFlows(
+    ctx,
+    { includeInactive: opts.includeInactive },
+    notes,
+    opts.cache,
+  );
+  const { classes, triggers, classCensus, triggerCensus } = await retrieveApex(ctx, resolver, notes, opts.cache);
+  const apex = { classes, triggers };
 
   // Determine the object set that will appear in the graph, then fetch 90-day counts for it.
   const preEdges = mergeEdges([
