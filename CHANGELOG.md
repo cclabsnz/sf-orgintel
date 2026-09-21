@@ -100,12 +100,16 @@ fragments is unaffected.
 
 ### Deprecated
 
-- **`coupling-graph.json`, `landscape-manifest.json` and `anatomy.json` are deprecated.** They
-  keep their shapes and their byte-for-byte guarantee for the whole `0.x` line, and are now
-  computed alongside the canonical graph rather than from a private model. `sf-orgintel` 1.0 will
-  retire them in favour of `graph-fragment.json` and `anatomy-fragment.json`, which carry the same
-  facts in a schema shared with `sf-orgviz`. See `CONVERGENCE_SPEC.md` §1.4. Consumers should move
-  to the fragments during `0.x`; this notice is the migration window.
+- **`coupling-graph.json` and `anatomy.json` are deprecated.** They keep their shapes and their
+  byte-for-byte guarantee for the whole `0.x` line. `sf-orgintel` 1.0 retires them in favour of
+  `graph-fragment.json` and `anatomy-fragment.json`, which carry the same facts in a schema
+  shared with `sf-orgviz`. Consumers should move to the fragments during `0.x`.
+- **`landscape-manifest.json` is deprecated on different terms.** It is not duplicated by either
+  fragment and cannot be: it carries computed layout coordinates, and `CONVERGENCE_SPEC.md` §1.3
+  keeps derived analytics out of the canonical graph. At 1.0 its navigation levels become a view
+  resolved against the merged graph at render time rather than a stored artifact. A consumer
+  reading it for coordinates has no drop-in replacement and should open an issue describing the
+  use, so the view can cover it.
 
 ## [0.2.0] — 2026-08-25
 
