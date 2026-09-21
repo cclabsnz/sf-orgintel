@@ -43,7 +43,21 @@ export interface MapRunResult {
   flowsAnalyzed: number;
   apexClassesAnalyzed: number;
   apexTriggersAnalyzed: number;
-  /** How many exist, not how many were parsed. From the same census the fragment's `analysed` side already reads. */
+  /**
+   * How many the listing read returned to THIS user on this run, not how many were parsed, and
+   * not how many exist. From the same `RetrievalCensus` the fragment's `analysed` side reads.
+   *
+   * Absent when the listing read was refused. Absent is not zero: a refused read has measured
+   * nothing, and rendering it as `0` would claim the org contains none of this kind while
+   * simultaneously claiming full coverage of it. Every consumer must preserve the distinction --
+   * `analysedOf` in src/report/mapReport.ts drops the denominator entirely when it is absent,
+   * and `buildMapCommandResult` leaves the `--json` field off rather than emitting `0`.
+   *
+   * These are NOT `intel anatomy`'s org-wide census, and must never be reconciled against it as
+   * if they were the same measurement. `flowsListed` counts `FlowDefinitionView` rows;
+   * `intel anatomy` reports `SELECT COUNT(Id) FROM FlowDefinition`. Different SObjects, different
+   * visibility, legitimately different totals for one org. See `RetrievalCensus` in retrieve.ts.
+   */
   flowsListed?: number;
   apexClassesListed?: number;
   apexTriggersListed?: number;
@@ -78,12 +92,19 @@ export async function runMap(
     opts.cache,
   );
   const { classes, triggers, classCensus, triggerCensus } = await retrieveApex(ctx, resolver, notes, opts.cache);
-  const apex = { classes, triggers };
+
+  // One derivation of "how much did this run analyse", used by both the fragment contribution
+  // and the returned result. See the comment at its use site below.
+  const analysed = {
+    flows: flowCensus.analysed,
+    apexClasses: classCensus.analysed,
+    apexTriggers: triggerCensus.analysed,
+  };
 
   // Determine the object set that will appear in the graph, then fetch 90-day counts for it.
   const preEdges = mergeEdges([
     ...deriveFlowEdges(flows).edges,
-    ...deriveApexEdges(apex.classes, apex.triggers, known),
+    ...deriveApexEdges(classes, triggers, known),
   ]);
   const objectSet = new Set<string>();
   for (const e of preEdges) {
@@ -104,8 +125,8 @@ export async function runMap(
 
   const artifacts = assembleCouplingArtifacts({
     flowSummaries: flows,
-    apexClasses: apex.classes,
-    apexTriggers: apex.triggers,
+    apexClasses: classes,
+    apexTriggers: triggers,
     knownObjects: known,
     nodeInfo,
     labelOf,
@@ -133,8 +154,8 @@ export async function runMap(
   const fragment = buildMapFragment({
     edges: artifacts.couplingGraph.edges,
     flowSummaries: flows,
-    apexClasses: apex.classes,
-    apexTriggers: apex.triggers,
+    apexClasses: classes,
+    apexTriggers: triggers,
     nodeInfo,
     // The same catalog-backed set assembleCouplingArtifacts got above, not something re-derived
     // from the coupling edges -- see fragment.ts's FragmentInput.knownObjects doc.
@@ -142,11 +163,14 @@ export async function runMap(
     workflowRulesFor: (object) => automation.countsFor(object).workflowRules,
     capturedAt: provenance.generatedAt,
     orgId: provenance.orgId,
-    analysed: {
-      flows: flowCensus.analysed,
-      apexClasses: classCensus.analysed,
-      apexTriggers: triggerCensus.analysed,
-    },
+    // The census is the one authority for these three, for the fragment and for the returned
+    // result below alike. They used to be derived twice -- once from the census here, once from
+    // `flows.length`/`classes.length` on the way out -- which was identical only by construction:
+    // the moment the retrieval drops something it listed (an unreadable Apex class, an
+    // unresolvable trigger), two independently derived "analysed" numbers are free to disagree,
+    // and the HTML numerator and the graph's `analysed` contribution would describe one run
+    // differently.
+    analysed: analysed,
   });
 
   return {
@@ -156,9 +180,9 @@ export async function runMap(
     clusters: artifacts.clusters,
     layout: artifacts.layout,
     timelines: artifacts.timelines,
-    flowsAnalyzed: flows.length,
-    apexClassesAnalyzed: apex.classes.length,
-    apexTriggersAnalyzed: apex.triggers.length,
+    flowsAnalyzed: analysed.flows,
+    apexClassesAnalyzed: analysed.apexClasses,
+    apexTriggersAnalyzed: analysed.apexTriggers,
     flowsListed: flowCensus.listed,
     apexClassesListed: classCensus.listed,
     apexTriggersListed: triggerCensus.listed,
