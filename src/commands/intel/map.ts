@@ -1,11 +1,11 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
-import type { CouplingGraph, LandscapeManifest, CanonicalGraph, EvidenceTier } from '@cclabsnz/sf-core';
+import type { CouplingGraph, LandscapeManifest, CanonicalGraph, EvidenceTier, Branding } from '@cclabsnz/sf-core';
 import { resolveBranding, type BrandingOverrides } from '@cclabsnz/sf-core';
 import { resolveOrgInfo, buildIntelContext } from '../../lib/wire.js';
-import { runMap } from '../../map/runMap.js';
-import { renderMapHtml, type MapAnchorRow } from '../../report/mapReport.js';
+import { runMap, type MapRunResult } from '../../map/runMap.js';
+import { renderMapHtml, type MapAnchorRow, type MapReportInput } from '../../report/mapReport.js';
 import { OrgIntelCache } from '../../lib/cache.js';
 import { resolveEvidence } from '../../map/evidence.js';
 import { TOOL_VERSION, API_VERSION } from '../../version.js';
@@ -17,6 +17,40 @@ interface MapCommandResult {
   flowsAnalyzed: number;
   apexClassesAnalyzed: number;
   apexTriggersAnalyzed: number;
+}
+
+/**
+ * Assembles the object handed to `renderMapHtml` from a run result. Pulled out of `run()` so the
+ * forwarding of every field -- the listed counts included -- is one place that can be tested
+ * without an org connection, rather than something only visible inside a live command invocation.
+ */
+export function buildMapReportInput(params: {
+  orgName: string;
+  result: MapRunResult;
+  anchors: MapAnchorRow[] | undefined;
+  evidenceTier: EvidenceTier | null;
+  branding: Branding;
+}): MapReportInput {
+  const { orgName, result, anchors, evidenceTier, branding } = params;
+  return {
+    orgName,
+    couplingGraph: result.couplingGraph,
+    clusters: result.clusters,
+    layout: result.layout,
+    timelines: result.timelines,
+    anchors,
+    evidenceTier,
+    // The same notes the terminal prints. A report read a week later has no terminal.
+    notes: result.notes,
+    flowsAnalyzed: result.flowsAnalyzed,
+    apexClassesAnalyzed: result.apexClassesAnalyzed,
+    apexTriggersAnalyzed: result.apexTriggersAnalyzed,
+    flowsListed: result.flowsListed,
+    apexClassesListed: result.apexClassesListed,
+    apexTriggersListed: result.apexTriggersListed,
+    generatedAt: result.couplingGraph.provenance.generatedAt,
+    branding,
+  };
 }
 
 export default class IntelMapCommand extends SfCommand<MapCommandResult> {
@@ -119,22 +153,7 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
         ? (JSON.parse(fs.readFileSync(flags.branding, 'utf-8')) as BrandingOverrides)
         : undefined;
       const branding = resolveBranding(overrides, flags['prepared-for']);
-      const html = renderMapHtml({
-        orgName: orgInfo.name,
-        couplingGraph: result.couplingGraph,
-        clusters: result.clusters,
-        layout: result.layout,
-        timelines: result.timelines,
-        anchors,
-        evidenceTier,
-        // The same notes the terminal prints. A report read a week later has no terminal.
-        notes: result.notes,
-        flowsAnalyzed: result.flowsAnalyzed,
-        apexClassesAnalyzed: result.apexClassesAnalyzed,
-        apexTriggersAnalyzed: result.apexTriggersAnalyzed,
-        generatedAt: result.couplingGraph.provenance.generatedAt,
-        branding,
-      });
+      const html = renderMapHtml(buildMapReportInput({ orgName: orgInfo.name, result, anchors, evidenceTier, branding }));
       const htmlPath = path.join(flags.output, `orgintel-map-${orgInfo.id}-${Date.now()}.html`);
       fs.writeFileSync(htmlPath, html, 'utf-8');
       this.log(`Report written: ${htmlPath}`);
