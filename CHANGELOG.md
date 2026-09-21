@@ -10,7 +10,79 @@ canonical published note and carries the provenance attestation and CycloneDX SB
 
 ## [Unreleased]
 
-Nothing yet.
+Both analysis commands now state **what they analysed against what they listed**, rather than a
+count that implies coverage it does not have. `intel map` reported that it analysed 210 flows
+without saying how many the org holds, which reads as completeness and is not. The numbers were
+already known at retrieval time on both sides, so this costs no extra org read.
+
+**If you are upgrading, expect numbers to move for an unchanged org.** `Apex classes: 412 of 412`
+becomes something like `398 of 412`, because a class nobody could read is no longer counted as one
+that was analysed. Nothing about the coupling analysis changed and no artifact's bytes moved; what
+changed is what the tool claims about its own coverage.
+
+### Added
+
+- **`intel map` states the denominator wherever it states a count.** The HTML report reads
+  `Flows analysed: 210 of 340` and `Apex classes / triggers: 398 of 412 / 27 of 29`; `--json`
+  gains `flowsListed`, `apexClassesListed` and `apexTriggersListed` alongside the existing
+  `*Analyzed` fields. The two answer different questions — how much of this exists, and how much
+  of it reached the graph — and the difference is the coverage fact neither number states alone.
+- **`graph-fragment.json` contributes `analysed` to `org.root`**: the flow, Apex class and Apex
+  trigger counts this run actually parsed. Deliberately not the org's totals, which `intel
+  anatomy` contributes to the same node as a census from `COUNT(Id)` aggregates. A consumer
+  merging both fragments can now compute the gap between them, which is the reconciliation
+  neither command could express on its own.
+- **A refused capability count is marked in `anatomy-fragment.json`.** `collectCapabilities`
+  returns `0` from a refused `COUNT(Id)` and records the refusal in the artifact's
+  `coverage.unavailable`; the fragment never received that list, so a refused census contributed
+  an unmarked `0` to `org.root`. A consumer subtracting analysed from census would have computed
+  a negative gap with nothing in the graph explaining why. The collectors' entries now travel
+  into the fragment's own `coverage.unavailable`, merged with the ones it derives itself and
+  keeping `failed` distinct from `deferred`. `anatomy.json` is unchanged, byte for byte.
+
+### Changed
+
+- **An Apex class nobody could read no longer counts as one that was analysed.** The class path
+  was a map with no drop, so the analysed figure was a copy of the listed figure and
+  `Apex classes: 412 of 412` was a tautology on every successful run. A class whose body is
+  withheld — the platform returns the literal `(hidden)` for managed-package code — and whose
+  `SymbolTable` is withheld too has nothing for the analyser to read: it yields no objects and
+  contributes no edge to either the coupling graph or the fragment. Such classes are now counted
+  as listed but not analysed, dropped from the population the graph is built from, and reported
+  in one aggregated note rather than one per class, which on a managed-heavy org would drown the
+  report it is meant to qualify. This is the "classes nobody could read" half of the coverage gap,
+  and it was previously invisible.
+  Triggers are unchanged and deliberately so: a trigger whose body is withheld but whose object
+  resolves still reaches the graph, as a node carrying the object it fires on and as an entry in
+  that object's order-of-execution timeline. The object, not the body, is the analysable fact
+  about a trigger, so an unresolvable object stays the only drop.
+- **`ROADMAP.md` withdraws "give the seven counts real producers".** The seven org-wide counts are
+  a census over the whole org, permanently, and stay measurements contributed onto `org.root`. A
+  graph-derived count does not restate them, it understates them, by exactly the flows nobody
+  activated and the classes nobody could read. What was actually missing was the reconciliation
+  above, not a producer.
+- `README.md` and the `0.3.0` deprecation notice now state the two different sets of terms the
+  legacy artifacts are deprecated on. `coupling-graph.json` and `anatomy.json` are carried by the
+  fragments; `landscape-manifest.json` is not and cannot be, because it holds computed layout
+  coordinates that the canonical graph deliberately does not store.
+
+### Fixed
+
+- **A refused read no longer reports a measured zero.** When `FlowDefinitionView`, `ApexClass` or
+  `ApexTrigger` could not be listed, the census recorded `0` and the report rendered
+  `Flows analysed: 0 of 0` while `--json` emitted `"flowsListed": 0`. That asserts two false
+  things at once: that the org contains none of this kind, and that every one of them was
+  analysed — a stronger claim than the bare, merely uninformative `0` the tool produced before
+  the census work. The listed count is now optional and left unset on every failure path, so the
+  report falls back to the bare figure and the `--json` field is absent rather than zero. Absent
+  is not zero, which is the same discipline `coverage.unavailable` already applies one level up.
+  The refusal itself still reaches both the terminal and the report's "Not analysed" section,
+  carrying the underlying Salesforce error.
+- **`intel map`'s denominator and `intel anatomy`'s census are documented as different
+  measurements.** They are different SObjects: the map report counts `FlowDefinitionView` rows,
+  `intel anatomy` reports `SELECT COUNT(Id) FROM FlowDefinition`. A user running both commands
+  can legitimately see `Flows: 340` from one and `210 of 337` from the other. Neither query
+  changed; both definitions now say what they measured and name the other.
 
 ## [0.3.0] — 2026-09-15
 
