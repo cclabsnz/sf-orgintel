@@ -115,6 +115,11 @@ export async function runAnatomy(
     identity: artifact.identity,
     ssoConfigKeys,
     edges: artifact.edges,
+    // The collectors' own refusals, taken from the artifact's already-sorted copy rather than
+    // from the raw `unavailable` array, for the same reason every other field here comes from
+    // `artifact`: one set of values, rendered twice. Without this a refused capability count
+    // reaches `org.root` as an unmarked `0` that a consumer cannot tell from a measured one.
+    unavailable: artifact.coverage.unavailable,
     capturedAt: provenance.generatedAt,
     orgId: provenance.orgId,
   });

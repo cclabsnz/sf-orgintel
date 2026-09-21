@@ -35,7 +35,16 @@ import {
   type AttributeContribution,
   type GraphUnavailable,
 } from '@cclabsnz/sf-core';
-import type { Product, Persona, Channel, Capabilities, Identity, IntegrationEdge, ChainHop } from './types.js';
+import type {
+  Product,
+  Persona,
+  Channel,
+  Capabilities,
+  Identity,
+  IntegrationEdge,
+  ChainHop,
+  Unavailable,
+} from './types.js';
 
 /**
  * The collectors' output, shaped for `buildAnatomyFragment`. Deliberately the same six
@@ -62,6 +71,24 @@ export interface AnatomyFragmentInput {
   identity: Identity;
   ssoConfigKeys: string[];
   edges: IntegrationEdge[];
+  /**
+   * What the collectors could not read, exactly as they recorded it in
+   * `artifact.coverage.unavailable`.
+   *
+   * Load-bearing, not decoration. `collectCapabilities` returns `0` from a refused
+   * `COUNT(Id)` and records the refusal only in this list; the fragment then contributes that
+   * `0` to `org.root` as `flows`/`apexClasses`/`apexTriggers`. Spec 2.1 invites a consumer to
+   * subtract `intel map`'s `analysed` from that census to get a coverage gap, so without the
+   * refusal travelling alongside, a refused census yields a silent, unmarked zero and the
+   * consumer computes a negative gap with nothing in the graph explaining why.
+   *
+   * These entries are merged with the fragment's own locally derived ones below rather than
+   * replacing them: the two describe different things being absent (a read the org refused
+   * versus a population this schema cannot express yet), and both belong in
+   * `coverage.unavailable`. `Unavailable` and `GraphUnavailable` are structurally identical,
+   * including the reason union, so nothing is translated or lost on the way across.
+   */
+  unavailable: Unavailable[];
   capturedAt: string;
   orgId: string;
 }
@@ -127,7 +154,14 @@ export function buildAnatomyFragment(input: AnatomyFragmentInput): CanonicalGrap
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
   const contributions: AttributeContribution[] = [];
-  const unavailable: GraphUnavailable[] = [];
+  // Seeded with what the collectors could not read, then extended below with what this
+  // assembly itself had to decline. A refused capability count contributes a 0 to org.root,
+  // and that 0 is only distinguishable from a measured zero because its refusal is here.
+  const unavailable: GraphUnavailable[] = input.unavailable.map((u) => ({
+    scope: u.scope,
+    reason: u.reason,
+    detail: u.detail,
+  }));
 
   // channels (type 'site') -> site.<SiteName> nodes, metadata provenance. Keyed on
   // `channelKeys` (`Site.SiteName`, the site's unique technical name), not on `channel.name`
@@ -427,7 +461,13 @@ export function buildAnatomyFragment(input: AnatomyFragmentInput): CanonicalGrap
   nodes.sort((a, b) => compare(a.id, b.id));
   edges.sort((a, b) => compare(a.from, b.from) || compare(a.to, b.to) || compare(a.kind, b.kind));
   contributions.sort((a, b) => compare(a.nodeId, b.nodeId));
-  unavailable.sort((a, b) => compare(a.scope, b.scope));
+  // Scope, then reason, then detail -- the same total order `runAnatomy` puts the artifact's
+  // own `coverage.unavailable` in. Scope alone stopped being a unique key once the collectors'
+  // entries joined this list, and two entries sharing one would otherwise order by whichever
+  // arrived first.
+  unavailable.sort(
+    (a, b) => compare(a.scope, b.scope) || compare(a.reason, b.reason) || compare(a.detail, b.detail),
+  );
 
   return {
     schemaVersion: SUPPORTED_GRAPH_SCHEMA_VERSION,
