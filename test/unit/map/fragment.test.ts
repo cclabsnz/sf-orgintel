@@ -207,7 +207,7 @@ describe('buildMapFragment: reconciliation with the census', () => {
     // intel anatomy contributes flows/apexClasses/apexTriggers as an org-wide census onto this
     // same node. Neither command sees the other's number; the merge puts them side by side, and
     // the difference is the coverage fact that neither can state alone. Spec 2.1.
-    const root = fragment().contributions.find((c) => c.nodeId === 'org.root');
+    const root = fragment().contributions?.find((c) => c.nodeId === 'org.root');
 
     expect(root).toBeDefined();
     expect(root?.attrs.analysed).toEqual({
