@@ -14,11 +14,12 @@ Current published version: **0.3.0**. Everything on `main` is released; see
   §1.4 of `CONVERGENCE_SPEC.md` accepted deliberately, and 1.0 is where it is paid off. This is
   the single highest-value open item, and it is a breaking change: the `0.x` line is the
   migration window.
-- **Give the seven counts real producers.** `flows`, `apexClasses`, `apexTriggers`, `lwc`,
-  `aura`, `externalDataSources` and `remoteSites` travel as measurements contributed onto
-  `org.root`, not as projections over nodes anyone owns. Until they have producers, `anatomy` is
-  a report carrying seven numbers rather than a projection by construction. This is the work that
-  finishes the convergence, and it should land before 1.0 freezes what the fragments promise.
+- **Org-wide counts are a census, and stay measurements.** Settled rather than open: `flows`,
+  `apexClasses`, `apexTriggers`, `lwc`, `aura`, `externalDataSources` and `remoteSites` are exact
+  `COUNT(Id)` aggregates over the whole org, while the graph holds only what was analysed
+  (`intel map` parses Active flows only and can lose `ApexClass` access entirely). A graph-derived
+  count understates rather than restates. What was missing is the reconciliation: the tool knows
+  both numbers and reported one.
 - **View A hardening on more orgs.** Three of View A's paths are still exercised only by
   fixtures, because neither verification org triggered them: the empty band, the
   not-collected band, and the hatched not-read tile. They need an org that is missing a
