@@ -81,10 +81,41 @@ describe('buildAnatomyFragment', () => {
     expect(scopes).toContain('anatomy.edges.unattributed');
     expect(scopes).toContain('anatomy.edges.remoteProxy');
     expect(scopes).toContain('anatomy.edges.unresolvedTarget');
-    for (const u of unavailable) {
+    // This assembly's own declines only. `deferred` is right for them -- they are populations
+    // this schema does not express yet, never attempted. The collectors' entries share the list
+    // but not that reason: a read the org refused is `failed`, and flattening the two would
+    // report a refusal as something nobody tried. Asserted separately below.
+    for (const u of unavailable.filter((entry) => entry.scope.startsWith('anatomy.'))) {
       expect(u.reason).toBe('deferred');
       expect(u.detail.length).toBeGreaterThan(0);
     }
+  });
+
+  it('carries the collectors\' refusals through, so a refused census is not a silent zero', () => {
+    // `collectCapabilities` returns 0 from a refused COUNT(Id) and records the refusal only in
+    // `artifact.coverage.unavailable`. That 0 then reaches `org.root` as `flows`. Spec 2.1
+    // invites a consumer to subtract `intel map`'s analysed count from this census to get a
+    // coverage gap -- so if the refusal does not travel with it, the consumer computes a
+    // negative gap from an unmarked zero with nothing in the graph explaining why.
+    const f = fragment();
+    const refused = f.coverage.unavailable.find((u) => u.scope === 'capabilities.flows');
+
+    expect(refused).toBeDefined();
+    expect(refused?.reason).toBe('failed');
+    expect(refused?.detail).toContain('INSUFFICIENT_ACCESS');
+    // And the zero it qualifies really is sitting on org.root, unmarked without it.
+    const root = f.contributions?.find((c) => c.nodeId === 'org.root');
+    expect(root?.attrs.flows).toBe(6);
+  });
+
+  it('keeps the collectors\' refusals and its own declines in one sorted list', () => {
+    // Merged, not replaced: the two describe different absences and both belong here. Sorted by
+    // scope so a consumer can key off the list rather than scan it in arrival order.
+    const scopes = fragment().coverage.unavailable.map((u) => u.scope);
+
+    expect(scopes).toContain('capabilities.flows');
+    expect(scopes.some((s) => s.startsWith('anatomy.'))).toBe(true);
+    expect([...scopes].sort()).toEqual(scopes);
   });
 
   describe('ssoConfig/site node ids (finding 1: collision destroys the whole merged graph)', () => {

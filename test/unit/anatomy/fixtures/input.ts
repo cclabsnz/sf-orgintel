@@ -306,6 +306,19 @@ export function input(): AnatomyFragmentInput {
         attribution: 'unattributed',
       },
     ],
+    // One refused collector read, carried through from `artifact.coverage.unavailable`. Present
+    // in the shared fixture rather than only in the test that asserts on it, because every
+    // fragment a real run builds carries whatever the collectors could not read, and a fixture
+    // that always passes an empty list would let the merge of the two sources go untested
+    // everywhere except one case. Reads as a refused capability census: the number that reaches
+    // `org.root` as `flows` alongside it is a 0 nobody measured.
+    unavailable: [
+      {
+        scope: 'capabilities.flows',
+        reason: 'failed',
+        detail: 'FlowDefinition count unavailable: INSUFFICIENT_ACCESS',
+      },
+    ],
     capturedAt: '2026-01-01T00:00:00Z',
     orgId: 'org1',
   };
