@@ -9,6 +9,12 @@
 // that isn't one, caused by an incomplete stub. So this derives the object list from every
 // `obj.`-prefixed endpoint across ALL edges (touches and couples alike), matching what a real
 // `sf-orgviz extract` would actually have captured.
+//
+// Task 3 adds a contribution to `org.root`, which is not an edge endpoint at all -- it is a
+// nodeId the fragment's `contributions` reference directly. An extraction stub built from edges
+// alone would leave `org.root` undeclared, and the merge would refuse the fragment with
+// GRAPH_MERGE_CONTRIBUTION_UNRESOLVED. So the id list below is drawn from edges AND
+// contributions, and the stub declares a node of the right kind for either prefix it finds.
 import { describe, it, expect } from '@jest/globals';
 import {
   mergeGraphs,
@@ -19,38 +25,65 @@ import {
   GRAPH_RULES,
   SUPPORTED_GRAPH_SCHEMA_VERSION,
   type CanonicalGraph,
+  type GraphNode,
+  type GraphNodeKind,
 } from '@cclabsnz/sf-core';
 import { buildMapFragment } from '../../../src/map/fragment.js';
 import { input } from './fixtures/input.js';
 
-/** Every `obj.*` endpoint the fragment's edges reference, touches and couples alike. */
-function objectsReferencedBy(fragment: CanonicalGraph): string[] {
-  return [
-    ...new Set(
-      fragment.edges.flatMap((e) => [e.from, e.to]).filter((id) => id.startsWith('obj.')),
-    ),
-  ]
-    .map((id) => id.slice('obj.'.length))
-    .sort();
+/** The id shapes sf-orgviz owns that this fragment references, and how to build a node. */
+const KIND_BY_PREFIX: Record<string, GraphNodeKind> = {
+  obj: 'sobject',
+  org: 'org',
+};
+
+/**
+ * Every id the fragment references but does not declare as one of its own nodes -- via edge
+ * endpoints (`obj.*`, touches and couples alike) and via contributions' `nodeId` (`org.root`).
+ * Those belong to the other producer, and are exactly what an `sf orgviz extract` would need to
+ * supply for the merge to resolve.
+ */
+function idsOwnedByOtherProducer(fragment: CanonicalGraph): string[] {
+  const ownIds = new Set(fragment.nodes.map((n) => n.id));
+  const referenced = new Set<string>();
+  for (const e of fragment.edges) {
+    referenced.add(e.from);
+    referenced.add(e.to);
+  }
+  for (const c of fragment.contributions ?? []) referenced.add(c.nodeId);
+  return [...referenced].filter((id) => !ownIds.has(id)).sort();
 }
 
-/** Stands in for an `sf orgviz extract`: the object nodes this fragment's edges point at. */
-function extraction(objects: string[], capturedAt: string, orgId: string): CanonicalGraph {
+function kindOf(id: string): GraphNodeKind {
+  const prefix = id.slice(0, id.indexOf('.'));
+  const kind = KIND_BY_PREFIX[prefix];
+  if (!kind) throw new Error(`merge.test.ts's extraction stub has no kind mapping for id ${id}`);
+  return kind;
+}
+
+/** Stands in for an `sf orgviz extract`: the nodes this fragment's edges and contributions point at. */
+function extraction(ids: string[], capturedAt: string, orgId: string): CanonicalGraph {
+  const nodes: GraphNode[] = ids.map((id) => {
+    const kind = kindOf(id);
+    const name = id.slice(id.indexOf('.') + 1);
+    const attrs: Record<string, unknown> = kind === 'sobject' ? { role: roleOf(name) } : {};
+    return {
+      id,
+      kind,
+      layer: layerOfKind(kind),
+      level: levelOfKind(kind),
+      parent: null,
+      label: name,
+      attrs,
+      provenance: { source: 'metadata', capturedAt },
+    };
+  });
   return {
     schemaVersion: SUPPORTED_GRAPH_SCHEMA_VERSION,
     capturedAt,
     orgId,
     producer: 'orgviz',
-    nodes: objects.map((name) => ({
-      id: `obj.${name}`,
-      kind: 'sobject',
-      layer: layerOfKind('sobject'),
-      level: levelOfKind('sobject'),
-      parent: null,
-      label: name,
-      attrs: { role: roleOf(name) },
-      provenance: { source: 'metadata', capturedAt },
-    })),
+    nodes,
     edges: [],
     coverage: { notes: [], unavailable: [] },
   };
@@ -59,16 +92,16 @@ function extraction(objects: string[], capturedAt: string, orgId: string): Canon
 describe('the map fragment in a merge', () => {
   it('merges with an extraction into one graph that validates clean', () => {
     const fragment = buildMapFragment(input());
-    const objects = objectsReferencedBy(fragment);
-    const result = mergeGraphs([extraction(objects, fragment.capturedAt, fragment.orgId), fragment]);
+    const ids = idsOwnedByOtherProducer(fragment);
+    const result = mergeGraphs([extraction(ids, fragment.capturedAt, fragment.orgId), fragment]);
     expect(result.findings).toEqual([]);
     expect(validateGraph(result.graph)).toEqual([]);
   });
 
   it('lands its measurements on the objects the other tool owns', () => {
     const fragment = buildMapFragment(input());
-    const objects = objectsReferencedBy(fragment);
-    const { graph, report } = mergeGraphs([extraction(objects, fragment.capturedAt, fragment.orgId), fragment]);
+    const ids = idsOwnedByOtherProducer(fragment);
+    const { graph, report } = mergeGraphs([extraction(ids, fragment.capturedAt, fragment.orgId), fragment]);
     expect(report.contributionsApplied).toBeGreaterThan(0);
     const account = graph!.nodes.find((n) => n.id === 'obj.Account')!;
     // Namespaced, so "who asserted this" stays answerable. Spec 3.3.

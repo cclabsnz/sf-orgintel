@@ -55,7 +55,9 @@ describe('buildMapFragment', () => {
   it('contributes the measurements it took, rather than inventing nodes to hold them', () => {
     // recordCount90d and automationCounts are facts about an object node sf-orgviz owns. A
     // measurement needs a measurer, so they travel as namespaced contributions. Spec 3.3.
-    const c = fragment().contributions ?? [];
+    // org.root's analysed-counts contribution is excluded here: it is a different contribution,
+    // to a different node kind, asserted separately below.
+    const c = (fragment().contributions ?? []).filter((entry) => entry.nodeId !== 'org.root');
     expect(c.length).toBeGreaterThan(0);
     for (const entry of c) {
       expect(entry.nodeId.startsWith('obj.')).toBe(true);
@@ -197,6 +199,27 @@ describe('buildMapFragment: workflowRules in the contribution', () => {
     expect(account).toBeDefined();
     const counts = account?.attrs.automationCounts as Record<string, number>;
     expect(counts).toEqual({ flows: 1, triggers: 1, approvals: 0, workflowRules: 3 });
+  });
+});
+
+describe('buildMapFragment: reconciliation with the census', () => {
+  it('contributes what it analysed to org.root, for reconciliation against the census', () => {
+    // intel anatomy contributes flows/apexClasses/apexTriggers as an org-wide census onto this
+    // same node. Neither command sees the other's number; the merge puts them side by side, and
+    // the difference is the coverage fact that neither can state alone. Spec 2.1.
+    const root = fragment().contributions.find((c) => c.nodeId === 'org.root');
+
+    expect(root).toBeDefined();
+    expect(root?.attrs.analysed).toEqual({
+      flows: 2,
+      apexClasses: 1,
+      apexTriggers: 0,
+    });
+  });
+
+  it('emits no org.root node, only a contribution to one', () => {
+    // org.root is sf-orgviz's. The merge refuses a fragment emitting a kind it does not own.
+    expect(fragment().nodes.find((n) => n.id === 'org.root')).toBeUndefined();
   });
 });
 
