@@ -37,7 +37,14 @@ export interface MapReportInput {
   flowsAnalyzed: number;
   apexClassesAnalyzed: number;
   apexTriggersAnalyzed: number;
-  /** How many exist, not how many were parsed. Optional: a caller with no census has not measured zero. */
+  /**
+   * How many the listing read returned to this user, not how many were parsed. Optional: a
+   * caller with no census has not measured zero.
+   *
+   * Not the same measurement as `intel anatomy`'s org-wide `Flows` figure, and a reader who
+   * runs both commands will see them disagree: this counts `FlowDefinitionView` rows, that
+   * one is `SELECT COUNT(Id) FROM FlowDefinition`. Different SObjects.
+   */
   flowsListed?: number;
   apexClassesListed?: number;
   apexTriggersListed?: number;
