@@ -49,6 +49,13 @@ export interface FragmentInput {
   workflowRulesFor: (object: string) => number;
   capturedAt: string;
   orgId: string;
+  /** What this run actually parsed, for reconciliation against the census `intel anatomy`
+   *  contributes to the same node. */
+  analysed: {
+    flows: number;
+    apexClasses: number;
+    apexTriggers: number;
+  };
 }
 
 const PRODUCER = 'orgintel' as const;
@@ -211,6 +218,21 @@ export function buildMapFragment(input: FragmentInput): CanonicalGraph {
         automationCounts: { ...info.automationCounts, workflowRules: input.workflowRulesFor(object) },
       },
     };
+  });
+
+  contributions.push({
+    nodeId: 'org.root',
+    attrs: {
+      // Deliberately NOT the org's totals: those are a census, and intel anatomy contributes
+      // them to this same node from COUNT(Id) aggregates over the whole org. This is what this
+      // run parsed. Keeping them distinct is the point -- the two numbers answer different
+      // questions, and collapsing them would restate the weaker one as the stronger.
+      analysed: {
+        flows: input.analysed.flows,
+        apexClasses: input.analysed.apexClasses,
+        apexTriggers: input.analysed.apexTriggers,
+      },
+    },
   });
 
   nodes.sort((a, b) => compare(a.id, b.id));

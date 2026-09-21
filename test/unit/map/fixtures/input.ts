@@ -93,5 +93,6 @@ export function input(): FragmentInput {
     workflowRulesFor: () => 0,
     capturedAt: '2026-01-01T00:00:00Z',
     orgId: 'org1',
+    analysed: { flows: 2, apexClasses: 1, apexTriggers: 0 },
   };
 }
