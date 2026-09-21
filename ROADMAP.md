@@ -8,12 +8,14 @@ Current published version: **0.3.0**. Everything on `main` is released; see
 
 ## Now
 
-- **Cut 1.0 and retire the legacy outputs.** `coupling-graph.json`,
-  `landscape-manifest.json` and `anatomy.json` are deprecated as of `0.3.0` and duplicate facts
-  the canonical fragments already carry. Holding two representations of the same org is the cost
-  §1.4 of `CONVERGENCE_SPEC.md` accepted deliberately, and 1.0 is where it is paid off. This is
-  the single highest-value open item, and it is a breaking change: the `0.x` line is the
-  migration window.
+- **Cut 1.0 and retire the legacy outputs.** `coupling-graph.json` and `anatomy.json` are
+  deprecated as of `0.3.0` and duplicate facts the canonical fragments already carry.
+  `landscape-manifest.json` is deprecated on different terms: it carries computed layout
+  coordinates, which §1.3 of `CONVERGENCE_SPEC.md` keeps out of the graph, so at 1.0 its
+  navigation levels become a view resolved at render time rather than a stored artifact.
+  Holding two representations of the same org is the cost §1.4 accepted deliberately, and 1.0
+  is where it is paid off. This is the single highest-value open item, and it is a breaking
+  change: the `0.x` line is the migration window.
 - **Org-wide counts are a census, and stay measurements.** Settled rather than open: `flows`,
   `apexClasses`, `apexTriggers`, `lwc`, `aura`, `externalDataSources` and `remoteSites` are exact
   `COUNT(Id)` aggregates over the whole org, while the graph holds only what was analysed
