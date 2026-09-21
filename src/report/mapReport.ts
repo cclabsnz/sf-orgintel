@@ -37,6 +37,10 @@ export interface MapReportInput {
   flowsAnalyzed: number;
   apexClassesAnalyzed: number;
   apexTriggersAnalyzed: number;
+  /** How many exist, not how many were parsed. Optional: a caller with no census has not measured zero. */
+  flowsListed?: number;
+  apexClassesListed?: number;
+  apexTriggersListed?: number;
   generatedAt: string;
   branding: Branding;
 }
@@ -66,14 +70,25 @@ export function renderMapHtml(input: MapReportInput): string {
   });
 }
 
+/**
+ * "210 of 340" when the denominator is known, "210" when it is not. Never "210 of 0": a caller
+ * without a census has not measured zero, it has not measured. Spec 2.1.
+ */
+function analysedOf(analysed: number, listed: number | undefined): string {
+  return typeof listed === 'number' ? `${analysed} of ${listed}` : `${analysed}`;
+}
+
 function summarySection(i: MapReportInput): string {
   const rows: Array<[string, string]> = [
     ['Evidence tier', i.evidenceTier ?? 'Not measured: run `sf intel probe`'],
     ['Objects', String(i.couplingGraph.nodes.length)],
     ['Coupled pairs', String(i.couplingGraph.edges.length)],
     ['Domains (clusters)', String(i.clusters.length)],
-    ['Flows analysed', String(i.flowsAnalyzed)],
-    ['Apex classes / triggers', `${i.apexClassesAnalyzed} / ${i.apexTriggersAnalyzed}`],
+    ['Flows analysed', analysedOf(i.flowsAnalyzed, i.flowsListed)],
+    [
+      'Apex classes / triggers',
+      `${analysedOf(i.apexClassesAnalyzed, i.apexClassesListed)} / ${analysedOf(i.apexTriggersAnalyzed, i.apexTriggersListed)}`,
+    ],
   ];
   return `<dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
 }

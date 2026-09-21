@@ -43,6 +43,10 @@ export interface MapRunResult {
   flowsAnalyzed: number;
   apexClassesAnalyzed: number;
   apexTriggersAnalyzed: number;
+  /** How many exist, not how many were parsed. From the same census the fragment's `analysed` side already reads. */
+  flowsListed?: number;
+  apexClassesListed?: number;
+  apexTriggersListed?: number;
   notes: string[];
 }
 
@@ -155,6 +159,9 @@ export async function runMap(
     flowsAnalyzed: flows.length,
     apexClassesAnalyzed: apex.classes.length,
     apexTriggersAnalyzed: apex.triggers.length,
+    flowsListed: flowCensus.listed,
+    apexClassesListed: classCensus.listed,
+    apexTriggersListed: triggerCensus.listed,
     notes: artifacts.notes,
   };
 }
