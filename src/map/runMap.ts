@@ -138,6 +138,11 @@ export async function runMap(
     workflowRulesFor: (object) => automation.countsFor(object).workflowRules,
     capturedAt: provenance.generatedAt,
     orgId: provenance.orgId,
+    analysed: {
+      flows: flowCensus.analysed,
+      apexClasses: classCensus.analysed,
+      apexTriggers: triggerCensus.analysed,
+    },
   });
 
   return {
