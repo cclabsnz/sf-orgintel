@@ -2,6 +2,7 @@ import { describe, it, expect } from '@jest/globals';
 import { DEFAULT_BRANDING } from '@cclabsnz/sf-core';
 import type { CouplingGraph } from '@cclabsnz/sf-core';
 import { renderMapHtml } from '../../../src/report/mapReport.js';
+import type { MapReportInput } from '../../../src/report/mapReport.js';
 import type { Cluster } from '../../../src/map/graph/clusters.js';
 import type { Point } from '../../../src/map/graph/layout.js';
 
@@ -21,6 +22,19 @@ const layout = new Map<string, Point>([
   ['Case', { x: 200, y: 300 }],
   ['WorkOrder', { x: 500, y: 320 }],
 ]);
+
+const baseInput = (): MapReportInput => ({
+  orgName: 'Test',
+  couplingGraph: graph,
+  clusters,
+  layout,
+  evidenceTier: null,
+  flowsAnalyzed: 0,
+  apexClassesAnalyzed: 0,
+  apexTriggersAnalyzed: 0,
+  generatedAt: '2026-01-01T00:00:00Z',
+  branding: DEFAULT_BRANDING,
+});
 
 describe('renderMapHtml', () => {
   it('renders a self-contained report with an SVG graph and the coupling table', () => {
@@ -123,5 +137,22 @@ describe('layer section', () => {
   it('stays self-contained — no remote assets', () => {
     expect(html).not.toMatch(/<script[^>]+\ssrc=/i);
     expect(html).not.toMatch(/<link[^>]+\srel=["']?stylesheet/i);
+  });
+});
+
+describe('analysed-versus-listed coverage', () => {
+  it('states what was analysed against what was listed', () => {
+    const html = renderMapHtml({ ...baseInput(), flowsAnalyzed: 210, flowsListed: 340 });
+
+    expect(html).toContain('210 of 340');
+  });
+
+  it('states the bare figure when nothing listed it', () => {
+    // A caller with no census must not render "210 of 0", which claims more flows were parsed
+    // than exist. Absent is not zero -- the same distinction coverage.unavailable carries.
+    const html = renderMapHtml({ ...baseInput(), flowsAnalyzed: 210, flowsListed: undefined });
+
+    expect(html).toContain('210');
+    expect(html).not.toContain('210 of');
   });
 });
