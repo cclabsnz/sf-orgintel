@@ -5,9 +5,9 @@
 // be inspected, tested and (eventually) resolved by something other than `buildManifest`.
 //
 // This module changes no rendering behaviour. `buildManifest` still builds the manifest
-// `intel map` writes, unchanged; `NAVIGATION_VIEW` and `resolveNavigationView` exist so a test
-// can prove the two agree on level *membership*, which is the whole point of turning the rules
-// into data.
+// `intel map` writes, unchanged. The NAVIGATION_VIEW spec is the value this module contributes;
+// a resolver in a later change will consume it to prove that the coordinates agree on level
+// *membership*, which is the whole point of turning the rules into data.
 //
 // TYPE OWNERSHIP: `NavigationViewSpec` is declared LOCALLY here, not imported from a shared package.
 // sf-orgviz still hardcodes its own view types and there is no `NavigationViewSpec` in
