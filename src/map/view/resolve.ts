@@ -1,7 +1,8 @@
 // Turns a NavigationViewSpec plus a merged graph into the same coordinates buildManifest
 // produces for L0 and L1. This module changes no rendering behaviour and reads no org data --
 // it is a second route to the coordinates buildManifest already writes to landscape-manifest.json,
-// so Task 3 can prove the two agree while buildManifest still exists to compare against.
+// so test/unit/map/view/equivalence.test.ts can prove the two agree while buildManifest still
+// exists to compare against.
 //
 // LAYOUT REUSE: computeLayout is called here, not reimplemented. A second layout algorithm would
 // make the equivalence test compare two algorithms instead of two routes to one algorithm, which
@@ -13,14 +14,15 @@
 // cluster links in a deterministic order. crossDomainEdges below reproduces that behaviour
 // exactly (same pair-key ordering, same sort) rather than importing it: manifest.ts is deleted
 // at 1.0, and a replacement that imports from the thing it replaces cannot outlive it.
-// Duplication is correct while both exist; Task 3's equivalence test is what keeps them honest.
+// Duplication is correct while both exist; test/unit/map/view/equivalence.test.ts is what keeps
+// them honest.
 //
 // LEVEL RESOLUTION: both L0 and L1 are resolved from the selector's own item list -- L0 from the
 // 'domain' items, L1 from the 'object' items grouped by domainId -- rather than L1 falling back
 // to iterating clusters directly. A resolver that ignores the view's output for half its levels
 // would make the spec decorative for those levels, which is the opposite of what this module is
 // for. The objects grouped by domainId are the same set as cluster.objects, and computeLayout
-// sorts its node list internally (src/map/graph/layout.ts:30), so the order they are gathered in
+// sorts its node list internally before laying anything out, so the order they are gathered in
 // cannot affect the coordinates produced.
 import { computeLayout, type LayoutEdge, type Point } from '../graph/layout.js';
 import type { Cluster } from '../graph/clusters.js';
