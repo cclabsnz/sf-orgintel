@@ -29,18 +29,26 @@ nodes because classes that could never be read are no longer counted as analysed
   gains `flowsListed`, `apexClassesListed` and `apexTriggersListed` alongside the existing
   `*Analyzed` fields. The two answer different questions — how much of this exists, and how much
   of it reached the graph — and the difference is the coverage fact neither number states alone.
+  (#25)
 - **`graph-fragment.json` contributes `analysed` to `org.root`**: the flow, Apex class and Apex
   trigger counts this run actually parsed. Deliberately not the org's totals, which `intel
   anatomy` contributes to the same node as a census from `COUNT(Id)` aggregates. A consumer
   merging both fragments can now compute the gap between them, which is the reconciliation
-  neither command could express on its own.
+  neither command could express on its own. (#25)
 - **A refused capability count is marked in `anatomy-fragment.json`.** `collectCapabilities`
   returns `0` from a refused `COUNT(Id)` and records the refusal in the artifact's
   `coverage.unavailable`; the fragment never received that list, so a refused census contributed
   an unmarked `0` to `org.root`. A consumer subtracting analysed from census would have computed
   a negative gap with nothing in the graph explaining why. The collectors' entries now travel
   into the fragment's own `coverage.unavailable`, merged with the ones it derives itself and
-  keeping `failed` distinct from `deferred`. `anatomy.json` is unchanged, byte for byte.
+  keeping `failed` distinct from `deferred`. `anatomy.json` is unchanged, byte for byte. (#25)
+- **The navigation levels are now a view spec**, resolved into L0 and L1 coordinates from the
+  merged graph rather than read from a stored artifact, and proven to reproduce exactly what
+  `landscape-manifest.json` carries. Nothing changes in what any command writes or renders today:
+  the manifest is still written, and this is the replacement consumers of its coordinates move to
+  before 1.0 removes it. The spec declares only the two levels that resolve, because `L2_process`,
+  `L3_transition` and `L4_component` have shipped since `0.1.0` carrying a null reference, a bare
+  `reserved` flag and an empty array respectively.
 
 ### Changed
 
@@ -57,16 +65,16 @@ nodes because classes that could never be read are no longer counted as analysed
   Triggers are unchanged and deliberately so: a trigger whose body is withheld but whose object
   resolves still reaches the graph, as a node carrying the object it fires on and as an entry in
   that object's order-of-execution timeline. The object, not the body, is the analysable fact
-  about a trigger, so an unresolvable object stays the only drop.
+  about a trigger, so an unresolvable object stays the only drop. (#25)
 - **`ROADMAP.md` withdraws "give the seven counts real producers".** The seven org-wide counts are
   a census over the whole org, permanently, and stay measurements contributed onto `org.root`. A
   graph-derived count does not restate them, it understates them, by exactly the flows nobody
   activated and the classes nobody could read. What was actually missing was the reconciliation
-  above, not a producer.
+  above, not a producer. (#25)
 - `README.md` and the `0.3.0` deprecation notice now state the two different sets of terms the
   legacy artifacts are deprecated on. `coupling-graph.json` and `anatomy.json` are carried by the
   fragments; `landscape-manifest.json` is not and cannot be, because it holds computed layout
-  coordinates that the canonical graph deliberately does not store.
+  coordinates that the canonical graph deliberately does not store. (#25)
 
 ### Fixed
 
@@ -79,12 +87,12 @@ nodes because classes that could never be read are no longer counted as analysed
   report falls back to the bare figure and the `--json` field is absent rather than zero. Absent
   is not zero, which is the same discipline `coverage.unavailable` already applies one level up.
   The refusal itself still reaches both the terminal and the report's "Not analysed" section,
-  carrying the underlying Salesforce error.
+  carrying the underlying Salesforce error. (#25)
 - **`intel map`'s denominator and `intel anatomy`'s census are documented as different
   measurements.** They are different SObjects: the map report counts `FlowDefinitionView` rows,
   `intel anatomy` reports `SELECT COUNT(Id) FROM FlowDefinition`. A user running both commands
   can legitimately see `Flows: 340` from one and `210 of 337` from the other. Neither query
-  changed; both definitions now say what they measured and name the other.
+  changed; both definitions now say what they measured and name the other. (#25)
 
 ## [0.3.0] — 2026-09-15
 
