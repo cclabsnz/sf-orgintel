@@ -39,7 +39,12 @@ permissions:
   contents: read
 
 env:
-  IDS: '00D[A-Za-z0-9]{12,15}|005[A-Za-z0-9]{12,15}|(0H4|888)[A-Za-z0-9]{12,15}|00e[A-Za-z0-9]{12,15}'
+  # Delimited, and exactly 15 or 18 characters - never a length between. An undelimited
+  # prefix + {12,15} collides with git SHAs: a message quoting a hash beginning 888 read as a
+  # connected-app id. A 40-character hash cannot satisfy the trailing delimiter. ERE has no
+  # portable word boundary, hence the explicit classes; the delimiters are stripped back off
+  # so the extracted value still compares exactly against the allowlist.
+  IDS: '(^|[^A-Za-z0-9])(00D|005|0H4|888|00e)[A-Za-z0-9]{12}([A-Za-z0-9]{3})?([^A-Za-z0-9]|$)'
   FIXTURE_ID: '(00D|005|0H4|888|00e)[A-Za-z0-9]*([xX]{2}|0{9,})'
   HOST: '[A-Za-z0-9][A-Za-z0-9.-]*\.my\.salesforce\.com'
   FIXTURE_HOST: '^(acme|example|test|myorg|sample|demo|localhost|develop|sandbox|scratch|x)(--[A-Za-z0-9-]+)?(\.sandbox|\.develop)?\.my\.salesforce\.com$'
@@ -63,7 +68,8 @@ jobs:
           # assignment would abort the step before it could report - failing the build on a
           # clean tree. `|| true` keeps the count and drops the status.
           allow() { if [ -s "$ALLOW" ]; then grep -vxFf "$ALLOW"; else cat; fi; }
-          ids=$(git grep -hoIE "$IDS" -- . | grep -vE "$FIXTURE_ID" | allow | grep -c . || true)
+          pick() { sed -E 's/^[^A-Za-z0-9]+//; s/[^A-Za-z0-9]+$//'; }
+          ids=$(git grep -hoIE "$IDS" -- . | pick | grep -vE "$FIXTURE_ID" | allow | grep -c . || true)
           hosts=$(git grep -hoIE "$HOST" -- . | grep -vE "$FIXTURE_HOST" | allow | grep -c . || true)
           mails=$(git grep -hoIE "$GOVT_EMAIL" -- . | allow | grep -c . || true)
           addrs=$(git grep -hoIE "$IP" -- . | grep -vE "$FIXTURE_IP" | allow | grep -c . || true)
@@ -91,8 +97,9 @@ jobs:
         run: |
           set -uo pipefail
           allow() { if [ -s "$ALLOW" ]; then grep -vxFf "$ALLOW"; else cat; fi; }
+          pick() { sed -E 's/^[^A-Za-z0-9]+//; s/[^A-Za-z0-9]+$//'; }
           msgs=$(git log --format='%s%n%b')
-          ids=$(printf '%s' "$msgs" | grep -hoE "$IDS" | grep -vE "$FIXTURE_ID" | allow | grep -c . || true)
+          ids=$(printf '%s' "$msgs" | grep -hoE "$IDS" | pick | grep -vE "$FIXTURE_ID" | allow | grep -c . || true)
           hosts=$(printf '%s' "$msgs" | grep -hoE "$HOST" | grep -vE "$FIXTURE_HOST" | allow | grep -c . || true)
           mails=$(printf '%s' "$msgs" | grep -hoE "$GOVT_EMAIL" | allow | grep -c . || true)
           if [ "$ids" -ne 0 ] || [ "$hosts" -ne 0 ] || [ "$mails" -ne 0 ]; then

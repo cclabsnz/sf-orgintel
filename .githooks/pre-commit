@@ -21,11 +21,18 @@ set -u
 # The prefix set was org ids alone until real customer User ids, connected-app ids, routable
 # addresses and object names reached tracked test files on a feature branch with this guard
 # active and silent throughout. It matched neither of the two things it looked at.
-ORG_ID='00D[A-Za-z0-9]{12,15}'
-USER_ID='005[A-Za-z0-9]{12,15}'
-CONNAPP_ID='(0H4|888)[A-Za-z0-9]{12,15}'
-EVENT_ID='00e[A-Za-z0-9]{12,15}'
+# A Salesforce id is a key prefix plus exactly 12 or 15 more alphanumerics - 15 or 18 in
+# total, never a length between. Matching a bare prefix + {12,15} instead collides with git
+# SHAs: a commit message quoting a hash beginning 888 was read as a connected-app id. So the
+# match is DELIMITED - it must be bounded by a non-alphanumeric or the string edge - which a
+# 40-character hash never satisfies. ERE has no portable word boundary (\b is GNU, [[:<:]] is
+# BSD), hence the explicit character classes; pick() strips the delimiters back off so the
+# extracted value still compares exactly against the allowlist.
+PREFIX='(00D|005|0H4|888|00e)'
+ID_BODY='[A-Za-z0-9]{12}([A-Za-z0-9]{3})?'
+ID="(^|[^A-Za-z0-9])${PREFIX}${ID_BODY}([^A-Za-z0-9]|\$)"
 FIXTURE_ID='(00D|005|0H4|888|00e)[A-Za-z0-9]*([xX]{2}|0{9,})'
+pick() { sed -E 's/^[^A-Za-z0-9]+//; s/[^A-Za-z0-9]+$//'; }
 
 # Matches the whole dotted host, not just the last label, so a sandbox host keeps its org
 # name. The fixture pattern is anchored at both ends, so the ENTIRE host must be a fixture:
@@ -73,14 +80,14 @@ fail=0
 # along with itself.
 for f in $(git diff --cached --name-only --diff-filter=ACM); do
   blob=$(git show ":$f" 2>/dev/null)
-  ids=$(printf '%s' "$blob" | grep -oE "$ORG_ID|$USER_ID|$CONNAPP_ID|$EVENT_ID" | grep -vE "$FIXTURE_ID" | allow | grep -c .)
+  ids=$(printf '%s' "$blob" | grep -oE "$ID" | pick | grep -vE "$FIXTURE_ID" | allow | grep -c .)
   hosts=$(printf '%s' "$blob" | grep -oE "$HOST" | grep -vE "$FIXTURE_HOST" | allow | grep -c .)
   mails=$(printf '%s' "$blob" | grep -oE "$GOVT_EMAIL" | allow | grep -c .)
   addrs=$(printf '%s' "$blob" | grep -oE "$IP" | grep -vE "$FIXTURE_IP" | allow | grep -c .)
   if [ "$ids" -ne 0 ] || [ "$hosts" -ne 0 ] || [ "$mails" -ne 0 ] || [ "$addrs" -ne 0 ]; then
     echo "pre-commit: $f references real org or customer data" >&2
     echo "  ($ids id(s), $hosts host(s), $mails address(es), $addrs IP(s)):" >&2
-    printf '%s' "$blob" | grep -nE "$ORG_ID|$USER_ID|$CONNAPP_ID|$EVENT_ID" | grep -vE "$FIXTURE_ID" | head -2 >&2
+    printf '%s' "$blob" | grep -nE "$ID" | grep -vE "$FIXTURE_ID" | head -2 >&2
     printf '%s' "$blob" | grep -nE "$HOST" | grep -vE "$FIXTURE_HOST" | head -2 >&2
     printf '%s' "$blob" | grep -nE "$GOVT_EMAIL" | head -2 >&2
     fail=1
