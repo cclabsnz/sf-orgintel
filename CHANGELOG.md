@@ -43,12 +43,14 @@ nodes because classes that could never be read are no longer counted as analysed
   into the fragment's own `coverage.unavailable`, merged with the ones it derives itself and
   keeping `failed` distinct from `deferred`. `anatomy.json` is unchanged, byte for byte. (#25)
 - **The navigation levels are now a view spec**, resolved into L0 and L1 coordinates from the
-  merged graph rather than read from a stored artifact, and proven to reproduce exactly what
-  `landscape-manifest.json` carries. Nothing changes in what any command writes or renders today:
-  the manifest is still written, and this is the replacement consumers of its coordinates move to
-  before 1.0 removes it. The spec declares only the two levels that resolve, because `L2_process`,
-  `L3_transition` and `L4_component` have shipped since `0.1.0` carrying a null reference, a bare
-  `reserved` flag and an empty array respectively.
+  merged graph rather than read from a stored artifact, and proven to reproduce exactly the
+  coordinates `landscape-manifest.json` carries. Coordinates are the whole of the claim: the view
+  resolves L0 and L1 positions, and does not reproduce the manifest's `label`, `objects`,
+  `metrics`, `graphRef` or `anchorObject`. Nothing changes in what any command writes or renders
+  today: the manifest is still written, and this is the replacement consumers of its coordinates
+  move to before 1.0 removes it. The spec declares only the two levels that resolve, because
+  `L2_process`, `L3_transition` and `L4_component` have shipped since `0.1.0` carrying a null
+  reference, a bare `reserved` flag and an empty array respectively.
 
 ### Changed
 
