@@ -5,7 +5,11 @@
 import { describe, it, expect } from '@jest/globals';
 import { NAVIGATION_VIEW } from '../../../../src/map/view/spec.js';
 import { resolveNavigationView } from '../../../../src/map/view/resolve.js';
+import { buildManifest } from '../../../../src/map/graph/manifest.js';
 import { artifacts, edges } from '../fixtures/input.js';
+import type { Cluster } from '../../../../src/map/graph/clusters.js';
+import type { LayoutEdge } from '../../../../src/map/graph/layout.js';
+import type { CouplingGraphNode } from '@cclabsnz/sf-core';
 
 const manifest = () => artifacts().manifest;
 const resolved = () => resolveNavigationView(NAVIGATION_VIEW, artifacts().clusters, edges());
@@ -41,5 +45,109 @@ describe('the navigation view reproduces what buildManifest lays out', () => {
     expect(l0.coordinates.get('landscape')?.size).toBe(built.levels.L0_landscape.clusters.length);
     expect(l1.coordinates.size).toBe(built.levels.L1_domain.perCluster.length);
     expect(built.levels.L0_landscape.clusters.length).toBeGreaterThan(0);
+  });
+});
+
+// The shared fixture above (artifacts()) collapses to a single cluster spanning every known
+// object -- see test/unit/map/fixtures/golden/landscape-manifest.golden.json. With only one
+// cluster, every edge is internal to it: crossDomainEdges (resolve.ts) and interClusterEdges
+// (manifest.ts) filter out every edge (`a === b`) and return empty on every run, and L0 lays out
+// a single node, which computeLayout short-circuits to the centre point. Their pair-key
+// deduplication and ordering -- the exact logic that has to agree for cross-domain coordinates to
+// match -- never executes against that fixture.
+//
+// This case builds a local, three-cluster fixture with edges that genuinely cross between
+// clusters, so that logic actually runs on both sides. It includes a duplicated cluster-to-cluster
+// link (clusterA<->clusterB, carried by two different object pairs) so the dedup path runs, and a
+// second duplicated link crossed in both directions (clusterA->clusterC via Gadget/Ledger, and
+// clusterC->clusterA via Ticket/Widget) so both branches of the `a < b ? a|b : b|a` pair-key
+// ternary fire for the *same* cluster pair -- a key that normalised by edge direction instead of
+// by cluster id would fail to dedup this pair, leaving an extra edge that changes the layout.
+//
+// buildManifest is called directly here, not via artifacts(). The earlier instruction to use
+// artifacts().manifest was to stop the two sides being built from separately-constructed inputs
+// that could quietly drift apart. That risk doesn't apply here: one local fixture object feeds
+// both buildManifest and resolveNavigationView in the same test.
+describe('the navigation view reproduces buildManifest across multiple domains', () => {
+  const multiClusters: Cluster[] = [
+    { id: 'clusterA', objects: ['Widget', 'Gadget'], anchorObject: 'Widget' },
+    { id: 'clusterB', objects: ['Order', 'Invoice'], anchorObject: 'Order' },
+    { id: 'clusterC', objects: ['Ticket', 'Ledger'], anchorObject: 'Ticket' },
+  ];
+
+  const multiEdges: LayoutEdge[] = [
+    { from: 'Widget', to: 'Gadget' }, // internal to clusterA
+    { from: 'Order', to: 'Invoice' }, // internal to clusterB
+    { from: 'Ticket', to: 'Ledger' }, // internal to clusterC
+    { from: 'Widget', to: 'Order' }, // clusterA -> clusterB
+    { from: 'Gadget', to: 'Invoice' }, // clusterA -> clusterB again: same cluster pair, must dedup
+    { from: 'Invoice', to: 'Ticket' }, // clusterB -> clusterC
+    { from: 'Gadget', to: 'Ledger' }, // clusterA -> clusterC (the a < b ternary branch)
+    { from: 'Ticket', to: 'Widget' }, // clusterC -> clusterA: same pair as above, reversed --
+    // exercises the b < a branch for the same key, must still dedup to one clusterA/clusterC link
+  ];
+
+  // buildManifest only reads `nodes` for L0 metrics, which these tests don't assert -- a plain
+  // node per object, not `buildNodes(multiEdges, ...)`, keeps this fixture free of a dependency
+  // on CouplingGraphEdge's richer shape (weight, operations, components) that multiEdges (plain
+  // LayoutEdge) doesn't carry.
+  const multiNodes: CouplingGraphNode[] = multiClusters.flatMap((c) =>
+    c.objects.map((object) => ({
+      object,
+      custom: false,
+      automationCounts: { flows: 0, triggers: 0, approvals: 0 },
+      recordCount90d: 0,
+    })),
+  );
+
+  const multiManifest = () =>
+    buildManifest(
+      { tool: 'orgintel', toolVersion: '0.0.0-test', generatedAt: '2026-01-01T00:00:00Z', orgId: 'org1' },
+      multiClusters,
+      multiEdges,
+      multiNodes,
+      (o: string) => o,
+    );
+  const multiResolved = () => resolveNavigationView(NAVIGATION_VIEW, multiClusters, multiEdges);
+
+  it('crosses real domain boundaries, not the degenerate single-cluster case', () => {
+    // Guards the fixture itself: if this ever collapsed to one cluster's worth of edges, the
+    // assertions below would pass as vacuously as they do against the shared single-cluster
+    // fixture above.
+    const clusterOf = new Map<string, string>();
+    for (const c of multiClusters) for (const o of c.objects) clusterOf.set(o, c.id);
+    const crossing = multiEdges.filter((e) => clusterOf.get(e.from) !== clusterOf.get(e.to));
+    expect(crossing.length).toBeGreaterThan(0);
+  });
+
+  it('places the domains at the same landscape coordinates', () => {
+    const built = multiManifest();
+    const [l0] = multiResolved();
+    const landscape = l0.coordinates.get('landscape');
+
+    for (const cluster of built.levels.L0_landscape.clusters) {
+      expect(landscape?.get(cluster.id)).toEqual(cluster.layout);
+    }
+  });
+
+  it('places every object at the same coordinate inside its own domain', () => {
+    const built = multiManifest();
+    const [, l1] = multiResolved();
+
+    for (const per of built.levels.L1_domain.perCluster) {
+      const space = l1.coordinates.get(per.clusterId);
+      for (const [object, coord] of Object.entries(per.layout)) {
+        expect(space?.get(object)).toEqual(coord);
+      }
+    }
+  });
+
+  it('covers every domain and object, leaving nothing unchecked', () => {
+    const built = multiManifest();
+    const [l0, l1] = multiResolved();
+
+    expect(l0.coordinates.get('landscape')?.size).toBe(built.levels.L0_landscape.clusters.length);
+    expect(l1.coordinates.size).toBe(built.levels.L1_domain.perCluster.length);
+    expect(built.levels.L0_landscape.clusters.length).toBeGreaterThan(1);
   });
 });
