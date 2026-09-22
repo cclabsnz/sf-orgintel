@@ -123,14 +123,30 @@ describe('the navigation view reproduces buildManifest across multiple domains',
     );
   const multiResolved = () => resolveNavigationView(NAVIGATION_VIEW, multiClusters, multiEdges);
 
-  it('crosses real domain boundaries, not the degenerate single-cluster case', () => {
-    // Guards the fixture itself: if this ever collapsed to one cluster's worth of edges, the
-    // assertions below would pass as vacuously as they do against the shared single-cluster
-    // fixture above.
+  it('crosses domains in both pair-key directions, with duplicate links left to dedup', () => {
+    // Guards the fixture itself against being trimmed back to something that looks equivalent
+    // but exercises less. It pins exactly what the comment above promises, so a future editor
+    // deleting an edge as "redundant" gets a failure rather than silent loss of coverage:
+    // more crossing edges than distinct cluster pairs (so dedup has work to do), both branches
+    // of the `a < b ? a|b : b|a` ternary taken, and both of them taken for one same pair.
     const clusterOf = new Map<string, string>();
     for (const c of multiClusters) for (const o of c.objects) clusterOf.set(o, c.id);
-    const crossing = multiEdges.filter((e) => clusterOf.get(e.from) !== clusterOf.get(e.to));
+
+    const crossing = multiEdges
+      .map((e) => ({ a: clusterOf.get(e.from), b: clusterOf.get(e.to) }))
+      .filter((p): p is { a: string; b: string } => p.a !== undefined && p.b !== undefined && p.a !== p.b)
+      .map(({ a, b }) => ({ key: a < b ? `${a}|${b}` : `${b}|${a}`, ascending: a < b }));
+
     expect(crossing.length).toBeGreaterThan(0);
+
+    const distinctPairs = new Set(crossing.map((c) => c.key));
+    expect(distinctPairs.size).toBeLessThan(crossing.length);
+
+    const ascendingKeys = new Set(crossing.filter((c) => c.ascending).map((c) => c.key));
+    const descendingKeys = new Set(crossing.filter((c) => !c.ascending).map((c) => c.key));
+    expect(ascendingKeys.size).toBeGreaterThan(0);
+    expect(descendingKeys.size).toBeGreaterThan(0);
+    expect([...ascendingKeys].filter((k) => descendingKeys.has(k))).not.toEqual([]);
   });
 
   it('places the domains at the same landscape coordinates', () => {
