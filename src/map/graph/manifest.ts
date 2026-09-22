@@ -89,7 +89,14 @@ function clusterMetrics(c: Cluster, nodeByName: Map<string, CouplingGraphNode>):
   return { objects: c.objects.length, automations, recordCount90d };
 }
 
-/** Distinct cluster-to-cluster links, for laying the landscape out. Deterministically ordered. */
+/**
+ * Distinct cluster-to-cluster links, for laying the landscape out. Deterministically ordered.
+ *
+ * DUPLICATED (deliberately) in src/map/view/resolve.ts as `crossDomainEdges`, because this file
+ * is deleted at 1.0 and a replacement importing from it could not outlive it. The two must stay
+ * in step -- same pair-key ordering, same dedup, same sort -- until this file is removed. Check
+ * test/unit/map/view/equivalence.test.ts if you change either one.
+ */
 function interClusterEdges(edges: LayoutEdge[], clusterOf: Map<string, string>): LayoutEdge[] {
   const seen = new Set<string>();
   const out: LayoutEdge[] = [];
