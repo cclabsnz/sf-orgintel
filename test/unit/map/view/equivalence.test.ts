@@ -31,6 +31,10 @@ describe('the navigation view reproduces what buildManifest lays out', () => {
 
     for (const per of built.levels.L1_domain.perCluster) {
       const space = l1.coordinates.get(per.clusterId);
+      // Iterating the manifest's entries checks the resolver for omissions only. The size
+      // equality is what checks it for surplus: an object leaking into a second domain's space
+      // as well as its own would still satisfy every per-object comparison above.
+      expect(space?.size).toBe(Object.keys(per.layout).length);
       for (const [object, coord] of Object.entries(per.layout)) {
         expect(space?.get(object)).toEqual(coord);
       }
@@ -136,6 +140,9 @@ describe('the navigation view reproduces buildManifest across multiple domains',
 
     for (const per of built.levels.L1_domain.perCluster) {
       const space = l1.coordinates.get(per.clusterId);
+      // Surplus check, as above: without it an object leaking into a second domain's space
+      // would pass every per-object comparison.
+      expect(space?.size).toBe(Object.keys(per.layout).length);
       for (const [object, coord] of Object.entries(per.layout)) {
         expect(space?.get(object)).toEqual(coord);
       }
