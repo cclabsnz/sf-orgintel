@@ -15,7 +15,7 @@ where the questions are:
 - What does it integrate with, and which product owns each integration?
 - How do people get access, and how do they lose it?
 
-Those were answered for POPH by hand: roughly forty ad-hoc SOQL, Tooling and metadata reads,
+Those were answered for the reference org by hand: roughly forty ad-hoc SOQL, Tooling and metadata reads,
 then a hand-drawn Lucid diagram. It took an afternoon and it is stale the moment the org
 changes. Every one of those reads is deterministic and already within OrgIntel's read-only
 envelope. This is a collector-and-renderer problem, not a research problem.
@@ -50,7 +50,7 @@ Three columns, read left to right. Answers *"which product reaches out to what."
 
 The left/right split is the point. Drawn as one panel per product, every shared service repeats
 six times and the reader cannot see what is common infrastructure versus what is product-specific.
-On POPH the split immediately surfaced that *every shared service routes through MuleSoft and
+On the reference org the split immediately surfaced that *every shared service routes through MuleSoft and
 every direct REST callout is product-specific* — a real architectural statement that the
 per-product layout hid.
 
@@ -70,21 +70,21 @@ All read-only. All already permitted by the envelope in `PERMISSIONS.md`. Groupe
 - `PermissionSetGroup`, `PermissionSet` counts
 
 **Products by size**
-- `Case` grouped by `RecordType.Name` — on POPH this mapped one-to-one onto business processes
+- `Case` grouped by `RecordType.Name` — on the reference org this mapped one-to-one onto business processes
 - `Account` grouped by `RecordType.Name` — reveals the person-account shape
 - Row counts on the anchor objects `discover` already ranks
 
 **Capabilities**
 - Counts over `ApexClass`, `ApexTrigger`, `FlowDefinition`, `LightningComponentBundle`, `AuraDefinitionBundle`, `PermissionSet`, `ConnectedApplication`, `NamedCredential`, `ExternalDataSource`, `RemoteProxy`
 - `sf sobject list` filtered to `__e` and `ChangeEvent` suffixes — platform events and CDC
-- `EventRelayConfig`, `PlatformEventChannel` — **absence is a finding.** Both empty on POPH, which bounds who can consume the delivery allocation.
+- `EventRelayConfig`, `PlatformEventChannel` — **absence is a finding.** Both empty on the reference org, which bounds who can consume the delivery allocation.
 
 **Identity**
 - `AuthProvider` and `SamlSsoConfig` are not SOQL-queryable. Use `sf org list metadata` then a
   targeted retrieve. The retrieved XML gives issuer, login URL, `identityMapping` and
   `userProvisioning` — enough to state the SSO posture precisely.
 - `LoginHistory` grouped by `Application`/`LoginType` — what people *actually* authenticate with.
-  On POPH this contradicted the assumed posture: community username/password logins outnumbered
+  On the reference org this contradicted the assumed posture: community username/password logins outnumbered
   community SSO roughly eleven to one.
 
 **Integration edges**
@@ -104,24 +104,24 @@ The proposal is a three-tier confidence model, reusing the vocabulary already in
 | Tier | Rule | Rendering |
 | --- | --- | --- |
 | `confirmed` | An Apex body contains `callout:<credential>` and the class's prefix resolves to a product | Heavier stroke, darker fill, labelled |
-| `inferred` | The credential or remote-site *name* carries a product prefix (`APH_Cloudhub_NHI` → APHOS) | Normal stroke |
+| `inferred` | The credential or remote-site *name* carries a product prefix (`ACME_Gateway_Registry` → ACME) | Normal stroke |
 | `unattributed` | Endpoint is live but no prefix resolves | Grey, dashed, in its own band — **never guessed** |
 
 The prefix registry is derived, not hardcoded: tokenise custom component names, take prefixes
 appearing above a frequency floor, and match them against `CustomApplication` developer names
-and installed package names. On POPH that yields `AIRNG`, `APH`, `NDMS`, `NIS`, `SPS`, `AIR`
+and installed package names. On the reference org that yields `ACME`, `BOLT`, `CDX`, `DLV`, `EMS`, `FNX`
 without a config file.
 
 **Two things learned the hard way, both of which will bite the implementation:**
 
 1. **Most integration logic is unreachable as source.** `sf project retrieve start --metadata
-   ApexClass` returned 243 of 2,367 classes on POPH — the rest live in managed and unlocked
+   ApexClass` returned 243 of 2,367 classes on the reference org — the rest live in managed and unlocked
    packages. But `ApexClass.Body` via the **Tooling API** returns bodies for unlocked-package
    classes that retrieve refuses. The confirmed tier must read bodies through Tooling, in
    keyset-paginated chunks, never via source retrieve.
 
 2. **OmniStudio holds callouts that Apex does not.** Integration Procedures make HTTP calls that
-   no Apex regex will ever see. On POPH this is why only two edges reached `confirmed` out of
+   no Apex regex will ever see. On the reference org this is why only two edges reached `confirmed` out of
    sixteen. Either parse `OmniProcess` definitions or state the coverage limit on the report —
    silently reporting two confirmed edges as though that were the whole picture is the failure
    mode to avoid.
@@ -143,7 +143,7 @@ Both views obey `DESIGN_BRIEF.md` — Bench Instrument, daylight, calibrated. Sp
 
 ## Lucid export
 
-The POPH diagram was built through Lucid's MCP server. **OrgIntel must not do that.** A network
+The reference diagram was built through Lucid's MCP server. **OrgIntel must not do that.** A network
 call to Lucid breaks both the no-egress invariant and the local-first claim printed on the
 chassis, and those are the reasons anyone trusts this tool with a production org.
 
@@ -152,7 +152,7 @@ The operator imports it manually if they want an editable diagram. The plugin ne
 to anything but the authenticated org.
 
 Standard Import is a documented, stable JSON schema — pages, shapes with bounding boxes, lines
-with shape endpoints, `rectangleContainer` for bands, `table` for matrices. The hand-built POPH
+with shape endpoints, `rectangleContainer` for bands, `table` for matrices. The hand-built reference
 document is a working reference for the exact shape of that payload.
 
 ## Command shape
@@ -173,7 +173,7 @@ Flags follow the existing convention: `--html`, `--output`, `--branding`, `--pre
 - **Not object-level coupling.** That is `map`, and anatomy should link to it rather than redraw it.
 - **No LLM.** Attribution is prefix-matching and regex over bodies. Deterministic, same org in,
   same diagram out — which is also what makes the output diffable across runs.
-- **No friendly renaming.** `AIRNG_ImmsQualityEvent__e`, not "immunisation quality events."
+- **No friendly renaming.** `ACME_QualityEvent__e`, not "immunisation quality events."
 
 ## Acceptance
 
@@ -193,5 +193,5 @@ Flags follow the existing convention: `--html`, `--output`, `--branding`, `--pre
   label rail) instead of hue?
 - Does anatomy earn a fourth command, or is it `map --anatomy`? Leaning fourth command; the
   collectors share almost nothing with the coupling pipeline.
-- Is `Case.RecordType` → business process a POPH coincidence or a pattern worth generalising?
+- Is `Case.RecordType` → business process a single-org coincidence or a pattern worth generalising?
   Test against a second org before hardcoding the assumption.
