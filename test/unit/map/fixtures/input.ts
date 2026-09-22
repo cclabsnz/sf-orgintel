@@ -16,6 +16,7 @@ import { assembleCouplingArtifacts, type MapArtifacts } from '../../../../src/ma
 import type { NodeInfo } from '../../../../src/map/graph/couplingGraph.js';
 import type { ApexClassInput, ApexTriggerInput } from '../../../../src/map/apex/apexTypes.js';
 import type { FragmentInput } from '../../../../src/map/fragment.js';
+import type { LayoutEdge } from '../../../../src/map/graph/layout.js';
 
 const DIR = join(process.cwd(), 'test/unit/map/fixtures/flows');
 const flow = (f: string, api: string) =>
@@ -73,6 +74,16 @@ export function artifacts(): MapArtifacts {
       orgId: PROVENANCE.orgId,
     },
   });
+}
+
+/**
+ * The same merged edge list `assembleCouplingArtifacts` passes to `buildManifest` -- read back
+ * off `artifacts().couplingGraph.edges` rather than recomputed, so the navigation view's
+ * equivalence test (test/unit/map/view/equivalence.test.ts) resolves against the exact edges the
+ * pinned manifest was built from, not a second set that could quietly drift from it.
+ */
+export function edges(): LayoutEdge[] {
+  return artifacts().couplingGraph.edges;
 }
 
 /**
