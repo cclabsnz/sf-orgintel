@@ -1,13 +1,16 @@
 // The navigation view expressed as data: a name, a selector, and a level list -- exactly the shape
 // sf-orgviz's own design taxonomy gives a "view" (a saved selector plus band order). This is
 // what makes `intel map` a *projection* rather than a third hardcoded view name: the
-// membership rules `buildManifest` used to bury in the L0/L1 layout logic are now a value that can
-// be inspected, tested and (eventually) resolved by something other than `buildManifest`.
+// membership rules `buildManifest` buries in its L0/L1 layout logic are now a value that can be
+// inspected, tested and resolved by something other than `buildManifest`.
 //
 // This module changes no rendering behaviour. `buildManifest` still builds the manifest
-// `intel map` writes, unchanged. The NAVIGATION_VIEW spec is the value this module contributes;
-// a resolver in a later change will consume it to prove that the coordinates agree on level
-// *membership*, which is the whole point of turning the rules into data.
+// `intel map` writes, unchanged. The NAVIGATION_VIEW spec is the value this module contributes,
+// and `src/map/view/resolve.ts` is the resolver that consumes it. The two carry separate claims:
+// the spec expresses which things belong to which level, and the resolver turns those levels into
+// coordinates that `test/unit/map/view/equivalence.test.ts` shows are identical to the ones
+// `buildManifest` produces. Membership is what is declared here; coordinate equality is what is
+// proven there.
 //
 // TYPE OWNERSHIP: `NavigationViewSpec` is declared LOCALLY here, not imported from a shared package.
 // sf-orgviz still hardcodes its own view types and there is no `NavigationViewSpec` in
