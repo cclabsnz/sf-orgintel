@@ -41,17 +41,34 @@ describe('resolveNavigationView', () => {
     expect([...(l1.coordinates.get('cluster-2')?.keys() ?? [])].sort()).toEqual(['Account']);
   });
 
-  it('lays a domain out from its internal couplings only', () => {
-    // Case-Account crosses domains. It must not influence cluster-1's internal layout, or an
-    // object's position inside its domain would depend on a domain it is not in.
-    const withCrossEdge = resolveNavigationView(NAVIGATION_VIEW, clusters(), edges());
-    const withoutCrossEdge = resolveNavigationView(NAVIGATION_VIEW, clusters(), [
-      { from: 'Case', to: 'WorkOrder' },
-    ]);
+  it('lays a domain out over its own objects only, never a coupled neighbour', () => {
+    // Case-Account crosses domains. A domain's coordinate space must hold that domain's own
+    // objects and nothing else: if the resolver laid out each domain's objects *plus whatever
+    // they couple to*, Account would land in cluster-1's space and an object's position inside
+    // its domain would depend on a domain it is not in.
+    //
+    // This is deliberately a NODE-list assertion, not an edge-list one. computeLayout filters
+    // its own edge argument down to its node list, so handing it the full edge list instead of
+    // the internal subset yields byte-identical coordinates and no assertion could tell the two
+    // apart. The node list is the part that is actually load-bearing, so that is what is pinned.
+    const [, l1] = resolveNavigationView(NAVIGATION_VIEW, clusters(), edges());
 
-    expect(withCrossEdge[1].coordinates.get('cluster-1')).toEqual(
-      withoutCrossEdge[1].coordinates.get('cluster-1'),
-    );
+    // Guard the fixture: "no neighbour leaked in" is a claim about nothing unless some object
+    // really does couple across a domain boundary.
+    const clusterOf = new Map<string, string>();
+    for (const c of clusters()) for (const o of c.objects) clusterOf.set(o, c.id);
+    const crossing = edges().filter((e) => clusterOf.get(e.from) !== clusterOf.get(e.to));
+    expect(crossing.length).toBeGreaterThan(0);
+
+    for (const c of clusters()) {
+      const space = l1.coordinates.get(c.id);
+      expect([...(space?.keys() ?? [])].sort()).toEqual([...c.objects].sort());
+    }
+
+    // Spelled out for the objects that would actually leak if neighbours were included: Account
+    // couples to Case but belongs to cluster-2, and vice versa.
+    expect(l1.coordinates.get('cluster-1')?.has('Account')).toBe(false);
+    expect(l1.coordinates.get('cluster-2')?.has('Case')).toBe(false);
   });
 
   it('is deterministic: same input, same coordinates', () => {
