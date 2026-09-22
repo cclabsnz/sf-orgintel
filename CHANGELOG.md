@@ -50,7 +50,7 @@ nodes because classes that could never be read are no longer counted as analysed
   today: the manifest is still written, and this is the replacement consumers of its coordinates
   move to before 1.0 removes it. The spec declares only the two levels that resolve, because
   `L2_process`, `L3_transition` and `L4_component` have shipped since `0.1.0` carrying a null
-  reference, a bare `reserved` flag and an empty array respectively.
+  reference, a bare `reserved` flag and an empty array respectively. (#26)
 
 ### Changed
 
