@@ -68,6 +68,12 @@ describe('the navigation view reproduces what buildManifest lays out', () => {
 // ternary fire for the *same* cluster pair -- a key that normalised by edge direction instead of
 // by cluster id would fail to dedup this pair, leaving an extra edge that changes the layout.
 //
+// It also includes a cluster holding exactly one object (clusterD/Journal). connectedComponents
+// produces those on real orgs, and one object is a distinct computeLayout branch: the `n === 1`
+// short-circuit that places the node at the canvas centre without running the force loop at all.
+// Every other cluster here has two objects, so without clusterD that branch would never be
+// compared between the two sides at L1.
+//
 // buildManifest is called directly here, not via artifacts(). The earlier instruction to use
 // artifacts().manifest was to stop the two sides being built from separately-constructed inputs
 // that could quietly drift apart. That risk doesn't apply here: one local fixture object feeds
@@ -77,6 +83,7 @@ describe('the navigation view reproduces buildManifest across multiple domains',
     { id: 'clusterA', objects: ['Widget', 'Gadget'], anchorObject: 'Widget' },
     { id: 'clusterB', objects: ['Order', 'Invoice'], anchorObject: 'Order' },
     { id: 'clusterC', objects: ['Ticket', 'Ledger'], anchorObject: 'Ticket' },
+    { id: 'clusterD', objects: ['Journal'], anchorObject: 'Journal' }, // one object: the n === 1 branch
   ];
 
   const multiEdges: LayoutEdge[] = [
@@ -89,6 +96,8 @@ describe('the navigation view reproduces buildManifest across multiple domains',
     { from: 'Gadget', to: 'Ledger' }, // clusterA -> clusterC (the a < b ternary branch)
     { from: 'Ticket', to: 'Widget' }, // clusterC -> clusterA: same pair as above, reversed --
     // exercises the b < a branch for the same key, must still dedup to one clusterA/clusterC link
+    { from: 'Journal', to: 'Order' }, // clusterD -> clusterB: clusterD's only coupling leaves it,
+    // so its own L1 space is a single unconnected node
   ];
 
   // buildManifest only reads `nodes` for L0 metrics, which these tests don't assert -- a plain
