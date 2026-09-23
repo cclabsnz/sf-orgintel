@@ -8,18 +8,10 @@ import { renderAnatomyHtml } from '../../report/anatomyReport.js';
 import type { AnatomyArtifact } from '../../anatomy/types.js';
 import { TOOL_VERSION, API_VERSION } from '../../version.js';
 
-/** Two spaces and a trailing newline, so consecutive runs diff cleanly in git. */
-export function writeArtifact(outputDir: string, artifact: AnatomyArtifact): string {
-  fs.mkdirSync(outputDir, { recursive: true });
-  const artifactPath = path.join(outputDir, 'anatomy.json');
-  fs.writeFileSync(artifactPath, JSON.stringify(artifact, null, 2) + '\n', 'utf-8');
-  return artifactPath;
-}
-
 /**
- * Same write path as `writeArtifact` -- two-space indent, trailing newline, directory created if
- * missing -- so `anatomy-fragment.json` inherits the same diff-cleanly-in-git behaviour as
- * `anatomy.json` rather than a second, subtly different convention.
+ * Two spaces and a trailing newline, so consecutive runs diff cleanly in git. This was
+ * `writeArtifact`'s convention for `anatomy.json` before 1.0 retired that file; the fragment
+ * inherits it rather than inventing a second, subtly different one.
  */
 export function writeFragment(outputDir: string, fragment: CanonicalGraph): string {
   fs.mkdirSync(outputDir, { recursive: true });
@@ -34,7 +26,7 @@ export function writeFragment(outputDir: string, fragment: CanonicalGraph): stri
  * a tidy directory, because these reports carry real product names, user counts and endpoints
  * and are routinely handed to someone else.
  *
- * Separate from `writeArtifact` so that a run without `--html` writes no report at all.
+ * Separate from `writeFragment` so that a run without `--html` writes no report at all.
  */
 export function writeReport(outputDir: string, html: string, orgId: string, generatedAtMs: number): string {
   fs.mkdirSync(outputDir, { recursive: true });
@@ -49,11 +41,11 @@ export default class IntelAnatomyCommand extends SfCommand<AnatomyArtifact> {
     'Collects what products live in the org, who uses it on what licence, what it integrates with, and how ' +
     'people authenticate. Every integration edge records how it was detected and, separately, how it was ' +
     'attributed to a product, so a confirmed call with an unknown owner is reported as exactly that. ' +
-    'Emits anatomy-fragment.json, sf-orgintel\'s contribution to the shared canonical org graph, plus ' +
-    'anatomy.json -- the same facts in the older per-tool IR, deprecated since 0.3.0 and retired at 1.0. ' +
-    'With --html, also renders View A, a seven-band layer map of the same artifact, which adds no reads: ' +
-    'a band the artifact does not cover says so rather than going to fetch it. ' +
-    'Read-only and deterministic: same org in, same anatomy.json and anatomy-fragment.json out.';
+    'Emits anatomy-fragment.json, sf-orgintel\'s contribution to the shared canonical org graph. The older ' +
+    'per-tool IR file anatomy.json was deprecated at 0.3.0 and is no longer written as of 1.0. ' +
+    'With --html, also renders View A, a seven-band layer map of the same facts, which adds no reads: ' +
+    'a band the collection does not cover says so rather than going to fetch it. ' +
+    'Read-only and deterministic: same org in, same anatomy-fragment.json out.';
   public static examples = [
     '<%= config.bin %> <%= command.id %> --target-org myOrg',
     '<%= config.bin %> <%= command.id %> --target-org myOrg --html --output ./reports',
@@ -66,7 +58,7 @@ export default class IntelAnatomyCommand extends SfCommand<AnatomyArtifact> {
     'target-org': Flags.requiredOrg(),
     html: Flags.boolean({ summary: 'Also write a branded HTML report of View A, the seven-band layer map.', default: false }),
     output: Flags.string({
-      summary: 'Directory to write anatomy.json, anatomy-fragment.json, and the --html report to.',
+      summary: 'Directory to write anatomy-fragment.json and the --html report to.',
       default: '.',
     }),
     branding: Flags.string({
@@ -94,9 +86,6 @@ export default class IntelAnatomyCommand extends SfCommand<AnatomyArtifact> {
       toolVersion: TOOL_VERSION,
       apiVersion: API_VERSION,
     });
-
-    const artifactPath = writeArtifact(flags.output, artifact);
-    this.log(`IR written: ${artifactPath}`);
 
     const fragmentPath = writeFragment(flags.output, fragment);
     this.log(`IR written: ${fragmentPath}`);

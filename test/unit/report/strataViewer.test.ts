@@ -1,13 +1,16 @@
 import { renderStrataViewer } from '../../../src/report/strataViewer.js';
-import type { CouplingGraph } from '@cclabsnz/sf-core';
+import type { CouplingView } from '../../../src/report/couplingView.js';
 
-const graph = (objectName: string): CouplingGraph =>
-  ({
-    version: 1,
-    provenance: { generatedAt: '2026-08-12T00:00:00Z', orgId: '00Dxx0000000000EAA' },
-    nodes: [{ object: objectName, layer: 'business' }, { object: 'Account', layer: 'business' }],
-    edges: [{ from: objectName, to: 'Account', weight: 1, operations: [], components: [] }],
-  }) as unknown as CouplingGraph;
+// A `CouplingView` literal, not the `CouplingGraph` this used to build: 1.0 retired that document
+// and the renderer now takes only what `couplingViewOf` produces from the fragment.
+const counts = { flows: 0, triggers: 0, approvals: 0 };
+const graph = (objectName: string): CouplingView => ({
+  nodes: [
+    { object: objectName, layer: 'business', automationCounts: counts, recordCount90d: 0 },
+    { object: 'Account', layer: 'business', automationCounts: counts, recordCount90d: 0 },
+  ],
+  edges: [{ from: objectName, to: 'Account', weight: 1, operations: [], components: [] }],
+});
 
 describe('renderStrataViewer payload', () => {
   it('cannot be closed early by a string in the data', () => {

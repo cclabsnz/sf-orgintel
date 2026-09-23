@@ -1,7 +1,9 @@
-// Cross-checks the two files a single `intel anatomy` run writes: anatomy.json (the artifact)
-// and anatomy-fragment.json (the fragment). Both come out of one `runAnatomy()` call over one
-// collected set of facts, so this is what would catch a later change that derives one of them
-// differently and lets the pair quietly disagree about the same org.
+// Cross-checks the two halves a single `intel anatomy` run produces: the artifact and the
+// fragment. Both come out of one `runAnatomy()` call over one collected set of facts, so this is
+// what would catch a later change that derives one of them differently.
+//
+// 1.0 retired `anatomy.json`, so only the fragment is written now -- but the artifact is still
+// built, still feeds View A's bands, and this is still what holds the two to the same facts.
 import { describe, it, expect } from '@jest/globals';
 import { runResult } from './fixtures/input.js';
 

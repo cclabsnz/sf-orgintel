@@ -1,18 +1,17 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
-import type { CouplingGraph, LandscapeManifest, CanonicalGraph, EvidenceTier, Branding } from '@cclabsnz/sf-core';
+import type { CanonicalGraph, EvidenceTier, Branding } from '@cclabsnz/sf-core';
 import { resolveBranding, type BrandingOverrides } from '@cclabsnz/sf-core';
 import { resolveOrgInfo, buildIntelContext } from '../../lib/wire.js';
 import { runMap, type MapRunResult } from '../../map/runMap.js';
 import { renderMapHtml, type MapAnchorRow, type MapReportInput } from '../../report/mapReport.js';
+import { couplingViewOf, type CouplingView } from '../../report/couplingView.js';
 import { OrgIntelCache } from '../../lib/cache.js';
 import { resolveEvidence } from '../../map/evidence.js';
 import { TOOL_VERSION, API_VERSION } from '../../version.js';
 
 interface MapCommandResult {
-  couplingGraph: CouplingGraph;
-  manifest: LandscapeManifest;
   fragment: CanonicalGraph;
   flowsAnalyzed: number;
   apexClassesAnalyzed: number;
@@ -34,11 +33,14 @@ export function buildMapReportInput(params: {
   anchors: MapAnchorRow[] | undefined;
   evidenceTier: EvidenceTier | null;
   branding: Branding;
+  /** The run's fragment, already adapted. Accepted rather than re-derived so `run()` builds one
+   *  view and hands the same one to the report and to the terminal summary. */
+  view?: CouplingView;
 }): MapReportInput {
   const { orgName, result, anchors, evidenceTier, branding } = params;
   return {
     orgName,
-    couplingGraph: result.couplingGraph,
+    couplingGraph: params.view ?? couplingViewOf(result.fragment),
     clusters: result.clusters,
     layout: result.layout,
     timelines: result.timelines,
@@ -52,7 +54,10 @@ export function buildMapReportInput(params: {
     flowsListed: result.flowsListed,
     apexClassesListed: result.apexClassesListed,
     apexTriggersListed: result.apexTriggersListed,
-    generatedAt: result.couplingGraph.provenance.generatedAt,
+    // `runMap` stamps the fragment's `capturedAt` from the same run provenance that used to
+    // stamp `couplingGraph.provenance.generatedAt`, so this is the same instant, read off the
+    // one model that survives rather than a second field kept alongside it.
+    generatedAt: result.fragment.capturedAt,
     branding,
   };
 }
@@ -66,8 +71,6 @@ export function buildMapReportInput(params: {
  */
 export function buildMapCommandResult(result: MapRunResult): MapCommandResult {
   return {
-    couplingGraph: result.couplingGraph,
-    manifest: result.manifest,
     fragment: result.fragment,
     flowsAnalyzed: result.flowsAnalyzed,
     apexClassesAnalyzed: result.apexClassesAnalyzed,
@@ -84,9 +87,9 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
     'Parses Active flows (Flow XML) and Apex (SymbolTable, with a body-regex fallback) to build a cross-object ' +
     'coupling graph: object-pair couplings aggregated across flows, triggers, and classes with weights, ' +
     'operations, contributing components, and confidence. Emits graph-fragment.json, sf-orgintel\'s contribution ' +
-    'to the shared canonical org graph, plus coupling-graph.json (the same facts in the older per-tool IR) and ' +
-    'landscape-manifest.json (layout coordinates, which the graph does not store). Both are deprecated since ' +
-    '0.3.0 and retired at 1.0. With --html, a branded report with a static coupling graph. Read-only and ' +
+    'to the shared canonical org graph. The older per-tool IR files coupling-graph.json and ' +
+    'landscape-manifest.json were deprecated at 0.3.0 and are no longer written as of 1.0. ' +
+    'With --html, a branded report with a static coupling graph. Read-only and ' +
     'deterministic: same org in, same graph out.';
   public static examples = [
     '<%= config.bin %> <%= command.id %> --target-org myOrg',
@@ -103,9 +106,7 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
     html: Flags.boolean({ summary: 'Also write a branded HTML coupling report.', default: false }),
     output: Flags.string({
       char: 'o',
-      summary:
-        'Directory to write coupling-graph.json, landscape-manifest.json, graph-fragment.json, and the ' +
-        '--html report.',
+      summary: 'Directory to write graph-fragment.json and the --html report.',
       default: '.',
     }),
     branding: Flags.string({
@@ -126,7 +127,9 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
     }),
     'top-layout': Flags.integer({
       summary: 'Objects to draw in the HTML coupling picture (default 20).',
-      description: 'Affects the report visual only. The landscape manifest lays out every object.',
+      description:
+        'Affects the report visual only. The navigation view lays every object out completely, ' +
+        'independently of this cap.',
       min: 2,
     }),
     'max-node-counts': Flags.integer({
@@ -162,15 +165,14 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
       },
     );
 
+    // One adaptation of the fragment for this run, shared by the HTML report and the terminal
+    // summary below. Both used to read the separate CouplingGraph; deriving the view twice would
+    // reintroduce exactly the second model 1.0 removed.
+    const view = couplingViewOf(result.fragment);
+
     fs.mkdirSync(flags.output, { recursive: true });
-    const graphPath = path.join(flags.output, 'coupling-graph.json');
-    const manifestPath = path.join(flags.output, 'landscape-manifest.json');
     const fragmentPath = path.join(flags.output, 'graph-fragment.json');
-    fs.writeFileSync(graphPath, JSON.stringify(result.couplingGraph, null, 2), 'utf-8');
-    fs.writeFileSync(manifestPath, JSON.stringify(result.manifest, null, 2), 'utf-8');
     fs.writeFileSync(fragmentPath, JSON.stringify(result.fragment, null, 2), 'utf-8');
-    this.log(`IR written: ${graphPath}`);
-    this.log(`IR written: ${manifestPath}`);
     this.log(`IR written: ${fragmentPath}`);
 
     if (flags.html) {
@@ -178,24 +180,26 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
         ? (JSON.parse(fs.readFileSync(flags.branding, 'utf-8')) as BrandingOverrides)
         : undefined;
       const branding = resolveBranding(overrides, flags['prepared-for']);
-      const html = renderMapHtml(buildMapReportInput({ orgName: orgInfo.name, result, anchors, evidenceTier, branding }));
+      const html = renderMapHtml(
+        buildMapReportInput({ orgName: orgInfo.name, result, anchors, evidenceTier, branding, view }),
+      );
       const htmlPath = path.join(flags.output, `orgintel-map-${orgInfo.id}-${Date.now()}.html`);
       fs.writeFileSync(htmlPath, html, 'utf-8');
       this.log(`Report written: ${htmlPath}`);
     }
 
-    this.printSummary(result, evidenceTier);
+    this.printSummary(view, result.clusters.length, evidenceTier);
     for (const note of result.notes) this.log(`  note: ${note}`);
 
     return buildMapCommandResult(result);
   }
 
-  private printSummary(result: { couplingGraph: CouplingGraph; clusters: unknown[] }, tier: EvidenceTier | null): void {
-    const g = result.couplingGraph;
+  private printSummary(view: CouplingView, domains: number, tier: EvidenceTier | null): void {
+    const g = view;
     this.log('');
     this.log('─────────────────────────────────────────');
     this.log(`  Evidence tier: ${tier ?? 'not measured (run `sf intel probe`)'}`);
-    this.log(`  Objects: ${g.nodes.length}   Coupled pairs: ${g.edges.length}   Domains: ${result.clusters.length}`);
+    this.log(`  Objects: ${g.nodes.length}   Coupled pairs: ${g.edges.length}   Domains: ${domains}`);
     this.log('─────────────────────────────────────────');
     this.log('  Top process backbones:');
     for (const e of g.edges.slice(0, 8)) {

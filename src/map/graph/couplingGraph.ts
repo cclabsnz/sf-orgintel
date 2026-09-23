@@ -1,11 +1,10 @@
-import type {
-  CouplingGraphEdge,
-  CouplingGraphNode,
-  CouplingComponentRef,
-  CouplingOperation,
-} from '@cclabsnz/sf-core';
+// Edge aggregation for the coupling analysis. 1.0 retired `coupling-graph.json` and the
+// `CouplingGraph` document assembled around these edges; what survives here is the merge itself,
+// because it is the analysis, not the artifact. `mergeEdges`'s output is what `buildMapFragment`
+// turns into the fragment's `couples` edges, and `CouplingGraphEdge` remains its element type --
+// a published edge shape this still conforms to, not a document this still emits.
+import type { CouplingGraphEdge, CouplingComponentRef, CouplingOperation } from '@cclabsnz/sf-core';
 import type { RawEdge, CouplingDirection } from '../types.js';
-import { roleOf } from './layers.js';
 
 export interface NodeInfo {
   custom: boolean;
@@ -74,25 +73,20 @@ export function mergeEdges(raw: RawEdge[]): CouplingGraphEdge[] {
   return edges;
 }
 
-/** Build graph nodes for every object that appears in an edge. */
-export function buildNodes(edges: CouplingGraphEdge[], info: (object: string) => NodeInfo): CouplingGraphNode[] {
+/**
+ * Every object that appears in an edge, in codepoint order.
+ *
+ * This replaces `buildNodes`, which built the same object list wrapped in full
+ * `CouplingGraphNode` records. Those records existed to be serialised into `coupling-graph.json`;
+ * the only part the pipeline itself ever used was the object names and their layer, and the layer
+ * comes from `roleOf` at every reading site. So the node assembly went with the artifact and the
+ * list it was derived from stayed. Same objects, same order.
+ */
+export function edgeObjects(edges: readonly CouplingGraphEdge[]): string[] {
   const objects = new Set<string>();
   for (const e of edges) {
     objects.add(e.from);
     objects.add(e.to);
   }
-  return [...objects]
-    .sort()
-    .map((object) => {
-      const i = info(object);
-      return {
-        object,
-        custom: i.custom,
-        automationCounts: i.automationCounts,
-        recordCount90d: i.recordCount90d,
-        // Derived, not supplied: the classifier is the single source of truth, so a caller
-        // cannot accidentally disagree with what the report and manifest show.
-        layer: roleOf(object),
-      };
-    });
+  return [...objects].sort();
 }

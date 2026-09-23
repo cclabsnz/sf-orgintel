@@ -30,6 +30,19 @@ describe('resolveNavigationView', () => {
     expect([...(landscape?.keys() ?? [])].sort()).toEqual(['cluster-1', 'cluster-2']);
   });
 
+  it('gives each domain a distinct landscape position', () => {
+    // Carried over from test/unit/map/manifest.test.ts, which asserted this of `buildManifest`'s
+    // L0 before 1.0 retired landscape-manifest.json and deleted that function. The property
+    // outlived its old subject: two domains stacked on one point is a landscape a viewer cannot
+    // navigate, whichever code lays it out.
+    const [l0] = resolveNavigationView(NAVIGATION_VIEW, clusters(), edges());
+    const landscape = l0.coordinates.get('landscape');
+
+    const positions = [...(landscape?.values() ?? [])].map((p) => `${p.x},${p.y}`);
+    expect(positions).toHaveLength(clusters().length);
+    expect(new Set(positions).size).toBe(positions.length);
+  });
+
   it('gives each domain its own object coordinate space', () => {
     // L0 and L1 are deliberately different spaces: L0 positions domains against each other, L1
     // positions objects within one domain. Flattening them into one space would make a viewer

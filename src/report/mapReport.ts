@@ -1,7 +1,6 @@
 import { esc, type Branding } from '@cclabsnz/sf-core';
-import type { CouplingGraph, CouplingGraphEdge } from '@cclabsnz/sf-core';
 import type { Cluster } from '../map/graph/clusters.js';
-import type { CouplingView } from './couplingView.js';
+import type { CouplingView, CouplingViewEdge } from './couplingView.js';
 import { summariseLayers, crossLayerCoupling, LAYER_DESCRIPTIONS } from '../map/graph/layers.js';
 import { extractProcessChains } from '../map/graph/chains.js';
 import { summariseCoverage, coverageHeadline, edgeConfidence } from '../map/graph/coverage.js';
@@ -21,7 +20,12 @@ export interface MapAnchorRow {
 
 export interface MapReportInput {
   orgName: string;
-  couplingGraph: CouplingGraph | CouplingView;
+  /**
+   * The fragment adapted by `couplingViewOf`. Named `couplingGraph` for the same reason the
+   * adapter is shaped the way it is: this used to be the `CouplingGraph` document. 1.0 retired
+   * that document, so the fragment-derived view is the only thing that can be passed here.
+   */
+  couplingGraph: CouplingView;
   clusters: Cluster[];
   layout: Map<string, Point>;
   /** Per-object save sequences; the only guaranteed ordering in the report. */
@@ -217,7 +221,7 @@ ${bands}${wires}${marks}
  * Only a record-triggered flow or an Apex trigger says *order*: when a Case changes, an
  * Account is updated. Chaining those is the one output here shaped like a process.
  */
-function processSection(graph: CouplingGraph | CouplingView): string {
+function processSection(graph: CouplingView): string {
   const chains = extractProcessChains(graph.edges).slice(0, 10);
   const directional = graph.edges.filter((e) => e.direction).length;
 
@@ -291,7 +295,7 @@ ${flows}
 ${more}`;
 }
 
-function layerSection(graph: CouplingGraph | CouplingView): string {
+function layerSection(graph: CouplingView): string {
   const objects = graph.nodes.map((n) => n.object);
   if (objects.length === 0) return '';
 
@@ -325,7 +329,7 @@ business process but reveal how the business model is wired to identity, logging
 <tbody>${pairRows}</tbody></table>`;
 }
 
-function couplingTableSection(edges: CouplingGraphEdge[]): string {
+function couplingTableSection(edges: CouplingViewEdge[]): string {
   const top = edges.slice(0, 25);
   const rows = top
     .map((e) => {
@@ -350,7 +354,7 @@ function anchorSection(anchors?: MapAnchorRow[]): string {
 <table><thead><tr><th>Object</th><th>Score</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-function clusterSection(clusters: Cluster[], graph: CouplingGraph | CouplingView): string {
+function clusterSection(clusters: Cluster[], graph: CouplingView): string {
   const labelOf = new Map(graph.nodes.map((n) => [n.object, n.object]));
   const rows = clusters
     .slice(0, 12)

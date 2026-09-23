@@ -1,21 +1,19 @@
-// Turns a NavigationViewSpec plus a merged graph into the same coordinates buildManifest
-// produces for L0 and L1. This module changes no rendering behaviour and reads no org data --
-// it is a second route to the coordinates buildManifest already writes to landscape-manifest.json,
-// so test/unit/map/view/equivalence.test.ts can prove the two agree while buildManifest still
-// exists to compare against.
+// Turns a NavigationViewSpec plus a merged graph into L0 and L1 coordinates: where each domain
+// sits in the landscape, and where each object sits inside its own domain. This module reads no
+// org data and changes no rendering behaviour.
 //
-// LAYOUT REUSE: computeLayout is called here, not reimplemented. A second layout algorithm would
-// make the equivalence test compare two algorithms instead of two routes to one algorithm, which
-// would prove nothing about whether the view spec is a faithful description of buildManifest's
-// rules.
+// It began as a second route to the coordinates `buildManifest` wrote into
+// landscape-manifest.json, proved equivalent to it while both existed. 1.0 retired that artifact
+// and deleted `buildManifest`, so this is now the only implementation of these rules.
 //
-// EDGE DEDUPLICATION: buildManifest derives its cross-cluster edges with a private helper,
-// interClusterEdges (src/map/graph/manifest.ts, bottom of file), that deduplicates cluster-to-
-// cluster links in a deterministic order. crossDomainEdges below reproduces that behaviour
-// exactly (same pair-key ordering, same sort) rather than importing it: manifest.ts is deleted
-// at 1.0, and a replacement that imports from the thing it replaces cannot outlive it.
-// Duplication is correct while both exist; test/unit/map/view/equivalence.test.ts is what keeps
-// them honest.
+// LAYOUT REUSE: computeLayout is called here, not reimplemented. Every level's coordinates come
+// from the one layout algorithm the repo has, so a level cannot quietly drift onto its own.
+//
+// EDGE DEDUPLICATION: crossDomainEdges below deduplicates cluster-to-cluster links in a
+// deterministic order. It used to be a deliberate duplicate of a private `interClusterEdges`
+// helper in src/map/graph/manifest.ts, kept separate because a replacement that imported from
+// the thing it replaces could not outlive it. That file is gone and the duplicate with it; this
+// is the sole implementation, and nothing needs to be kept in step with it any more.
 //
 // LEVEL RESOLUTION: both L0 and L1 are resolved from the selector's own item list -- L0 from the
 // 'domain' items, L1 from the 'object' items grouped by domainId -- rather than L1 falling back
@@ -78,8 +76,8 @@ export function resolveNavigationView(
 
 /**
  * Distinct cluster-to-cluster links, for laying the landscape out. Deterministically ordered.
- * Reproduces manifest.ts's interClusterEdges exactly (same pair-key ordering, same dedup, same
- * sort) rather than importing it -- see the module header.
+ * Once a deliberate duplicate of manifest.ts's interClusterEdges; that file is gone and this is
+ * the only implementation -- see the module header.
  */
 function crossDomainEdges(edges: readonly LayoutEdge[], clusterOf: Map<string, string>): LayoutEdge[] {
   const seen = new Set<string>();

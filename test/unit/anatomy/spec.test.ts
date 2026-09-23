@@ -1,7 +1,7 @@
 // The load-bearing test of Task 6: resolving ANATOMY_VIEW against an artifact must produce the
 // same band membership buildBands produces from that same artifact. If the two disagree, the
-// spec is wrong -- buildBands is what ships, and its output is inside the frozen anatomy.json
-// (test/unit/anatomy/fixtures/anatomy.golden.json), so it is never adjusted to match the spec.
+// spec is wrong -- buildBands is what ships and what View A renders, so it is never adjusted to
+// match the spec.
 import { describe, it, expect } from '@jest/globals';
 import { ANATOMY_VIEW, resolveAnatomyView } from '../../../src/anatomy/view/spec.js';
 import { buildBands, type BandId } from '../../../src/anatomy/view/bands.js';

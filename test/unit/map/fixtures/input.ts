@@ -1,14 +1,14 @@
 // Shared deterministic fixture for map-assembly tests.
 //
-// `artifacts()` is the one call to assembleCouplingArtifacts() that both the golden byte-pinning
-// suite (golden.test.ts) and the behavioral suite (assemble.test.ts) exercise. It used to be
-// duplicated between the two files with slightly different provenance/knownObjects values; that
-// drift is exactly the kind of thing a golden test is supposed to catch, so it is collapsed here
-// into a single source of truth instead.
+// `artifacts()` is the one call to assembleCouplingArtifacts() that every suite touching the
+// assembly exercises. It used to be duplicated per-file with slightly different provenance and
+// knownObjects values, which is how two suites end up describing the same fixture org
+// differently; it is collapsed here into a single source of truth instead.
 //
-// `input()` shapes the same underlying facts as a plain object for later tasks in the
-// map-as-a-projection convergence work. Task 3 defines the real `FragmentInput` type — this is
-// deliberately just an object literal with an inferred shape until then.
+// `input()` shapes the same underlying facts as the `FragmentInput` that `buildMapFragment`
+// takes, so the fragment suite, the rendered-HTML goldens and assemble.test.ts all describe one
+// org. Since 1.0 retired coupling-graph.json and landscape-manifest.json, the fragment built
+// from `input()` is the only model of this fixture's couplings that anything renders.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseFlowXml } from '../../../../src/map/flow/parseFlow.js';
@@ -44,19 +44,17 @@ export const apexTriggers = (): ApexTriggerInput[] => [];
 export const knownObjects = () => new Set(['Account', 'Case', 'WorkOrder', 'Contact']);
 
 /**
- * Fixed provenance. `generatedAt` and `toolVersion` are the only fields that would otherwise
- * move between runs, and pinning them here is what makes a byte comparison meaningful rather
- * than a test of the clock.
+ * Fixed capture provenance. `capturedAt` is the only field that would otherwise move between
+ * runs, and pinning it here is what makes the rendered-HTML goldens a comparison of the renderer
+ * rather than a test of the clock.
  */
 export const PROVENANCE = {
-  tool: 'orgintel' as const,
   toolVersion: '0.0.0-test',
   generatedAt: '2026-01-01T00:00:00Z',
   orgId: 'org1',
-  evidenceTier: null,
 };
 
-/** The deterministic assembleCouplingArtifacts() call shared by golden.test.ts and assemble.test.ts. */
+/** The deterministic assembleCouplingArtifacts() call every map-assembly suite shares. */
 export function artifacts(): MapArtifacts {
   return assembleCouplingArtifacts({
     flowSummaries: flowSummaries(),
@@ -64,36 +62,27 @@ export function artifacts(): MapArtifacts {
     apexTriggers: apexTriggers(),
     knownObjects: knownObjects(),
     nodeInfo,
-    labelOf: (o: string) => o,
     notes: [],
-    couplingProvenance: PROVENANCE,
-    manifestProvenance: {
-      tool: 'orgintel' as const,
-      toolVersion: PROVENANCE.toolVersion,
-      generatedAt: PROVENANCE.generatedAt,
-      orgId: PROVENANCE.orgId,
-    },
   });
 }
 
 /**
- * The same merged edge list `assembleCouplingArtifacts` passes to `buildManifest` -- read back
- * off `artifacts().couplingGraph.edges` rather than recomputed, so the navigation view's
- * equivalence test (test/unit/map/view/equivalence.test.ts) resolves against the exact edges the
- * pinned manifest was built from, not a second set that could quietly drift from it.
+ * The merged edge list `assembleCouplingArtifacts` produced -- read back off `artifacts()` rather
+ * than recomputed, so anything resolving against these edges (the navigation view, the fragment)
+ * gets the exact set the assembly built, not a second set free to drift from it.
  */
 export function edges(): LayoutEdge[] {
-  return artifacts().couplingGraph.edges;
+  return artifacts().edges;
 }
 
 /**
  * The `FragmentInput` for `buildMapFragment`. Carries the same edges `artifacts()` produced, the
  * same raw facts that fed it, the same nodeInfo, and fixed capture provenance, so the fragment
- * suite (fragment.test.ts) describes the same org as assemble.test.ts and the golden suite.
+ * suite (fragment.test.ts) describes the same org as assemble.test.ts and the render goldens.
  */
 export function input(): FragmentInput {
   return {
-    edges: artifacts().couplingGraph.edges,
+    edges: artifacts().edges,
     flowSummaries: flowSummaries(),
     apexClasses: apexClasses(),
     apexTriggers: apexTriggers(),
@@ -102,8 +91,8 @@ export function input(): FragmentInput {
     // from the edges above, which is the bug task 1 fixes.
     knownObjects: knownObjects(),
     workflowRulesFor: () => 0,
-    capturedAt: '2026-01-01T00:00:00Z',
-    orgId: 'org1',
+    capturedAt: PROVENANCE.generatedAt,
+    orgId: PROVENANCE.orgId,
     analysed: { flows: 2, apexClasses: 1, apexTriggers: 0 },
   };
 }
