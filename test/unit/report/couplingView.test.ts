@@ -14,7 +14,11 @@ describe('couplingViewOf', () => {
     expect(view().nodes.length).toBeGreaterThan(0);
   });
 
-  it('carries the per-object measurements the report prints', () => {
+  it('carries the per-object measurements CouplingGraphNode carried', () => {
+    // Parity with the deleted `CouplingGraphNode`, deliberately, not a requirement of any
+    // renderer: nothing in src/report/ reads `recordCount90d` or `automationCounts` off the view
+    // today. They are kept because the view is the documented stand-in for that node shape, and
+    // a caller adapting a fragment for its own renderer is entitled to the same fields.
     const account = view().nodes.find((n) => n.object === 'Account');
 
     expect(account?.recordCount90d).toBe(100);
@@ -22,8 +26,11 @@ describe('couplingViewOf', () => {
   });
 
   it('assigns every object a layer, since the fragment stores none', () => {
-    // CouplingGraphNode carried `layer`; contributions do not. Both renderers already fall back
-    // to roleOf(object), so the adapter resolves it once rather than leaving it undefined.
+    // CouplingGraphNode carried `layer`; contributions do not. The renderers used to fall back
+    // to roleOf(object) themselves, and 259621b deleted both fallbacks so that src/map no longer
+    // depends on src/report. The adapter is now the SOLE place `layer` is resolved for the
+    // report path -- roleOf appears nowhere else under src/report/ -- so a node reaching a
+    // renderer without one would be undefined all the way down, not silently reclassified.
     for (const n of view().nodes) expect(typeof n.layer).toBe('string');
   });
 
