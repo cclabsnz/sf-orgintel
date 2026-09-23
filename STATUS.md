@@ -4,8 +4,9 @@ Working repo: `cclabsnz/sf-orgintel`. Depends on `@cclabsnz/sf-core` from npm (^
 
 **M5 is complete and this page is history.** The work that followed it is the three-plan
 convergence onto one canonical org graph, shipped in `0.3.0`: `intel map` and `intel anatomy`
-each emit a graph fragment in the schema `sf-orgviz` also writes, and the three legacy IR
-artifacts are deprecated pending 1.0. Current direction lives in [ROADMAP.md](ROADMAP.md);
+each emit a graph fragment in the schema `sf-orgviz` also writes. The three legacy IR artifacts
+were deprecated in `0.3.0` and retired in `1.0.0`, which also deleted the in-memory models behind
+them; the fragments are the only IR now. Current direction lives in [ROADMAP.md](ROADMAP.md);
 what shipped lives in [CHANGELOG.md](CHANGELOG.md).
 
 | Task | State |
@@ -23,7 +24,9 @@ what shipped lives in [CHANGELOG.md](CHANGELOG.md).
 ## Beyond the plan (found on a real org)
 
 - **Layer view:** done. Objects classified into seven layers, carried on each coupling-graph
-  node (`@cclabsnz/sf-core@^0.1.2`) and reported as a cross-layer coupling table. On a real org
+  node (`@cclabsnz/sf-core@^0.1.2`) and reported as a cross-layer coupling table. Since `1.0.0`
+  retired that node, the layer is resolved by `couplingViewOf` when it adapts the fragment for
+  the report; the table is unchanged. On a real org
   `business ↔ security` is the second-heaviest relationship in the graph (1709 weight / 361
   couplings), which filtering infrastructure out would have deleted entirely.
 - **Evidence quality not surfaced graph-level:** done. A "Coverage and confidence" section

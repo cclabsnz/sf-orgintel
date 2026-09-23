@@ -3,7 +3,7 @@
 What this plugin intends to do next, and what it does not intend to do. This is a statement
 of current direction, not a set of commitments or dates.
 
-Current published version: **0.3.0**. Everything on `main` is released; see
+Current published version: **1.0.0**. Everything on `main` is released; see
 [CHANGELOG.md](CHANGELOG.md).
 
 ## Now

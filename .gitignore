@@ -16,13 +16,12 @@ pnpm-debug.log*
 .sfdx/
 .sf/
 
-# Report artefacts written during development
+# Report artefacts written during development. coupling-graph.json,
+# landscape-manifest.json and anatomy.json were retired in 1.0.0 and are no longer
+# written by anything, so they are no longer listed here.
 orgintel-*.html
 orgintel-*.json
-coupling-graph.json
-landscape-manifest.json
 graph-fragment.json
-anatomy.json
 anatomy-fragment.json
 
 # Internal docs — kept locally, never published
