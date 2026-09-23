@@ -21,7 +21,6 @@ function flow(apiName: string, trigger: string, updates: string[]): FlowSummary 
   };
 }
 
-
 /**
  * Four groups of 15, densely cross-linked. Modularity merges each group at its natural
  * resolution (largest 15) and subdivides them under pressure (largest ~4), so a target below
