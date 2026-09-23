@@ -8,14 +8,6 @@ Current published version: **0.3.0**. Everything on `main` is released; see
 
 ## Now
 
-- **Cut 1.0 and retire the legacy outputs.** `coupling-graph.json` and `anatomy.json` are
-  deprecated as of `0.3.0` and duplicate facts the canonical fragments already carry.
-  `landscape-manifest.json` is deprecated on different terms: it carries computed layout
-  coordinates, which §1.3 of `CONVERGENCE_SPEC.md` keeps out of the graph, so at 1.0 its
-  navigation levels become a view resolved at render time rather than a stored artifact.
-  Holding two representations of the same org is the cost §1.4 accepted deliberately, and 1.0
-  is where it is paid off. This is the single highest-value open item, and it is a breaking
-  change: the `0.x` line is the migration window.
 - **Org-wide counts are a census, and stay measurements.** Settled rather than open: `flows`,
   `apexClasses`, `apexTriggers`, `lwc`, `aura`, `externalDataSources` and `remoteSites` are exact
   `COUNT(Id)` aggregates over the whole org, while the graph holds only what was analysed
@@ -26,6 +18,14 @@ Current published version: **0.3.0**. Everything on `main` is released; see
   fixtures, because neither verification org triggered them: the empty band, the
   not-collected band, and the hatched not-read tile. They need an org that is missing a
   feature before they can be trusted.
+- **`graph-fragment.json` does not yet mark map-side drops.** `src/map/fragment.ts` still
+  hardcodes `coverage: { notes: [], unavailable: [] }` on the fragment it builds, so a flow that
+  could not be retrieved, an Apex class whose body and `SymbolTable` are both withheld, or a
+  capped record-count sweep — every drop `intel map` already detects and reports in its terminal
+  notes and HTML report — reaches the fragment unmarked. `anatomy-fragment.json` gets this right:
+  the anatomy collectors' refusals travel into the fragment's own `coverage.unavailable`. The map
+  side needs the same wiring, from the notes `assembleCouplingArtifacts` and its collectors already
+  produce.
 
 ## Next
 
@@ -41,6 +41,22 @@ Current published version: **0.3.0**. Everything on `main` is released; see
   under one badge.
 - **Branch coverage.** Statements are at 87%, branches nearer 76%, and the gap sits in error
   paths, which is exactly where the absent-versus-refused distinction lives.
+
+## Known issues
+
+- **`crossDomainEdges` (`src/map/view/resolve.ts`) can let input order change L0 coordinates.**
+  It deduplicates cross-domain links on a canonical `a < b ? a|b : b|a` key, but pushes
+  `{ from: a, to: b }` in whichever direction the edge that won the dedupe arrived in, while the
+  final sort orders the result by `from + to`. Two edge lists that agree on the same undirected
+  pairs but disagree on which direction each pair first appears in can therefore sort differently,
+  moving the L0 landscape's layout. It is not reachable today: `mergeEdges` emits one deterministic
+  edge order per org, and nothing in `src/` calls `resolveNavigationView` yet, so no run can
+  observe two different orderings of the same org. That is why it was left unfixed here rather
+  than changed inside a retirement release that should not also move coordinates. The fix is one
+  line — normalise the pushed pair the same way the key already is:
+  `out.push(a < b ? { from: a, to: b } : { from: b, to: a })` — and should be made by whoever
+  first wires this view into a command, since landing it moves L0 coordinates for any org whose
+  edge order was depending on the bug.
 
 ## Not planned
 

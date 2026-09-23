@@ -8,19 +8,21 @@ From `0.2.0` onward each entry mirrors the
 [GitHub Release](https://github.com/cclabsnz/sf-orgintel/releases) for that tag, which is the
 canonical published note and carries the provenance attestation and CycloneDX SBOM for the build.
 
-## [Unreleased]
+## [1.0.0]
 
 Both analysis commands now state **what they analysed against what they listed**, rather than a
 count that implies coverage it does not have. `intel map` reported that it analysed 210 flows
 without saying how many the org holds, which reads as completeness and is not. The numbers were
 already known at retrieval time on both sides, so this costs no extra org read.
 
+This release also retires the three legacy per-tool artifacts, deprecated since `0.3.0`: see
+**Removed** below before upgrading.
+
 **If you are upgrading, expect numbers to move for an unchanged org.** `Apex classes: 412 of 412`
 becomes something like `398 of 412`, because a class nobody could read is no longer counted as one
-that was analysed. Nothing about the coupling analysis changed; the three deprecated artifacts
-(`coupling-graph.json`, `landscape-manifest.json`, `anatomy.json`) remain byte-identical, but the
-fragments do change. On a managed-heavy org, `graph-fragment.json` will show fewer `apexClass`
-nodes because classes that could never be read are no longer counted as analysed.
+that was analysed. Nothing about the coupling analysis itself changed. On a managed-heavy org,
+`graph-fragment.json` will show fewer `apexClass` nodes because classes that could never be read
+are no longer counted as analysed.
 
 ### Added
 
@@ -41,16 +43,15 @@ nodes because classes that could never be read are no longer counted as analysed
   an unmarked `0` to `org.root`. A consumer subtracting analysed from census would have computed
   a negative gap with nothing in the graph explaining why. The collectors' entries now travel
   into the fragment's own `coverage.unavailable`, merged with the ones it derives itself and
-  keeping `failed` distinct from `deferred`. `anatomy.json` is unchanged, byte for byte. (#25)
+  keeping `failed` distinct from `deferred`. (#25)
 - **The navigation levels are now a view spec**, resolved into L0 and L1 coordinates from the
-  merged graph rather than read from a stored artifact, and proven to reproduce exactly the
-  coordinates `landscape-manifest.json` carries. Coordinates are the whole of the claim: the view
-  resolves L0 and L1 positions, and does not reproduce the manifest's `label`, `objects`,
-  `metrics`, `graphRef` or `anchorObject`. Nothing changes in what any command writes or renders
-  today: the manifest is still written, and this is the replacement consumers of its coordinates
-  move to before 1.0 removes it. The spec declares only the two levels that resolve, because
-  `L2_process`, `L3_transition` and `L4_component` have shipped since `0.1.0` carrying a null
-  reference, a bare `reserved` flag and an empty array respectively. (#26)
+  merged graph rather than read from a stored artifact, and proven (while `landscape-manifest.json`
+  still existed) to reproduce exactly the coordinates it carried. Coordinates are the whole of the
+  claim: the view resolves L0 and L1 positions, and does not reproduce the manifest's `label`,
+  `objects`, `metrics`, `graphRef` or `anchorObject` — see Removed below. The spec declares only
+  the two levels that resolve, because `L2_process`, `L3_transition` and `L4_component` have
+  shipped since `0.1.0` carrying a null reference, a bare `reserved` flag and an empty array
+  respectively. (#26)
 
 ### Changed
 
@@ -73,10 +74,31 @@ nodes because classes that could never be read are no longer counted as analysed
   graph-derived count does not restate them, it understates them, by exactly the flows nobody
   activated and the classes nobody could read. What was actually missing was the reconciliation
   above, not a producer. (#25)
-- `README.md` and the `0.3.0` deprecation notice now state the two different sets of terms the
-  legacy artifacts are deprecated on. `coupling-graph.json` and `anatomy.json` are carried by the
-  fragments; `landscape-manifest.json` is not and cannot be, because it holds computed layout
-  coordinates that the canonical graph deliberately does not store. (#25)
+
+### Removed
+
+- **`coupling-graph.json`, `landscape-manifest.json` and `anatomy.json` are no longer written.**
+  The deprecation notice in `0.3.0` announced this; the `0.x` line was the migration window.
+  `graph-fragment.json` and `anatomy-fragment.json` carry the same facts in a schema shared with
+  `sf-orgviz`.
+- **Five fields of `landscape-manifest.json` are withdrawn, not replaced.** The navigation view
+  reproduces the L0 and L1 **coordinates**, proven equivalent before the file was removed. It does
+  not reproduce `label`, `objects`, `metrics` (`objects`, `automations`, `recordCount90d`),
+  `graphRef` or `anchorObject`. All five are derivable from cluster membership and the per-object
+  contributions the fragment carries, but no replacement was built and none is promised. If you
+  consume one, open an issue describing the use and it will be built against that.
+- **The in-memory models behind the three files are deleted, not just their writers, and this
+  reaches the programmatic API.** `assembleCouplingArtifacts`, exported from the package root,
+  returns a `MapArtifacts` that drops `couplingGraph: CouplingGraph` and
+  `manifest: LandscapeManifest` in favour of a single `edges: CouplingGraphEdge[]` — the same
+  merged couplings `coupling-graph.json` used to wrap, now handed straight to the fragment builder
+  instead. `runMap`'s `MapRunResult`, also exported from the package root, drops the same two
+  fields; there is no returned replacement for the manifest, since its coordinates are now resolved
+  on demand by `resolveNavigationView` (`src/map/view/resolve.ts`) rather than carried on the
+  result. `AssembleInput`, `assembleCouplingArtifacts`'s parameter type, correspondingly drops
+  `labelOf`, `couplingProvenance` and `manifestProvenance`, which existed only to build the two
+  retired documents. Anyone importing this package as a library, not just anyone reading the
+  written JSON files, is affected by this shape change.
 
 ### Fixed
 
@@ -258,7 +280,7 @@ Apex, with a branded HTML report behind `--html`.
 publishing was configured for this package. Every release from `0.2.0` onward carries one
 automatically. See [SECURITY.md](SECURITY.md).
 
-[Unreleased]: https://github.com/cclabsnz/sf-orgintel/compare/v0.3.0...HEAD
+[1.0.0]: https://github.com/cclabsnz/sf-orgintel/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/cclabsnz/sf-orgintel/releases/tag/v0.3.0
 [0.2.0]: https://github.com/cclabsnz/sf-orgintel/releases/tag/v0.2.0
 [0.1.0]: https://github.com/cclabsnz/sf-orgintel/releases/tag/v0.1.0

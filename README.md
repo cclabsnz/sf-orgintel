@@ -95,19 +95,11 @@ fallback) into an object-pair coupling graph, then partitions it into domains.
 | `--branding <file>` / `--prepared-for <name>` | Report branding |
 | `--refresh` | Ignore cached analysis and recompute |
 
-Emits three artifacts, all validated against JSON Schemas published in `@cclabsnz/sf-core`:
+Emits one artifact, validated against the JSON Schema published in `@cclabsnz/sf-core`:
 
 | File | Contents |
 | --- | --- |
 | `graph-fragment.json` | The couplings as a canonical graph fragment, in the schema `sf-orgviz` also writes. Carries no object nodes: `sobject` is a kind `sf-orgviz` owns, so `couples` edges stay unresolved until an extraction is merged in |
-| `coupling-graph.json` | Objects with automation counts and 90-day volumes; coupled pairs with weight, operations, contributing components and confidence |
-| `landscape-manifest.json` | Semantic-zoom navigation: L0 domains positioned against each other, L1 objects positioned within each domain |
-
-> **`coupling-graph.json` and `landscape-manifest.json` are deprecated as of `0.3.0`**, on
-> different terms. `coupling-graph.json` is carried field for field by `graph-fragment.json`;
-> move consumers across during `0.x`. `landscape-manifest.json` is not, and cannot be: it holds
-> computed layout coordinates, which the canonical graph deliberately does not store. At 1.0 its
-> levels become a view resolved from the merged graph at render time.
 
 **Clustering picks its algorithm by graph density.** A sparse org is often a tree, where
 modularity has no community structure to find and shatters a chain into pairs; a mature org has
@@ -135,16 +127,12 @@ on what licence, what it integrates with, and how people authenticate.
 | File | Contents |
 | --- | --- |
 | `anatomy-fragment.json` | The anatomy as a canonical graph fragment. Emits only the kinds this tool owns — `site`, `product` and `ssoConfig`. Personas, change data capture and the org-wide counts travel as attribute contributions on nodes `sf-orgviz` owns |
-| `anatomy.json` | Products, personas, channels, capabilities, identity and integration edges in the per-tool IR |
-
-> **`anatomy.json` is deprecated as of `0.3.0`.** It is carried by `anatomy-fragment.json` plus
-> the band view spec, byte-stable for the whole `0.x` line, and retired at 1.0.
 
 **Detection and attribution are recorded separately.** Every integration edge says how it was
 found and, as a distinct fact, how it was attributed to a product, so a confirmed call with an
 unknown owner is reported as exactly that rather than being assigned to a plausible owner.
 
-**View A adds no org reads.** It renders `anatomy.json` and nothing else. A band whose facts
+**View A adds no org reads.** It renders the run's own anatomy artifact and nothing else. A band whose facts
 were never collected says `not-collected` rather than drawing as empty, and a band with tiles
 still declares what it did not gather — the distinction between "there is nothing here" and
 "nobody looked" is never rounded away.

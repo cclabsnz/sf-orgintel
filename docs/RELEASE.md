@@ -50,8 +50,9 @@ cover an individual package.
 1. Land the work on `main` and make sure CI is green.
 2. Bump `version` in `package.json`. Semver against the **exported surface and CLI contract**:
    a new flag or command is a minor; renaming a flag, changing a default, or altering the shape
-   of `coupling-graph.json` or `landscape-manifest.json` is a major. Those two files are
-   consumed by other tools and are the real public interface, more than any TypeScript export.
+   of `graph-fragment.json` or `anatomy-fragment.json` is a major. Those two files are consumed
+   by other tools (`sf-orgviz` merges them into the canonical org graph) and are the real public
+   interface, more than any TypeScript export.
 3. Verify locally:
    ```sh
    pnpm install --frozen-lockfile
