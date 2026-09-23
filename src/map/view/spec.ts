@@ -1,16 +1,15 @@
 // The navigation view expressed as data: a name, a selector, and a level list -- exactly the shape
 // sf-orgviz's own design taxonomy gives a "view" (a saved selector plus band order). This is
-// what makes `intel map` a *projection* rather than a third hardcoded view name: the
-// membership rules `buildManifest` buries in its L0/L1 layout logic are now a value that can be
-// inspected, tested and resolved by something other than `buildManifest`.
+// what makes `intel map` a *projection* rather than a third hardcoded view name: the membership
+// rules that `buildManifest` used to bury inside its L0/L1 layout logic are a value that can be
+// inspected, tested and resolved on its own.
 //
-// This module changes no rendering behaviour. `buildManifest` still builds the manifest
-// `intel map` writes, unchanged. The NAVIGATION_VIEW spec is the value this module contributes,
-// and `src/map/view/resolve.ts` is the resolver that consumes it. The two carry separate claims:
-// the spec expresses which things belong to which level, and the resolver turns those levels into
-// coordinates that `test/unit/map/view/equivalence.test.ts` shows are identical to the ones
-// `buildManifest` produces. Membership is what is declared here; coordinate equality is what is
-// proven there.
+// This module changes no rendering behaviour. The NAVIGATION_VIEW spec is the value it
+// contributes, and `src/map/view/resolve.ts` is the resolver that consumes it. The two carry
+// separate claims: the spec expresses which things belong to which level, and the resolver turns
+// those levels into coordinates. Those coordinates were proven identical to `buildManifest`'s
+// while that function still existed; 1.0 retired landscape-manifest.json and deleted it, so the
+// resolver is now the only route to them.
 //
 // TYPE OWNERSHIP: `NavigationViewSpec` is declared LOCALLY here, not imported from a shared package.
 // sf-orgviz still hardcodes its own view types and there is no `NavigationViewSpec` in
@@ -21,7 +20,7 @@
 // SELECTOR SCOPE: sf-orgviz may apply its own narrowing to graph queries. `navigation`'s selector
 // performs no narrowing: it projects every cluster and every object in that cluster into a flat
 // item list; the levels, not the selector, partition that list by kind. The selector's one job is
-// to express the cluster-to-domain and cluster-to-object relationships that buildManifest lays out.
+// to express the cluster-to-domain and cluster-to-object relationships the levels lay out.
 import type { Cluster } from '../graph/clusters.js';
 
 /** One thing a navigation level can place. A domain at L0, an object at L1. */
@@ -57,7 +56,7 @@ export const NAVIGATION_VIEW: NavigationViewSpec = {
     // Where each domain sits in the landscape, relative to the other domains.
     { id: 'L0_landscape', title: 'Landscape', match: (i) => i.kind === 'domain' },
     // Where each object sits inside its own domain. A different coordinate space from L0's,
-    // deliberately: buildManifest lays each domain out on its own.
+    // deliberately: each domain is laid out on its own, so a viewer can zoom into one.
     { id: 'L1_domain', title: 'Domain', match: (i) => i.kind === 'object' },
   ],
 };

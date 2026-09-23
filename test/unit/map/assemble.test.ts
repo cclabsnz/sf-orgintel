@@ -4,35 +4,26 @@ import { artifacts } from './fixtures/input.js';
 describe('assembleCouplingArtifacts', () => {
   const a = artifacts();
 
-  it('merges flow + apex edges into an aggregated coupling graph', () => {
-    const g = a.couplingGraph;
-    expect(g.version).toBe(1);
-    expect(g.nodes.map((n) => n.object).sort()).toEqual(['Account', 'Case', 'Contact', 'WorkOrder']);
-
+  it('merges flow + apex edges into aggregated object-pair couplings', () => {
     // Case↔Account appears in both Case_Router and the screen flow -> weight 2.
-    const caseAccount = g.edges.find((e) => e.from === 'Account' && e.to === 'Case');
+    const caseAccount = a.edges.find((e) => e.from === 'Account' && e.to === 'Case');
     expect(caseAccount?.weight).toBe(2);
     expect(caseAccount?.operations).toContain('read');
 
     // Apex-derived Account↔Contact is high confidence.
-    const acctContact = g.edges.find((e) => e.from === 'Account' && e.to === 'Contact');
+    const acctContact = a.edges.find((e) => e.from === 'Account' && e.to === 'Contact');
     expect(acctContact?.components[0]).toMatchObject({ type: 'ApexClass', confidence: 'high' });
   });
 
-  it('populates the landscape manifest L0/L1 and reserves L2-L4', () => {
-    const m = a.manifest;
-    expect(m.version).toBe(1);
-    expect(m.levels.L0_landscape.clusters.length).toBeGreaterThan(0);
-    expect(m.levels.L1_domain.perCluster[0].graphRef).toMatch(/^coupling-graph\.json#cluster-/);
-    expect(m.levels.L2_process.perAnchor.every((p) => p.processGraphRef === null)).toBe(true);
-    expect(m.levels.L3_transition.reserved).toBe(true);
-    expect(m.levels.L4_component.flowSummaryRefs).toEqual([]);
+  it('covers every object the edges mention, and nothing else', () => {
+    // `buildNodes` used to assert this by producing one node per object; 1.0 retired the node
+    // records with `coupling-graph.json` and kept the object list they were derived from, so the
+    // claim is made here against the edges themselves rather than against a second model of them.
+    const objects = [...new Set(a.edges.flatMap((e) => [e.from, e.to]))].sort();
+    expect(objects).toEqual(['Account', 'Case', 'Contact', 'WorkOrder']);
 
-    // Manifest node coords agree with the report layout.
-    const anyCluster = m.levels.L1_domain.perCluster[0];
-    for (const [obj, coord] of Object.entries(anyCluster.layout)) {
-      expect(a.layout.get(obj)).toEqual(coord);
-    }
+    const clustered = a.clusters.flatMap((c) => c.objects).sort();
+    expect(clustered).toEqual(objects);
   });
 
   it('is deterministic', () => {

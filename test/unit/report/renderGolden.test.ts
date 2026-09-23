@@ -1,11 +1,13 @@
-// The rendered-HTML counterpart to renderEquivalence.test.ts, and the one guarantee in this
-// repo that survives Task 2's deletion of the CouplingGraph assembly and its golden suites.
+// The only thing in this repo pinning the rendered HTML, and deliberately so.
 //
-// renderEquivalence.test.ts compares the legacy route against the fragment route while both
-// exist; that comparison stops meaning anything the moment one side is deleted. These fixtures
-// were captured from the legacy route before that deletion, so this suite keeps asserting the
-// fragment route reproduces them byte for byte after the legacy route is gone -- it is a golden
-// of the HTML itself, not of one route agreeing with the other.
+// renderEquivalence.test.ts compared the legacy CouplingGraph route against the fragment route
+// while both existed; that comparison stopped meaning anything the moment 1.0 deleted one side,
+// and it went with it. These fixtures were captured from the legacy route BEFORE that deletion,
+// so this suite still asserts the fragment route reproduces byte for byte what the legacy route
+// produced -- it is a golden of the HTML itself, not of one route agreeing with the other.
+//
+// Do not regenerate these fixtures to make a failure go away. A regenerated golden pins whatever
+// the change produced, which is exactly the guarantee this file exists to refuse.
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -43,11 +45,11 @@ describe('fragment-based rendering reproduces the persisted golden HTML', () => 
 
   it('matches the strata viewer golden byte for byte', () => {
     const golden = readFileSync(join(FIXTURES, 'strataViewer.golden.html'), 'utf8');
-    const objects = artifacts().couplingGraph.nodes.map((n) => n.object);
-    const actual = renderStrataViewer({
-      couplingGraph: couplingViewOf(buildMapFragment(input())),
-      objects,
-    });
+    // The object list used to come off `couplingGraph.nodes`. That model is gone; the view's own
+    // nodes are the fragment-route equivalent, and the byte comparison below is what proves the
+    // two lists were the same for this fixture.
+    const view = couplingViewOf(buildMapFragment(input()));
+    const actual = renderStrataViewer({ couplingGraph: view, objects: view.nodes.map((n) => n.object) });
 
     expect(actual).toBe(golden);
   });

@@ -21,7 +21,6 @@ function flow(apiName: string, trigger: string, updates: string[]): FlowSummary 
   };
 }
 
-const PROV = { tool: 'orgintel' as const, toolVersion: '0.1.0', generatedAt: '2026-07-30T00:00:00.000Z', orgId: '00Dxx0000000000EAA' };
 
 /**
  * Four groups of 15, densely cross-linked. Modularity merges each group at its natural
@@ -53,9 +52,6 @@ function build(opts: { topLayout?: number; targetDomainSize?: number }) {
   return assembleCouplingArtifacts({
     flowSummaries: flows, apexClasses: [], apexTriggers: [], knownObjects: new Set(objects),
     nodeInfo: () => ({ custom: true, automationCounts: { flows: 1, triggers: 0, approvals: 0 }, recordCount90d: 10 }),
-    labelOf: (o) => o,
-    couplingProvenance: { ...PROV, evidenceTier: 'B' as const },
-    manifestProvenance: PROV,
     ...opts,
   });
 }

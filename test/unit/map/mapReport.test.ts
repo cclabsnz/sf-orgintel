@@ -1,17 +1,20 @@
 import { describe, it, expect } from '@jest/globals';
 import { DEFAULT_BRANDING } from '@cclabsnz/sf-core';
-import type { CouplingGraph } from '@cclabsnz/sf-core';
 import { renderMapHtml } from '../../../src/report/mapReport.js';
+import type { CouplingView } from '../../../src/report/couplingView.js';
 import type { MapReportInput } from '../../../src/report/mapReport.js';
 import type { Cluster } from '../../../src/map/graph/clusters.js';
 import type { Point } from '../../../src/map/graph/layout.js';
 
-const graph: CouplingGraph = {
-  version: 1,
-  provenance: { tool: 'orgintel', toolVersion: '0.1.0', generatedAt: '2026-07-26T00:00:00.000Z', orgId: '00D', evidenceTier: 'B' },
+// A `CouplingView` literal, not the `CouplingGraph` this used to build: 1.0 retired that document
+// and the report now takes only what `couplingViewOf` produces from the fragment. `layer` was
+// absent before and the renderer fell back to `roleOf`; it is stated here as the value `roleOf`
+// returns for these two objects, so the rendered output is unchanged.
+const GENERATED_AT = '2026-07-26T00:00:00.000Z';
+const graph: CouplingView = {
   nodes: [
-    { object: 'Case', custom: false, automationCounts: { flows: 3, triggers: 1, approvals: 0 }, recordCount90d: 100 },
-    { object: 'WorkOrder', custom: false, automationCounts: { flows: 1, triggers: 0, approvals: 0 }, recordCount90d: 50 },
+    { object: 'Case', layer: 'business', automationCounts: { flows: 3, triggers: 1, approvals: 0 }, recordCount90d: 100 },
+    { object: 'WorkOrder', layer: 'business', automationCounts: { flows: 1, triggers: 0, approvals: 0 }, recordCount90d: 50 },
   ],
   edges: [
     { from: 'Case', to: 'WorkOrder', weight: 4, operations: ['create', 'update'], components: [{ type: 'Flow', name: 'Case_Router', confidence: 'high' }] },
@@ -47,7 +50,7 @@ describe('renderMapHtml', () => {
       flowsAnalyzed: 5,
       apexClassesAnalyzed: 3,
       apexTriggersAnalyzed: 2,
-      generatedAt: graph.provenance.generatedAt,
+      generatedAt: GENERATED_AT,
       branding: DEFAULT_BRANDING,
     });
     expect(html.startsWith('<!DOCTYPE html>')).toBe(true);
@@ -70,7 +73,7 @@ describe('renderMapHtml', () => {
       flowsAnalyzed: 5,
       apexClassesAnalyzed: 3,
       apexTriggersAnalyzed: 2,
-      generatedAt: graph.provenance.generatedAt,
+      generatedAt: GENERATED_AT,
       branding: DEFAULT_BRANDING,
     });
     expect(html).toContain('from cached discover');
@@ -80,22 +83,17 @@ describe('renderMapHtml', () => {
 
 describe('layer section', () => {
   /** A graph spanning several layers, as a real org's does. */
-  const layered = {
-    version: 1 as const,
-    provenance: {
-      tool: 'orgintel' as const, toolVersion: '0.1.0', generatedAt: '2026-07-30T00:00:00.000Z',
-      orgId: '00Dxx0000000000EAA', evidenceTier: 'B' as const,
-    },
+  const layered: CouplingView = {
     nodes: [
-      { object: 'Account', custom: false, automationCounts: { flows: 3, triggers: 1, approvals: 0 }, recordCount90d: 100, layer: 'business' as const },
-      { object: 'Case', custom: false, automationCounts: { flows: 2, triggers: 0, approvals: 0 }, recordCount90d: 50, layer: 'business' as const },
-      { object: 'User', custom: false, automationCounts: { flows: 0, triggers: 0, approvals: 0 }, recordCount90d: 10, layer: 'security' as const },
-      { object: 'LogEntry__c', custom: true, automationCounts: { flows: 0, triggers: 0, approvals: 0 }, recordCount90d: 900, layer: 'observability' as const },
+      { object: 'Account', automationCounts: { flows: 3, triggers: 1, approvals: 0 }, recordCount90d: 100, layer: 'business' },
+      { object: 'Case', automationCounts: { flows: 2, triggers: 0, approvals: 0 }, recordCount90d: 50, layer: 'business' },
+      { object: 'User', automationCounts: { flows: 0, triggers: 0, approvals: 0 }, recordCount90d: 10, layer: 'security' },
+      { object: 'LogEntry__c', automationCounts: { flows: 0, triggers: 0, approvals: 0 }, recordCount90d: 900, layer: 'observability' },
     ],
     edges: [
-      { from: 'Account', to: 'Case', weight: 8, operations: ['update' as const], components: [{ type: 'Flow', name: 'F1', confidence: 'high' as const }] },
-      { from: 'Account', to: 'User', weight: 12, operations: ['read' as const], components: [{ type: 'ApexClass', name: 'C1', confidence: 'approximate' as const }] },
-      { from: 'LogEntry__c', to: 'User', weight: 5, operations: ['create' as const], components: [{ type: 'ApexClass', name: 'C2', confidence: 'approximate' as const }] },
+      { from: 'Account', to: 'Case', weight: 8, operations: ['update'], components: [{ type: 'Flow', name: 'F1', confidence: 'high' }] },
+      { from: 'Account', to: 'User', weight: 12, operations: ['read'], components: [{ type: 'ApexClass', name: 'C1', confidence: 'approximate' }] },
+      { from: 'LogEntry__c', to: 'User', weight: 5, operations: ['create'], components: [{ type: 'ApexClass', name: 'C2', confidence: 'approximate' }] },
     ],
   };
 

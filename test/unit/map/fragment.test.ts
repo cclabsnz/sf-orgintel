@@ -15,9 +15,10 @@ import type { ApexClassInput, ApexTriggerInput } from '../../../src/map/apex/ape
 // '2026-01-01T00:00:00Z'` and `orgId: 'org1'` fixed so the determinism test means something.
 //
 // Deliberately NOT extended with an ApexTriggerInput here: this fixture also backs
-// assemble.test.ts's `artifacts()` and the golden suite (golden.test.ts), so adding a trigger
-// would change coupling-graph.golden.json and turn a frozen, deliberately-pinned test red. The
-// trigger path gets its own small local fixture below instead.
+// assemble.test.ts's `artifacts()` and the rendered-HTML goldens in
+// test/unit/report/renderGolden.test.ts, so adding a trigger would change the report this org
+// renders and turn a frozen, deliberately-pinned test red. The trigger path gets its own small
+// local fixture below instead.
 import { input, artifacts, knownObjects, apexClasses } from './fixtures/input.js';
 
 const fragment = () => buildMapFragment(input());
@@ -85,13 +86,17 @@ describe('buildMapFragment', () => {
     expect(JSON.stringify(buildMapFragment(input()))).toBe(JSON.stringify(buildMapFragment(input())));
   });
 
-  it('describes exactly the couplings the coupling graph describes', () => {
-    // The two artifacts are rendered from one in-memory edge set, and this is what holds them to
-    // it. If a later change derives one of them differently, this fails before a consumer sees
-    // two files from one run disagreeing about the same org.
-    const { couplingGraph } = artifacts(); // the golden suite's helper
+  it('carries every merged coupling through to a `couples` edge, unaltered', () => {
+    // The fragment is rendered from the merged edge set `assembleCouplingArtifacts` produces, and
+    // this holds it to that set: an edge dropped, an endpoint mangled by the `obj.` prefixing, or
+    // a weight recomputed on the way through fails here rather than in a consumer's graph.
+    //
+    // Until 1.0 this compared against `artifacts().couplingGraph.edges`, the second in-memory
+    // model. That model is gone; the merged edges it wrapped are what the comparison was ever
+    // really about, so they are read directly.
+    const merged = artifacts().edges;
     const couples = buildMapFragment(input()).edges.filter((e) => e.kind === 'couples');
-    const fromGraph = couplingGraph.edges.map((e) => `${e.from}|${e.to}|${e.weight}`).sort();
+    const fromGraph = merged.map((e) => `${e.from}|${e.to}|${e.weight}`).sort();
     const fromFragment = couples
       .map((e) => `${e.from.replace(/^obj\./, '')}|${e.to.replace(/^obj\./, '')}|${String(e.attrs.weight)}`)
       .sort();
@@ -139,14 +144,14 @@ describe('buildMapFragment: trigger nodes', () => {
   it('leaves the shared fixture, and hence the golden suite, unaffected', () => {
     // withTrigger() spreads a fresh input() and only overrides apexTriggers, so the shared
     // fixture object itself is never mutated. This re-confirms the base fragment stays
-    // trigger-free -- the same fact assemble.test.ts and golden.test.ts depend on via artifacts().
+    // trigger-free -- the same fact assemble.test.ts and the render goldens depend on.
     expect(fragment().nodes.some((n) => n.kind === 'trigger')).toBe(false);
   });
 });
 
 describe('buildMapFragment: known objects come from the catalog, not the edges', () => {
   // A local fixture, not the shared one -- adding this class to fixtures/input.ts would change
-  // coupling-graph.golden.json. `OpportunityAudit` references exactly one object, so
+  // the org the rendered-HTML goldens pin. `OpportunityAudit` references exactly one object, so
   // deriveApexEdges's pairwise loop (which needs at least two) never emits a coupling for it --
   // `Opportunity` forms no coupling pair anywhere in this org. Before task 1's fix, `known` was
   // built from the merged coupling edges, so `Opportunity` would never appear in it, the

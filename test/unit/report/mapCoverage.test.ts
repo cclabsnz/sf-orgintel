@@ -1,12 +1,12 @@
 import { DEFAULT_BRANDING } from '@cclabsnz/sf-core';
-import type { CouplingGraph, CouplingGraphEdge } from '@cclabsnz/sf-core';
 import { renderMapHtml } from '../../../src/report/mapReport.js';
+import type { CouplingViewEdge } from '../../../src/report/couplingView.js';
 
 const edge = (
   from: string,
   to: string,
   confidences: Array<'high' | 'approximate'>,
-): CouplingGraphEdge => ({
+): CouplingViewEdge => ({
   from,
   to,
   weight: confidences.length,
@@ -14,15 +14,12 @@ const edge = (
   components: confidences.map((c, i) => ({ type: 'ApexClass', name: `C${i}`, confidence: c })),
 });
 
-const render = (edges: CouplingGraphEdge[], notes?: string[]): string =>
+const render = (edges: CouplingViewEdge[], notes?: string[]): string =>
   renderMapHtml({
     orgName: 'Example Org',
-    couplingGraph: {
-      version: 1,
-      provenance: { generatedAt: '2026-08-04T00:00:00Z' },
-      nodes: [],
-      edges,
-    } as unknown as CouplingGraph,
+    // A `CouplingView`, not the `CouplingGraph` this used to build: 1.0 retired that document and
+    // the report now takes only what `couplingViewOf` produces from the fragment.
+    couplingGraph: { nodes: [], edges },
     clusters: [],
     layout: new Map(),
     evidenceTier: null,

@@ -45,8 +45,8 @@ export async function runAnatomy(
   const { channels, channelKeys } = await collectChannels(ctx, notes, unavailable);
   const capabilities = await collectCapabilities(ctx, notes, unavailable);
   const { ssoConfigs, ssoConfigKeys, loginsByType } = await collectIdentity(ctx, notes, unavailable);
-  // The published `Identity` shape only -- `ssoConfigKeys` never joins it, or it would move
-  // `anatomy.json`'s golden. Threaded to the fragment separately below.
+  // The published `Identity` shape only -- `ssoConfigKeys` never joins it. Threaded to the
+  // fragment separately below.
   const identity: Identity = { ssoConfigs, loginsByType };
   const evidence = await collectIntegrationEdges(ctx, notes, unavailable);
 

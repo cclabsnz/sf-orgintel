@@ -1,6 +1,6 @@
 import { describe, it, expect } from '@jest/globals';
 import { DEFAULT_BRANDING } from '@cclabsnz/sf-core';
-import type { CouplingGraph, QueryResult, SoqlClient, ToolingClient } from '@cclabsnz/sf-core';
+import type { QueryResult, SoqlClient, ToolingClient } from '@cclabsnz/sf-core';
 import { buildMapReportInput, buildMapCommandResult } from '../../../src/commands/intel/map.js';
 import { renderMapHtml } from '../../../src/report/mapReport.js';
 import { runMap } from '../../../src/map/runMap.js';
@@ -8,23 +8,13 @@ import type { MapRunResult } from '../../../src/map/runMap.js';
 import type { IntelContext } from '../../../src/lib/wire.js';
 import { mockRest, noopMetadata } from '../helpers/mocks.js';
 
-const couplingGraph: CouplingGraph = {
-  version: 1,
-  provenance: {
-    tool: 'orgintel',
-    toolVersion: '0.1.0',
-    generatedAt: '2026-01-01T00:00:00.000Z',
-    orgId: '00D',
-    evidenceTier: 'B',
-  },
-  nodes: [],
-  edges: [],
-};
-
+/**
+ * Only the fields `buildMapReportInput`/`buildMapCommandResult` actually read. `capturedAt` is
+ * among them: it is where the report's `generatedAt` now comes from, since 1.0 retired the
+ * `CouplingGraph` whose provenance used to carry it.
+ */
 const baseResult = (): MapRunResult => ({
-  couplingGraph,
-  manifest: {} as any,
-  fragment: {} as any,
+  fragment: { capturedAt: '2026-01-01T00:00:00.000Z', contributions: [], edges: [] } as any,
   clusters: [],
   layout: new Map(),
   timelines: [],
@@ -118,16 +108,26 @@ describe('buildMapCommandResult', () => {
     expect(commandResult.apexTriggersListed).toBe(4);
   });
 
-  it('still carries the analysed counts and the IR artifacts untouched', () => {
+  it('still carries the analysed counts and the emitted fragment untouched', () => {
     const result = baseResult();
     const commandResult = buildMapCommandResult(result);
 
     expect(commandResult.flowsAnalyzed).toBe(210);
     expect(commandResult.apexClassesAnalyzed).toBe(3);
     expect(commandResult.apexTriggersAnalyzed).toBe(2);
-    expect(commandResult.couplingGraph).toBe(result.couplingGraph);
-    expect(commandResult.manifest).toBe(result.manifest);
     expect(commandResult.fragment).toBe(result.fragment);
+  });
+
+  it('no longer carries the retired IR artifacts', () => {
+    // 1.0 stopped writing coupling-graph.json and landscape-manifest.json and deleted the models
+    // behind them. `--json` must not keep restating them, under any key: a consumer reading
+    // `couplingGraph` out of the result should find nothing there rather than a half-populated
+    // shape rebuilt to keep the field alive.
+    const json = JSON.parse(JSON.stringify(buildMapCommandResult(baseResult()))) as Record<string, unknown>;
+
+    expect(Object.keys(json)).not.toContain('couplingGraph');
+    expect(Object.keys(json)).not.toContain('manifest');
+    expect(Object.keys(json)).toContain('fragment');
   });
 });
 

@@ -1,4 +1,4 @@
-import type { EvidenceTier, CouplingGraph, LandscapeManifest, CanonicalGraph } from '@cclabsnz/sf-core';
+import type { EvidenceTier, CanonicalGraph } from '@cclabsnz/sf-core';
 import type { IntelContext } from '../lib/wire.js';
 import type { OrgIntelCache } from '../lib/cache.js';
 import type { Cluster } from './graph/clusters.js';
@@ -32,9 +32,11 @@ export interface MapOptions {
 }
 
 export interface MapRunResult {
-  couplingGraph: CouplingGraph;
-  manifest: LandscapeManifest;
-  /** sf-orgintel's half of the canonical org graph — the same facts, sf-orgviz's schema. */
+  /**
+   * sf-orgintel's half of the canonical org graph — and, since 1.0 retired `coupling-graph.json`
+   * and `landscape-manifest.json`, the only model of this run's couplings that leaves here. The
+   * report renders it through `couplingViewOf`; nothing re-derives a second one.
+   */
   fragment: CanonicalGraph;
   clusters: Cluster[];
   layout: Map<string, Point>;
@@ -64,7 +66,7 @@ export interface MapRunResult {
   notes: string[];
 }
 
-/** Retrieve flows + apex, build the coupling graph and landscape manifest. Read-only. */
+/** Retrieve flows + apex, merge the couplings, and render them as the graph fragment. Read-only. */
 export async function runMap(
   ctx: IntelContext,
   provenance: MapProvenanceInput,
@@ -121,7 +123,6 @@ export async function runMap(
       recordCount90d: recordCounts.get(object) ?? 0,
     };
   };
-  const labelOf = (object: string): string => catalog.get(object)?.label ?? object;
 
   const artifacts = assembleCouplingArtifacts({
     flowSummaries: flows,
@@ -129,30 +130,17 @@ export async function runMap(
     apexTriggers: triggers,
     knownObjects: known,
     nodeInfo,
-    labelOf,
     topLayout: opts.topLayout,
     targetDomainSize: opts.targetDomainSize,
     notes,
-    couplingProvenance: {
-      tool: 'orgintel',
-      toolVersion: provenance.toolVersion,
-      generatedAt: provenance.generatedAt,
-      orgId: provenance.orgId,
-      evidenceTier: provenance.evidenceTier,
-    },
-    manifestProvenance: {
-      tool: 'orgintel',
-      toolVersion: provenance.toolVersion,
-      generatedAt: provenance.generatedAt,
-      orgId: provenance.orgId,
-    },
   });
 
-  // Rendered from the same merged edges as couplingGraph (artifacts.couplingGraph.edges is
-  // mergeEdges's output), plus the same raw flow/apex inputs and nodeInfo -- so the fragment and
-  // the coupling graph a single run writes cannot describe different couplings for this org.
+  // Built from the merged edges `assembleCouplingArtifacts` just produced, plus the same raw
+  // flow/apex inputs and nodeInfo. There is no second model to disagree with it any more: the
+  // CouplingGraph the fragment used to be cross-checked against is gone, and this is what both
+  // the written IR and the HTML report now read.
   const fragment = buildMapFragment({
-    edges: artifacts.couplingGraph.edges,
+    edges: artifacts.edges,
     flowSummaries: flows,
     apexClasses: classes,
     apexTriggers: triggers,
@@ -174,8 +162,6 @@ export async function runMap(
   });
 
   return {
-    couplingGraph: artifacts.couplingGraph,
-    manifest: artifacts.manifest,
     fragment,
     clusters: artifacts.clusters,
     layout: artifacts.layout,
