@@ -1,9 +1,10 @@
 // Shared deterministic fixture for anatomy-assembly tests.
 //
-// `artifacts()` is the one call to `runAnatomy()` that the behavioral suites share. It builds a
-// *populated* IntelContext -- not the `emptyCtx()` in runAnatomy.test.ts -- because an empty org
-// exercises almost nothing: every one of the six collectors needs to return something for the
-// consistency and band assertions built on this fixture to mean anything.
+// `artifacts()` is the one call to `runAnatomy()` that the golden byte-pinning suite
+// (golden.test.ts) and the behavioral suites share. It builds a *populated* IntelContext -- not
+// the `emptyCtx()` in runAnatomy.test.ts -- because a freeze over an empty org pins almost
+// nothing: every one of the six collectors needs to return something for the byte comparison to
+// mean anything.
 //
 // A later task in the map/anatomy convergence plan adds an `input()` export here, mirroring
 // `test/unit/map/fixtures/input.ts`, once the anatomy equivalent of `FragmentInput` exists. Room
@@ -189,9 +190,11 @@ export async function runResult(): Promise<AnatomyRunResult> {
 }
 
 /**
- * The artifact half of `runResult()`. 1.0 stopped writing this as `anatomy.json`, but `runAnatomy`
- * still builds it: View A's bands render from it, and fragmentConsistency.test.ts cross-checks the
- * fragment against it.
+ * The artifact half of `runResult()` -- what `golden.test.ts` byte-freezes.
+ *
+ * 1.0 stopped writing this to `anatomy.json`, but it is not internal: `run()` returns it, so it
+ * is what `sf intel anatomy --json` emits. It also feeds View A's bands and is the side
+ * `fragmentConsistency.test.ts` checks the fragment against.
  */
 export async function artifacts(): Promise<AnatomyArtifact> {
   return (await runResult()).artifact;
