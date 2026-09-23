@@ -8,6 +8,14 @@
 //
 // Do not regenerate these fixtures to make a failure go away. A regenerated golden pins whatever
 // the change produced, which is exactly the guarantee this file exists to refuse.
+//
+// One exception, and only one. `mapReport.golden.html` is ~190KB, nearly all of it the base64
+// web-font CSS that `@cclabsnz/sf-core`'s `fontFaceCss()` inlines through `src/report/shell.ts`.
+// A `pnpm update` that moves sf-core within `^0.6.0` can therefore redden this suite over font
+// bytes, with nothing in this repo having changed. Regenerating is legitimate for THAT failure --
+// but only after reading the diff and confirming the change is confined to the `@font-face`
+// block. A diff that also touches the report's own markup is the failure this file is for, and
+// the dependency bump is not a licence to pin it.
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
