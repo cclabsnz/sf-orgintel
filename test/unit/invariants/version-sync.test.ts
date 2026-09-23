@@ -4,8 +4,8 @@ import { TOOL_VERSION } from '../../../src/version.js';
 /**
  * `TOOL_VERSION` is stamped into the `provenance` block of the artifacts `intel probe`,
  * `intel discover` and `intel anatomy` build -- the payload each returns from `--json`, and for
- * `discover` the `fingerprint.json` it writes -- and it namespaces the on-disk cache directory
- * (`src/lib/cache.ts`). A value that disagrees with the published package version makes those
+ * `discover` the `orgintel-fingerprint-<orgId>-<timestamp>.json` it writes -- and it namespaces
+ * the on-disk cache directory (`src/lib/cache.ts`). A value that disagrees with the published package version makes those
  * artifacts lie about what produced them. That matters more here than in most projects: they are
  * handed to clients and diffed across runs, and provenance is the part a reader has no way to
  * check.

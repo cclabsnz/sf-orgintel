@@ -27,7 +27,8 @@ export { assembleCouplingArtifacts } from './map/assemble.js';
 export { renderMapHtml } from './report/mapReport.js';
 // `renderMapHtml` takes a `CouplingView` since 1.0, and the fragment is the only thing that can
 // produce one. Exported so the public path into the renderer is complete: a caller runs
-// `runMap` (or `buildMapFragment`), adapts the fragment with `couplingViewOf`, and renders that.
+// `runMap`, which returns the fragment, adapts it with `couplingViewOf`, and renders that.
+// `buildMapFragment` is not exported from this root, so `runMap` is the whole of the public path.
 // Before 1.0 the route ran through `assembleCouplingArtifacts(...).couplingGraph`, which no
 // longer exists.
 export { couplingViewOf } from './report/couplingView.js';
