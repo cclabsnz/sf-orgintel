@@ -1,4 +1,4 @@
-import type { EvidenceTier, CanonicalGraph } from '@cclabsnz/sf-core';
+import type { CanonicalGraph } from '@cclabsnz/sf-core';
 import type { IntelContext } from '../lib/wire.js';
 import type { OrgIntelCache } from '../lib/cache.js';
 import type { Cluster } from './graph/clusters.js';
@@ -15,12 +15,17 @@ import { assembleCouplingArtifacts } from './assemble.js';
 import { buildMapFragment } from './fragment.js';
 import type { ObjectTimeline } from './graph/timeline.js';
 
+/**
+ * The capture facts `runMap` stamps onto the fragment. Once also carried `toolVersion` and
+ * `evidenceTier`, which fed the `provenance` blocks of `coupling-graph.json` and
+ * `landscape-manifest.json`; 1.0 retired both documents and the fragment stamps neither, so the
+ * two fields were read by nothing while every caller still had to supply them. `evidenceTier` is
+ * still measured and still reaches the HTML report -- `src/commands/intel/map.ts` passes it to
+ * `buildMapReportInput` directly, which is the only place it was ever going.
+ */
 export interface MapProvenanceInput {
   generatedAt: string;
-  toolVersion: string;
   orgId: string;
-  /** Null when no `intel probe` has graded this org — never defaulted. */
-  evidenceTier: EvidenceTier | null;
 }
 
 export interface MapOptions {
@@ -118,7 +123,6 @@ export async function runMap(
   const nodeInfo = (object: string): NodeInfo => {
     const c = automation.countsFor(object);
     return {
-      custom: catalog.get(object)?.custom ?? /__c$/i.test(object),
       automationCounts: { flows: c.flows, triggers: c.triggers, approvals: c.approvals },
       recordCount90d: recordCounts.get(object) ?? 0,
     };

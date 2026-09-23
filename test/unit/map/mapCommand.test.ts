@@ -190,9 +190,7 @@ function refusingOrg(): IntelContext {
 const runRefused = (): Promise<MapRunResult> =>
   runMap(refusingOrg(), {
     generatedAt: '2026-01-01T00:00:00.000Z',
-    toolVersion: '0.3.0',
     orgId: '00D',
-    evidenceTier: null,
   });
 
 describe('a run whose listing reads are all refused', () => {

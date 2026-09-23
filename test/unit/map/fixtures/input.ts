@@ -16,14 +16,12 @@ import { assembleCouplingArtifacts, type MapArtifacts } from '../../../../src/ma
 import type { NodeInfo } from '../../../../src/map/graph/couplingGraph.js';
 import type { ApexClassInput, ApexTriggerInput } from '../../../../src/map/apex/apexTypes.js';
 import type { FragmentInput } from '../../../../src/map/fragment.js';
-import type { LayoutEdge } from '../../../../src/map/graph/layout.js';
 
 const DIR = join(process.cwd(), 'test/unit/map/fixtures/flows');
 const flow = (f: string, api: string) =>
   parseFlowXml(readFileSync(join(DIR, `${f}.flow-meta.xml`), 'utf8'), api);
 
 export const nodeInfo = (): NodeInfo => ({
-  custom: false,
   automationCounts: { flows: 1, triggers: 1, approvals: 0 },
   recordCount90d: 100,
 });
@@ -49,7 +47,6 @@ export const knownObjects = () => new Set(['Account', 'Case', 'WorkOrder', 'Cont
  * rather than a test of the clock.
  */
 export const PROVENANCE = {
-  toolVersion: '0.0.0-test',
   generatedAt: '2026-01-01T00:00:00Z',
   orgId: 'org1',
 };
@@ -64,15 +61,6 @@ export function artifacts(): MapArtifacts {
     nodeInfo,
     notes: [],
   });
-}
-
-/**
- * The merged edge list `assembleCouplingArtifacts` produced -- read back off `artifacts()` rather
- * than recomputed, so anything resolving against these edges (the navigation view, the fragment)
- * gets the exact set the assembly built, not a second set free to drift from it.
- */
-export function edges(): LayoutEdge[] {
-  return artifacts().edges;
 }
 
 /**

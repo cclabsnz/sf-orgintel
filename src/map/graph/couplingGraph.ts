@@ -6,8 +6,14 @@
 import type { CouplingGraphEdge, CouplingComponentRef, CouplingOperation } from '@cclabsnz/sf-core';
 import type { RawEdge, CouplingDirection } from '../types.js';
 
+/**
+ * The per-object facts the fragment's `obj.*` contributions are built from. Once also carried a
+ * `custom` flag, which existed only for the `CouplingGraphNode` records `buildNodes` wrapped into
+ * `coupling-graph.json`; 1.0 deleted that writer and with it the flag's only reader, so the
+ * catalog lookup and `__c` regex that computed it are gone too. Only what a contribution actually
+ * states belongs here.
+ */
 export interface NodeInfo {
-  custom: boolean;
   automationCounts: { flows: number; triggers: number; approvals: number };
   recordCount90d: number;
 }

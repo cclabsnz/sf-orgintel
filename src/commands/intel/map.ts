@@ -9,7 +9,7 @@ import { renderMapHtml, type MapAnchorRow, type MapReportInput } from '../../rep
 import { couplingViewOf, type CouplingView } from '../../report/couplingView.js';
 import { OrgIntelCache } from '../../lib/cache.js';
 import { resolveEvidence } from '../../map/evidence.js';
-import { TOOL_VERSION, API_VERSION } from '../../version.js';
+import { API_VERSION } from '../../version.js';
 
 interface MapCommandResult {
   fragment: CanonicalGraph;
@@ -153,7 +153,7 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
     this.log(`Mapping cross-object couplings for org: ${orgInfo.name} (${orgInfo.id})`);
     const result = await runMap(
       ctx,
-      { generatedAt: new Date().toISOString(), toolVersion: TOOL_VERSION, orgId: orgInfo.id, evidenceTier },
+      { generatedAt: new Date().toISOString(), orgId: orgInfo.id },
       {
         includeInactive: flags['include-inactive'],
         cache,
