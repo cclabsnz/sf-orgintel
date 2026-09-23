@@ -1,5 +1,4 @@
 import type { CouplingGraphEdge } from '@cclabsnz/sf-core';
-import type { CouplingView } from '../../report/couplingView.js';
 
 /**
  * How much of the coupling graph rests on exact evidence, and how much on approximation.
@@ -44,9 +43,11 @@ export function edgeConfidence(edge: CouplingGraphEdge): EdgeConfidence {
   return high === 0 ? 'approximate' : 'mixed';
 }
 
-// `Pick`, not the whole `CouplingView`: this reads `edges` alone, so it asks for exactly that
-// and stays callable by anything carrying the same edge shape.
-export function summariseCoverage(graph: Pick<CouplingView, 'edges'>): CoverageSummary {
+// Asks for `edges` alone, because that is all it reads. `CouplingGraphEdge` rather than the
+// report layer's `CouplingViewEdge` -- the two are field for field identical, `edgeConfidence`
+// above already takes it, and naming the report type here would point src/map/ at src/report/,
+// inverting a dependency that runs the other way everywhere else in the repo.
+export function summariseCoverage(graph: { edges: readonly CouplingGraphEdge[] }): CoverageSummary {
   const edgesByConfidence: Record<EdgeConfidence, number> = { high: 0, mixed: 0, approximate: 0 };
   let totalComponents = 0;
   let highComponents = 0;

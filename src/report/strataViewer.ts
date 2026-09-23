@@ -1,5 +1,5 @@
 import { computeStrataLayout } from '../map/graph/strata.js';
-import { roleOf, LAYER_DESCRIPTIONS } from '../map/graph/layers.js';
+import { LAYER_DESCRIPTIONS } from '../map/graph/layers.js';
 import type { CouplingView } from './couplingView.js';
 
 export interface StrataViewerInput {
@@ -35,7 +35,7 @@ export function renderStrataViewer(input: StrataViewerInput): string {
   const included = new Set(input.objects);
   const nodes = input.couplingGraph.nodes
     .filter((n) => included.has(n.object))
-    .map((n) => ({ object: n.object, layer: n.layer ?? roleOf(n.object) }));
+    .map((n) => ({ object: n.object, layer: n.layer }));
 
   if (nodes.length === 0) return '';
 
