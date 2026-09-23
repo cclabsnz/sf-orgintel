@@ -43,7 +43,10 @@ export function edgeConfidence(edge: CouplingGraphEdge): EdgeConfidence {
   return high === 0 ? 'approximate' : 'mixed';
 }
 
-export function summariseCoverage(graph: CouplingGraph): CoverageSummary {
+// `Pick`, not the whole `CouplingGraph`: this reads `edges` alone, and widening the parameter
+// this way lets a caller pass the fragment-derived `CouplingView` too (same edge shape, no
+// `version`/`provenance`/node-`custom`) without this module knowing that type exists.
+export function summariseCoverage(graph: Pick<CouplingGraph, 'edges'>): CoverageSummary {
   const edgesByConfidence: Record<EdgeConfidence, number> = { high: 0, mixed: 0, approximate: 0 };
   let totalComponents = 0;
   let highComponents = 0;
