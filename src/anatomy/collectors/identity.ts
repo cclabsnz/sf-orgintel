@@ -8,8 +8,10 @@ import type { Identity, SsoConfig, Unavailable } from '../types.js';
  * `collectIdentity`'s return, plus the one fact `SsoConfig` itself cannot carry: a stable unique
  * key per config, threaded to `buildAnatomyFragment` only (mirrors how `workflowRulesFor` is
  * threaded past the published shape in `src/map/fragment.ts`'s `FragmentInput`). `SsoConfig` is
- * frozen as part of `anatomy.json` (`identityMapping`, `userProvisioning`, `issuer`, `type`), so
- * a `DeveloperName` column added here must never join that shape or it moves the golden.
+ * frozen at four fields (`identityMapping`, `userProvisioning`, `issuer`, `type`) as part of the
+ * artifact `sf intel anatomy --json` emits and `test/unit/anatomy/golden.test.ts` byte-freezes,
+ * so a `DeveloperName` column added here must never join that shape or it moves the golden. (The
+ * freeze outlived `anatomy.json`: 1.0 retired the file, not the shape it carried.)
  *
  * `ssoConfigKeys[i]` names `ssoConfigs[i]`, in the same order -- both are sorted together below,
  * never independently, so the pairing never drifts. `issuer` cannot serve as this key on its

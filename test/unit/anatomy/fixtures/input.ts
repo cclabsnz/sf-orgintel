@@ -89,7 +89,8 @@ function ctx() {
       { test: (s) => s === 'SELECT SiteName FROM RemoteProxy ORDER BY SiteName',
         records: [{ SiteName: 'Acme_Shipping_API' }, { SiteName: 'Old_Partner_Site' }] },
       // -- identity.ts -- DeveloperName is fixture-only: it never joins the published SsoConfig
-      // shape (see identity.ts's CollectedIdentity doc), so it does not appear in anatomy.json.
+      // shape (see identity.ts's CollectedIdentity doc), so it does not appear in the artifact the
+      // golden freezes.
       { test: (s) => s === 'SELECT DeveloperName, Issuer FROM SamlSsoConfig',
         records: [{ DeveloperName: 'Acme_Okta', Issuer: 'https://acme.okta.com' }] },
       // -- capabilities.ts: COUNT(Id) aggregates. Each is an exact, distinct query string, so
@@ -130,7 +131,8 @@ function ctx() {
           { profileName: 'Community User', licenceName: 'Customer Community Plus', userCount: 120 },
         ] },
       // -- channels.ts -- SiteName is fixture-only: it never joins the published Channel shape
-      // (see channels.ts's CollectedChannels doc), so it does not appear in anatomy.json.
+      // (see channels.ts's CollectedChannels doc), so it does not appear in the artifact the golden
+      // freezes.
       { test: (s) => s === 'SELECT Name, SiteName, Status FROM Site',
         records: [
           { Name: 'Acme Customer Portal', SiteName: 'Acme_Customer_Portal', Status: 'Active' },

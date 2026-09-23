@@ -1,5 +1,8 @@
 // src/anatomy/types.ts
-// Shape of anatomy.json. Data only, no logic, so every consumer agrees on one definition.
+// Shape of the anatomy artifact -- what `sf intel anatomy --json` emits, and what View A and
+// `buildAnatomyFragment` are both built from. Until 1.0 it was also written to `anatomy.json`;
+// that file is retired, the shape is not. Data only, no logic, so every consumer agrees on one
+// definition.
 
 /**
  * How an integration edge was proven to exist. Independent of who owns it.
