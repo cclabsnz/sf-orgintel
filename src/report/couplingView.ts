@@ -1,7 +1,8 @@
 // Adapts the graph fragment (`buildMapFragment`'s output) into the shape the map report and
-// strata viewer already read off `CouplingGraph`. Spec section 4/5: the renderers took their
-// nodes and edges from a second in-memory model of facts the fragment already carries, and this
-// closes that gap without changing what either renderer prints.
+// strata viewer used to read off `CouplingGraph`. The renderers took their nodes and edges from
+// a second in-memory model of facts the fragment already carries; 1.0 deleted that model, and
+// this adapter is what lets the renderers go on printing exactly what they printed before --
+// pinned byte for byte by test/unit/report/renderGolden.test.ts.
 import type {
   CanonicalGraph,
   CouplingComponentRef,
@@ -13,11 +14,11 @@ import { roleOf, type Layer } from '../map/graph/layers.js';
 /** The subset of CouplingGraphNode the renderers actually read, sourced from the fragment. */
 export interface CouplingViewNode {
   object: string;
-  // The brief's spec types this `string`; `Layer` (still a string at runtime, `roleOf`'s own
-  // return type) is used instead because `string` here widens `CouplingGraphNode.layer`'s
-  // `ObjectLayer` down to `string` wherever a caller reads `CouplingGraph | CouplingView`,
-  // which then fails `computeStrataLayout`'s `StrataObject.layer: Layer` downstream. See
-  // task-1-report.md.
+  // Typed `Layer` (`roleOf`'s own return type, a string union) rather than the bare `string` it
+  // would be tempting to use here. `string` would widen `CouplingGraphNode.layer`'s `ObjectLayer`
+  // down to `string` wherever a caller reads a value typed `CouplingGraph | CouplingView`, which
+  // then fails to satisfy `computeStrataLayout`'s `StrataObject.layer: Layer` downstream -- a
+  // type error in the strata viewer, reported from a call site nowhere near this line.
   layer: Layer;
   automationCounts: { flows: number; triggers: number; approvals: number };
   recordCount90d: number;
