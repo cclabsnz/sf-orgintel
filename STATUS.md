@@ -26,7 +26,9 @@ what shipped lives in [CHANGELOG.md](CHANGELOG.md).
 - **Layer view:** done. Objects classified into seven layers, carried on each coupling-graph
   node (`@cclabsnz/sf-core@^0.1.2`) and reported as a cross-layer coupling table. Since `1.0.0`
   retired that node, the layer is resolved by `couplingViewOf` when it adapts the fragment for
-  the report; the table is unchanged. On a real org
+  the report, since the fragment's contributions carry no layer of their own. The table counts
+  the same objects it always did, the ones appearing in a coupling edge; `couplingViewOf` filters
+  its nodes down to those, because the contributions it reads cover every known object. On a real org
   `business ↔ security` is the second-heaviest relationship in the graph (1709 weight / 361
   couplings), which filtering infrastructure out would have deleted entirely.
 - **Evidence quality not surfaced graph-level:** done. A "Coverage and confidence" section

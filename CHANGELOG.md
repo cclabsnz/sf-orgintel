@@ -76,8 +76,15 @@ are no longer counted as analysed.
   the public path into the renderer is complete: `runMap(...)` gives a `fragment`,
   `couplingViewOf(fragment)` gives the view, and that is what `renderMapHtml` renders. The
   pre-1.0 route, `assembleCouplingArtifacts(input).couplingGraph` straight into `renderMapHtml`,
-  is gone with the model. The rendered HTML is unchanged and pinned byte for byte by
-  `test/unit/report/renderGolden.test.ts`; only the argument's type moved.
+  is gone with the model. The rendered HTML is unchanged, and the reason is that the view carries
+  the same facts in the same order: the same node population (the objects appearing in a `couples`
+  edge, which is what `buildNodes` collected), the same `layer` from the same classifier, and the
+  same edges in the fragment's own order, which is the merged order `couplingGraph.edges` had.
+  `test/unit/report/renderGolden.test.ts` pins that byte for byte for its fixture org, which is as
+  far as a golden reaches. What moved is more than the argument's type: `CouplingView` is a
+  narrower shape than `CouplingGraph`, dropping the `custom` flag `CouplingGraphNode` carried. The
+  map report never read it, which is why the HTML does not move, but a caller reading
+  `MapReportInput.couplingGraph.nodes` for its own purposes will find it gone.
 - **`ROADMAP.md` withdraws "give the seven counts real producers".** The seven org-wide counts are
   a census over the whole org, permanently, and stay measurements contributed onto `org.root`. A
   graph-derived count does not restate them, it understates them, by exactly the flows nobody
@@ -111,15 +118,26 @@ are no longer counted as analysed.
   reaches the command's own `--json` payload, which returned both alongside `fragment` at `0.3.0`
   and now returns `fragment` and the six count fields only. **A script reading
   `.result.couplingGraph` or `.result.manifest` gets `null` rather than an error**, so the
-  breakage is silent: `jq '.result.couplingGraph.edges | length'` yields nothing, not a failure.
+  breakage is silent, and worse than silent. `jq '.result.couplingGraph.edges | length'` prints
+  `0` and exits `0`: there is no error to notice, only a plausible number to believe, and what it
+  plausibly says is that the org has no couplings at all.
   Read `.result.fragment` instead — the same `CanonicalGraph` written to `graph-fragment.json`,
   present in `--json` since `0.3.0`. The couplings `couplingGraph.edges` carried are its edges
   with `kind == "couples"`, whose `from`/`to` are `obj.`-prefixed node ids and whose `weight`,
   `operations`, `components` and `direction` sit under `attrs`; the per-object figures
-  `couplingGraph.nodes` carried are its `contributions` entries for `obj.*` node ids. There is no
-  replacement for `manifest` in `--json` or anywhere else, for the reason given above.
-  `src/report/couplingView.ts` performs exactly this adaptation and is exported as
-  `couplingViewOf` if you want it done for you.
+  `couplingGraph.nodes` carried are its `contributions` entries for `obj.*` node ids, whose
+  `attrs` hold `recordCount90d` and `automationCounts`. There is no replacement for `manifest` in
+  `--json` or anywhere else, for the reason given above.
+  The node half of that mapping is not one for one, and four differences matter if you are doing
+  it yourself. A contribution carries no `layer`, which `CouplingGraphNode` did, so you classify
+  the object yourself. It carries no `custom` flag, which `CouplingGraphNode` also did, and
+  nothing in the fragment replaces it. Its `automationCounts` has a fourth field,
+  `workflowRules`, that `CouplingGraphNode.automationCounts` never had. And there is one entry per
+  KNOWN object, which on most orgs is the whole sObject catalog, where `couplingGraph.nodes` held
+  only the objects appearing in an edge. `src/report/couplingView.ts` reconciles all four: it
+  resolves `layer` with `roleOf`, drops `workflowRules`, does not reproduce `custom`, and
+  restricts its nodes to the objects a `couples` edge names. It is exported as `couplingViewOf`
+  if you want that done for you.
   Three audiences are affected by this release, not one: anyone reading the written JSON files,
   anyone parsing `sf intel map --json`, and anyone importing this package as a library.
   `sf intel anatomy --json` is deliberately NOT among them — 1.0 retired the `anatomy.json` file,
