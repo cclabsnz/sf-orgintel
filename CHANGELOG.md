@@ -69,6 +69,15 @@ are no longer counted as analysed.
   resolves still reaches the graph, as a node carrying the object it fires on and as an entry in
   that object's order-of-execution timeline. The object, not the body, is the analysable fact
   about a trigger, so an unresolvable object stays the only drop. (#25)
+- **`renderMapHtml` takes a `CouplingView`, and `couplingViewOf` is how you get one.**
+  `MapReportInput.couplingGraph` was a `CouplingGraph`; that model is deleted, so the renderer now
+  reads a view adapted from the fragment. `couplingViewOf` and the `CouplingView`,
+  `CouplingViewNode` and `CouplingViewEdge` types are exported from the package root for this, so
+  the public path into the renderer is complete: `runMap(...)` gives a `fragment`,
+  `couplingViewOf(fragment)` gives the view, and that is what `renderMapHtml` renders. The
+  pre-1.0 route, `assembleCouplingArtifacts(input).couplingGraph` straight into `renderMapHtml`,
+  is gone with the model. The rendered HTML is unchanged and pinned byte for byte by
+  `test/unit/report/renderGolden.test.ts`; only the argument's type moved.
 - **`ROADMAP.md` withdraws "give the seven counts real producers".** The seven org-wide counts are
   a census over the whole org, permanently, and stay measurements contributed onto `org.root`. A
   graph-derived count does not restate them, it understates them, by exactly the flows nobody
@@ -97,8 +106,24 @@ are no longer counted as analysed.
   on demand by `resolveNavigationView` (`src/map/view/resolve.ts`) rather than carried on the
   result. `AssembleInput`, `assembleCouplingArtifacts`'s parameter type, correspondingly drops
   `labelOf`, `couplingProvenance` and `manifestProvenance`, which existed only to build the two
-  retired documents. Anyone importing this package as a library, not just anyone reading the
-  written JSON files, is affected by this shape change.
+  retired documents.
+- **`sf intel map --json` no longer carries `couplingGraph` or `manifest`.** The deletion above
+  reaches the command's own `--json` payload, which returned both alongside `fragment` at `0.3.0`
+  and now returns `fragment` and the six count fields only. **A script reading
+  `.result.couplingGraph` or `.result.manifest` gets `null` rather than an error**, so the
+  breakage is silent: `jq '.result.couplingGraph.edges | length'` yields nothing, not a failure.
+  Read `.result.fragment` instead — the same `CanonicalGraph` written to `graph-fragment.json`,
+  present in `--json` since `0.3.0`. The couplings `couplingGraph.edges` carried are its edges
+  with `kind == "couples"`, whose `from`/`to` are `obj.`-prefixed node ids and whose `weight`,
+  `operations`, `components` and `direction` sit under `attrs`; the per-object figures
+  `couplingGraph.nodes` carried are its `contributions` entries for `obj.*` node ids. There is no
+  replacement for `manifest` in `--json` or anywhere else, for the reason given above.
+  `src/report/couplingView.ts` performs exactly this adaptation and is exported as
+  `couplingViewOf` if you want it done for you.
+  Three audiences are affected by this release, not one: anyone reading the written JSON files,
+  anyone parsing `sf intel map --json`, and anyone importing this package as a library.
+  `sf intel anatomy --json` is deliberately NOT among them — 1.0 retired the `anatomy.json` file,
+  not the `AnatomyArtifact` shape, and that payload is byte-identical for identical input.
 
 ### Fixed
 

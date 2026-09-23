@@ -25,5 +25,12 @@ export { deriveFlowEdges } from './map/flow/flowEdges.js';
 export { deriveApexEdges, analyzeApex } from './map/apex/apexEdges.js';
 export { assembleCouplingArtifacts } from './map/assemble.js';
 export { renderMapHtml } from './report/mapReport.js';
+// `renderMapHtml` takes a `CouplingView` since 1.0, and the fragment is the only thing that can
+// produce one. Exported so the public path into the renderer is complete: a caller runs
+// `runMap` (or `buildMapFragment`), adapts the fragment with `couplingViewOf`, and renders that.
+// Before 1.0 the route ran through `assembleCouplingArtifacts(...).couplingGraph`, which no
+// longer exists.
+export { couplingViewOf } from './report/couplingView.js';
+export type { CouplingView, CouplingViewNode, CouplingViewEdge } from './report/couplingView.js';
 
 export { TOOL_VERSION, API_VERSION } from './version.js';
