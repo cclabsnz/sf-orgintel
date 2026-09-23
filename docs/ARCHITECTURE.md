@@ -29,8 +29,8 @@ The org boundary lives in `sf-core`, consumed from npm. This repository holds th
 | --- | --- |
 | `sf intel discover` | An org fingerprint: installed packages, clouds, object inventory, record types |
 | `sf intel probe` | An evidence tier: what can be measured on this org, and how confidently |
-| `sf intel map` | `coupling-graph.json` and `landscape-manifest.json`, plus an HTML coupling report |
-| `sf intel anatomy` | `anatomy.json`, plus View A (the seven-band layer map) behind `--html` |
+| `sf intel map` | `graph-fragment.json`, plus an HTML coupling report |
+| `sf intel anatomy` | `anatomy-fragment.json`, plus View A (the seven-band layer map) behind `--html` |
 
 ## The shape every command follows
 
@@ -41,7 +41,7 @@ command  →  wire (build an IntelContext)  →  collectors        [IO, may fail
                                         pure analysis           [no org, fully testable]
                                               |
                                               v
-                                        versioned artifact      (anatomy.json, coupling-graph.json)
+                                        versioned artifact      (anatomy-fragment.json, graph-fragment.json)
                                               |
                                               v
                                         renderer  →  self-contained HTML
@@ -49,8 +49,8 @@ command  →  wire (build an IntelContext)  →  collectors        [IO, may fail
 
 **The split is the design.** Collectors perform IO and are allowed to fail. Everything after
 them is pure, which is why attribution, layout and classification can be unit-tested without
-an org. A renderer never reaches back for data: View A renders `anatomy.json` and nothing
-else, so a band the artifact does not cover says so rather than going to fetch it.
+an org. A renderer never reaches back for data: View A renders the run's own anatomy artifact
+and nothing else, so a band the artifact does not cover says so rather than going to fetch it.
 
 ## Modules
 

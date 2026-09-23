@@ -15,7 +15,7 @@ issueRules:
   #
   #   src/lib/cache.ts             the ~/.orgintel analysis cache, so a re-run does not
   #                                re-query the org
-  #   src/commands/intel/*.ts      writes coupling-graph.json, landscape-manifest.json and
+  #   src/commands/intel/*.ts      writes graph-fragment.json, anatomy-fragment.json and
   #                                the HTML report into the --output directory the operator
   #                                names
   #

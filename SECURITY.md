@@ -6,7 +6,7 @@ cross-object couplings — from metadata and behavioural data. It issues only
 SOQL / Tooling / REST GET queries and never modifies an org. Even so, we take the
 security of the plugin, and of the orgs it runs against, seriously.
 
-The output deserves as much care as the code: `anatomy.json`, `coupling-graph.json`
+The output deserves as much care as the code: `anatomy-fragment.json`, `graph-fragment.json`
 and the generated HTML reports contain real product names, user counts, endpoints and
 org identifiers. Treat a generated report as customer data.
 

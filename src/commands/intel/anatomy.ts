@@ -41,8 +41,7 @@ export default class IntelAnatomyCommand extends SfCommand<AnatomyArtifact> {
     'Collects what products live in the org, who uses it on what licence, what it integrates with, and how ' +
     'people authenticate. Every integration edge records how it was detected and, separately, how it was ' +
     'attributed to a product, so a confirmed call with an unknown owner is reported as exactly that. ' +
-    'Emits anatomy-fragment.json, sf-orgintel\'s contribution to the shared canonical org graph. The older ' +
-    'per-tool IR file anatomy.json was deprecated at 0.3.0 and is no longer written as of 1.0. ' +
+    'Emits anatomy-fragment.json, sf-orgintel\'s contribution to the shared canonical org graph. ' +
     'With --html, also renders View A, a seven-band layer map of the same facts, which adds no reads: ' +
     'a band the collection does not cover says so rather than going to fetch it. ' +
     'Read-only and deterministic: same org in, same anatomy-fragment.json out.';

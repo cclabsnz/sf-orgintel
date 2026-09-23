@@ -43,8 +43,8 @@ matters of taste, and each is enforced by a test that fails the build:
   guard runs in CI and as a pre-commit hook. Note that it cannot recognise an org
   *alias* structurally, so keep those out by hand.
 
-Generated output (`anatomy.json`, `coupling-graph.json`, the HTML reports) contains real
-product names, user counts and endpoints. Treat it as customer data and delete it when
+Generated output (`anatomy-fragment.json`, `graph-fragment.json`, the HTML reports) contains
+real product names, user counts and endpoints. Treat it as customer data and delete it when
 you are done.
 
 ## Coding standards

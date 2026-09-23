@@ -8,8 +8,8 @@ This is the security-relevant design document referred to by [SECURITY.md](../SE
 
 ## What this software does, and what could go wrong
 
-This plugin reads a Salesforce org and writes artifacts describing it: `anatomy.json`,
-`coupling-graph.json`, and HTML reports that are routinely handed to a client. It holds no
+This plugin reads a Salesforce org and writes artifacts describing it: `anatomy-fragment.json`,
+`graph-fragment.json`, and HTML reports that are routinely handed to a client. It holds no
 credentials, uses the Salesforce CLI's existing authenticated connection, and exposes no
 network service.
 
