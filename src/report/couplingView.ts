@@ -64,10 +64,26 @@ interface CouplesEdgeAttrs {
  * Adapt the fragment into what the map report and strata viewer read. Node order is the
  * contributions' order (`buildMapFragment` already sorts it by codepoint, `org.root` excluded by
  * the `obj.` filter); edge order is the fragment's own, unchanged by the `couples` filter.
+ *
+ * Nodes are restricted to objects that appear in a `couples` edge, which is the population the
+ * deleted `CouplingGraph` carried: `buildNodes(edges, info)` collected exactly the `from`/`to`
+ * of its edges. The fragment contributes one `obj.*` entry per KNOWN object -- on a real org,
+ * the whole sObject catalog, since `runMap` passes `catalog.all()` as `knownObjects` -- so the
+ * `obj.` prefix alone is a far wider set, and the report's `Objects` figure and its layer table
+ * both read `nodes` unfiltered. The participant set is derived from this fragment's own
+ * `couples` edges rather than from `knownObjects` or any other outside input, so the adapter
+ * stays a pure function of its argument.
  */
 export function couplingViewOf(fragment: CanonicalGraph): CouplingView {
+  const coupled = new Set<string>();
+  for (const e of fragment.edges) {
+    if (e.kind !== 'couples') continue;
+    coupled.add(stripObjPrefix(e.from));
+    coupled.add(stripObjPrefix(e.to));
+  }
+
   const nodes: CouplingViewNode[] = (fragment.contributions ?? [])
-    .filter((c) => c.nodeId.startsWith(OBJ_PREFIX))
+    .filter((c) => c.nodeId.startsWith(OBJ_PREFIX) && coupled.has(stripObjPrefix(c.nodeId)))
     .map((c) => {
       const object = stripObjPrefix(c.nodeId);
       const attrs = c.attrs as unknown as ObjectContributionAttrs;

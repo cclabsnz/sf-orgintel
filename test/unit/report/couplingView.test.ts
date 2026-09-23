@@ -51,4 +51,30 @@ describe('couplingViewOf', () => {
       expect(e.from.startsWith('flow.') || e.from.startsWith('apexClass.')).toBe(false);
     }
   });
+
+  it('omits a known object that forms no coupling pair', () => {
+    // The fragment contributes one `obj.*` entry per KNOWN object, and `runMap` passes the org's
+    // whole sObject catalog as `knownObjects`. The deleted `CouplingGraphNode` population was
+    // narrower: `buildNodes(edges, info)` collected only the objects appearing in an edge. Two
+    // consumers read `nodes` unfiltered -- the report's `Objects` summary figure and its layer
+    // table -- so without the filter both count the catalog instead of the couplings.
+    //
+    // The shared fixture cannot show this: its `knownObjects` and its edge-participating set are
+    // the same four objects, so the two populations coincide. `Lead` is added HERE rather than
+    // there because widening that fixture would move the render goldens.
+    const base = input();
+    const known = new Set([...base.knownObjects, 'Lead']);
+    const fragment = buildMapFragment({ ...base, knownObjects: known });
+    const v = couplingViewOf(fragment);
+
+    // Lead is genuinely in the fragment and genuinely uncoupled, so its absence below is this
+    // adapter's filter and not something the fragment builder already did.
+    expect(fragment.contributions?.some((c) => c.nodeId === 'obj.Lead')).toBe(true);
+    expect(v.edges.some((e) => e.from === 'Lead' || e.to === 'Lead')).toBe(false);
+
+    expect(v.nodes.map((n) => n.object)).not.toContain('Lead');
+    // The coupled objects are still all there: this filters, it does not empty.
+    expect(v.nodes.map((n) => n.object)).toContain('Account');
+    expect(v.nodes).toHaveLength(couplingViewOf(buildMapFragment(base)).nodes.length);
+  });
 });
