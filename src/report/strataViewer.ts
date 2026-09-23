@@ -175,8 +175,18 @@ function viewerScript(): string {
     return { tier: 'objects', keep: ranked.length, labels: true, edges: true };
   }
 
-  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) {
-    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+  // The scene is built element by element rather than as a markup string. An object name is
+  // org data, and the only reason a name could not close an attribute and inject markup was an
+  // escape function applied by hand at every interpolation site. setAttribute and textContent
+  // do not parse markup at all, so the sink is gone rather than guarded.
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  function svgEl(name, attrs) {
+    var node = document.createElementNS(SVG_NS, name);
+    for (var key in attrs) {
+      if (Object.prototype.hasOwnProperty.call(attrs, key)) node.setAttribute(key, attrs[key]);
+    }
+    return node;
+  }
 
   function render() {
     var d = detail(view.zoom);
@@ -193,11 +203,16 @@ function viewerScript(): string {
       Object.keys(neighbours).forEach(function (k) { shown[k] = true; });
     }
 
-    var bandH = (data.height - 88) / data.bands.length, parts = [];
+    var bandH = (data.height - 88) / data.bands.length, frag = document.createDocumentFragment();
     data.bands.forEach(function (b, i) {
       var y = 44 + bandH * i;
-      parts.push('<rect class="v-band' + (i % 2 ? ' alt' : '') + '" x="0" y="' + y + '" width="' + data.width + '" height="' + bandH + '"/>');
-      parts.push('<text class="v-bandlabel" x="10" y="' + (y + 15) + '">' + esc(b.layer.toUpperCase()) + ' \\u00b7 ' + b.count + '</text>');
+      frag.appendChild(svgEl('rect', {
+        'class': 'v-band' + (i % 2 ? ' alt' : ''),
+        x: 0, y: y, width: data.width, height: bandH,
+      }));
+      var bandLabel = svgEl('text', { 'class': 'v-bandlabel', x: 10, y: y + 15 });
+      bandLabel.textContent = b.layer.toUpperCase() + ' \\u00b7 ' + b.count;
+      frag.appendChild(bandLabel);
     });
 
     var pos = {};
@@ -225,10 +240,10 @@ function viewerScript(): string {
         var path = Math.abs(a.y - b.y) < 1
           ? 'M ' + a.x + ' ' + a.y + ' Q ' + ((a.x + b.x) / 2) + ' ' + (a.y - 26) + ' ' + b.x + ' ' + b.y
           : 'M ' + a.x + ' ' + a.y + ' C ' + a.x + ' ' + mid + ' ' + b.x + ' ' + mid + ' ' + b.x + ' ' + b.y;
-        parts.push('<path class="' + cls + '" d="' + path + '" stroke-width="' +
-          (0.4 + (e.weight / maxW) * 2.4) + '"' +
-          (marker ? ' marker-end="' + marker + '"' : '') +
-          (e.direction === 'both' && marker ? ' marker-start="' + marker + '"' : '') + '/>');
+        var edgeAttrs = { 'class': cls, d: path, 'stroke-width': 0.4 + (e.weight / maxW) * 2.4 };
+        if (marker) edgeAttrs['marker-end'] = marker;
+        if (e.direction === 'both' && marker) edgeAttrs['marker-start'] = marker;
+        frag.appendChild(svgEl('path', edgeAttrs));
       });
     }
 
@@ -236,16 +251,28 @@ function viewerScript(): string {
       if (!shown[n.object]) return;
       var dim = selected && n.object !== selected && !neighbours[n.object];
       var s = n.object === selected ? 11 : 8;
-      parts.push('<rect class="v-node' + (n.object === selected ? ' sel' : dim ? ' dim' : '') +
-        '" x="' + (n.x - s / 2) + '" y="' + (n.y - s / 2) + '" width="' + s + '" height="' + s +
-        '" data-object="' + esc(n.object) + '"><title>' + esc(n.object) + ' \\u2014 ' + n.degree + ' couplings</title></rect>');
+      var box = svgEl('rect', {
+        'class': 'v-node' + (n.object === selected ? ' sel' : dim ? ' dim' : ''),
+        x: n.x - s / 2, y: n.y - s / 2, width: s, height: s,
+        'data-object': n.object,
+      });
+      var tip = svgEl('title', null);
+      tip.textContent = n.object + ' \\u2014 ' + n.degree + ' couplings';
+      box.appendChild(tip);
+      frag.appendChild(box);
       if (d.labels || n.object === selected) {
-        parts.push('<text class="v-label' + (dim ? ' dim' : '') + '" x="' + (n.x + 2) + '" y="' + (n.y - 9) +
-          '" transform="rotate(-32 ' + (n.x + 2) + ' ' + (n.y - 9) + ')">' + esc(n.object) + '</text>');
+        var nodeLabel = svgEl('text', {
+          'class': 'v-label' + (dim ? ' dim' : ''),
+          x: n.x + 2, y: n.y - 9,
+          transform: 'rotate(-32 ' + (n.x + 2) + ' ' + (n.y - 9) + ')',
+        });
+        nodeLabel.textContent = n.object;
+        frag.appendChild(nodeLabel);
       }
     });
 
-    scene.innerHTML = parts.join('');
+    while (scene.firstChild) scene.removeChild(scene.firstChild);
+    scene.appendChild(frag);
     scene.setAttribute('transform', 'translate(' + view.x + ' ' + view.y + ') scale(' + view.zoom + ')');
     tierEl.textContent = TIERS[d.tier];
     if (selected) {
