@@ -1,0 +1,151 @@
+{
+  "schemaVersion": "1.2.0",
+  "capturedAt": "2026-09-23T00:00:00.000Z",
+  "orgId": "00Dxx0000000000EAA",
+  "nodes": [],
+  "edges": [],
+  "coverage": {
+    "notes": [],
+    "unavailable": [
+      {
+        "scope": "anatomy.edges.unattributed",
+        "reason": "deferred",
+        "detail": "1 integration edge(s) had no product attribution and were left out; there is no node to anchor them to."
+      },
+      {
+        "scope": "channels",
+        "reason": "failed",
+        "detail": "Sites could not be read: \nSELECT Name, SiteName, Status FROM Site\n             ^\nERROR at Row:1:Column:14\nNo such column 'SiteName' on entity 'Site'. If you are attempting to use a custom field, be sure to append the '__c' after the custom field name. Please reference your WSDL or the describe call for the appropriate names."
+      },
+      {
+        "scope": "channels.appConsoleApi",
+        "reason": "deferred",
+        "detail": "The app, console and api channel types were not attempted in this phase; only site is collected."
+      },
+      {
+        "scope": "channels.network",
+        "reason": "deferred",
+        "detail": "The Network join was not attempted in this phase."
+      },
+      {
+        "scope": "edges.omniStudio",
+        "reason": "failed",
+        "detail": "OmniStudio integration elements could not be read: \nOmniProcess.Id, OmniProcess.Name FROM OmniProcessElement WHERE OmniProcess.OmniProcessType\n                                      ^\nERROR at Row:1:Column:71\nsObject type 'OmniProcessElement' is not supported. If you are attempting to use a custom object, be sure to append the '__c' after the entity name. Please reference your WSDL or the describe call for the appropriate names."
+      },
+      {
+        "scope": "identity.ssoConfigs",
+        "reason": "failed",
+        "detail": "SSO configuration could not be read: sObject type 'SamlSsoConfig' is not supported."
+      },
+      {
+        "scope": "personas.landingApp",
+        "reason": "deferred",
+        "detail": "landingApp is not collected in this phase; the UserAppInfo/AppDefinition join was not attempted."
+      }
+    ]
+  },
+  "producer": "orgintel",
+  "contributions": [
+    {
+      "nodeId": "org.root",
+      "attrs": {
+        "flows": 3,
+        "apexClasses": 28,
+        "apexTriggers": 1,
+        "lwc": 9,
+        "aura": 0,
+        "externalDataSources": 0,
+        "remoteSites": 1,
+        "eventRelayConfigured": false,
+        "loginsByType": [
+          {
+            "application": "Browser",
+            "loginType": "Application",
+            "count": 1
+          },
+          {
+            "application": "Browser",
+            "loginType": "Remote Access 2.0",
+            "count": 14
+          },
+          {
+            "application": "Browser",
+            "loginType": "Remote Access Client",
+            "count": 1
+          },
+          {
+            "application": "orgfarm_app_1",
+            "loginType": "Remote Access 2.0",
+            "count": 3
+          },
+          {
+            "application": "Salesforce CLI",
+            "loginType": "Remote Access 2.0",
+            "count": 33
+          },
+          {
+            "application": "SF Agent Gateway",
+            "loginType": "Remote Access 2.0",
+            "count": 232
+          }
+        ]
+      }
+    },
+    {
+      "nodeId": "profile.Analytics Cloud Integration User",
+      "attrs": {
+        "licence": "Analytics Cloud Integration User",
+        "activeUsers": 1,
+        "landingApp": null
+      }
+    },
+    {
+      "nodeId": "profile.Analytics Cloud Security User",
+      "attrs": {
+        "licence": "Analytics Cloud Integration User",
+        "activeUsers": 1,
+        "landingApp": null
+      }
+    },
+    {
+      "nodeId": "profile.Chatter Free User",
+      "attrs": {
+        "licence": "Chatter Free",
+        "activeUsers": 1,
+        "landingApp": null
+      }
+    },
+    {
+      "nodeId": "profile.E0 Probe Profile",
+      "attrs": {
+        "licence": "Guest User License",
+        "activeUsers": 1,
+        "landingApp": null
+      }
+    },
+    {
+      "nodeId": "profile.Minimum Access - API Only Integrations",
+      "attrs": {
+        "licence": "Salesforce Integration",
+        "activeUsers": 1,
+        "landingApp": null
+      }
+    },
+    {
+      "nodeId": "profile.Minimum Access - Salesforce",
+      "attrs": {
+        "licence": "Salesforce",
+        "activeUsers": 2,
+        "landingApp": null
+      }
+    },
+    {
+      "nodeId": "profile.System Administrator",
+      "attrs": {
+        "licence": "Salesforce",
+        "activeUsers": 2,
+        "landingApp": null
+      }
+    }
+  ]
+}
