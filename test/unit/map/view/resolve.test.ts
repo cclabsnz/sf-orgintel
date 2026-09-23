@@ -186,22 +186,30 @@ describe('resolveNavigationView across multiple domains', () => {
     expect(landscape(extra)).not.toEqual(landscape(dedupedEdges()));
   });
 
-  it('orders the cross-domain links it keeps, so one edge list gives one landscape', () => {
-    // What the final sort in `crossDomainEdges` buys. `computeLayout` accumulates displacement
-    // per edge in sequence, so without the sort the surviving links would reach it in dedup
-    // (i.e. caller) order and the coordinates would follow.
+  it('orders the cross-domain links it keeps, so a reordered edge list gives one landscape', () => {
+    // What the final sort in `crossDomainEdges` buys, asserted against a DIFFERENT input rather
+    // than the same one twice -- the same call twice is determinism, which the last test in this
+    // file already covers, and would stay green with the sort deleted. `computeLayout`
+    // accumulates displacement per edge in sequence, so without the sort the surviving links
+    // reach it in dedup (i.e. caller) order and the coordinates follow. Deleting the sort turns
+    // this red; the coordinates for `permuted` move.
     //
-    // NOT order-independence, and deliberately not asserted as such: `crossDomainEdges`
+    // NOT full order-independence, and deliberately not asserted as such. `crossDomainEdges`
     // deduplicates on a canonical `a < b ? a|b : b|a` key but pushes `{ from: a, to: b }` in
-    // whichever direction the FIRST edge for that pair happened to run. The sort then keys on
-    // `from + to`, so 'clusterA'+'clusterC' and 'clusterC'+'clusterA' sort to different slots and
-    // reversing the input can still move the landscape. That is inherited byte for byte from
-    // manifest.ts's `interClusterEdges` and is not reachable today -- `mergeEdges` emits one
-    // deterministic order per org, and nothing in src/ calls `resolveNavigationView` yet. It is
-    // recorded here rather than pinned, so a later change that canonicalises the direction is
-    // free to make it go away without tripping a test that had frozen the quirk in place.
+    // whichever direction the FIRST edge for that pair happened to run, while the sort keys on
+    // `from + to` -- so an input that changes which direction a pair is first crossed in can
+    // still move the landscape. That defect is recorded in ROADMAP.md's Known issues, not pinned
+    // here: `permuted` below moves `Journal -> Order` to the front, which changes the arrival
+    // ORDER of the cluster pairs without changing the first-seen DIRECTION of any of them
+    // (clusterD -> clusterB either way, and it is the only edge for that pair). So the one-line
+    // canonicalisation the roadmap proposes leaves this test green, and a future fix is free to
+    // land without tripping a test that had frozen the quirk in place.
+    const permuted: LayoutEdge[] = [
+      { from: 'Journal', to: 'Order' }, // clusterD -> clusterB, moved to the front
+      ...multiEdges().filter((e) => !(e.from === 'Journal' && e.to === 'Order')),
+    ];
     const a = landscape(multiEdges());
-    const b = landscape(multiEdges());
+    const b = landscape(permuted);
     expect(a).toEqual(b);
     expect([...(a?.keys() ?? [])]).toEqual([...(b?.keys() ?? [])]);
   });
