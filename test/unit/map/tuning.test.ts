@@ -50,7 +50,7 @@ function build(opts: { topLayout?: number; targetDomainSize?: number }) {
   const { flows, objects } = denseGraph();
   return assembleCouplingArtifacts({
     flowSummaries: flows, apexClasses: [], apexTriggers: [], knownObjects: new Set(objects),
-    nodeInfo: () => ({ custom: true, automationCounts: { flows: 1, triggers: 0, approvals: 0 }, recordCount90d: 10 }),
+    nodeInfo: () => ({ automationCounts: { flows: 1, triggers: 0, approvals: 0 }, recordCount90d: 10 }),
     ...opts,
   });
 }
