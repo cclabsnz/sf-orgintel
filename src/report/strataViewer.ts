@@ -1,9 +1,10 @@
 import type { CouplingGraph } from '@cclabsnz/sf-core';
 import { computeStrataLayout } from '../map/graph/strata.js';
 import { roleOf, LAYER_DESCRIPTIONS } from '../map/graph/layers.js';
+import type { CouplingView } from './couplingView.js';
 
 export interface StrataViewerInput {
-  couplingGraph: CouplingGraph;
+  couplingGraph: CouplingGraph | CouplingView;
   /** Objects to include; the full graph is usually too dense to draw at once. */
   objects: string[];
 }
