@@ -55,7 +55,9 @@ import type {
  * emitting them here would duplicate a fact another producer already states.
  *
  * `channelKeys` and `ssoConfigKeys` are not artifact fields: `Channel` and `SsoConfig` are frozen
- * as part of `anatomy.json`, so the unique key each needs to build a collision-safe node id
+ * as part of the artifact `--json` emits and `golden.test.ts` byte-freezes -- a freeze that
+ * outlived `anatomy.json`, since 1.0 retired the file and not the shape -- so the unique key each
+ * needs to build a collision-safe node id
  * (`Site.SiteName`, `SamlSsoConfig.DeveloperName`) travels here directly from the collector
  * instead, the way `workflowRulesFor` is threaded past `map/fragment.ts`'s published shapes.
  * `channelKeys[i]` names `channels[i]`; `ssoConfigKeys[i]` names `identity.ssoConfigs[i]`. Both

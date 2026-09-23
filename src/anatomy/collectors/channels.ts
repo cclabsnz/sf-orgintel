@@ -6,8 +6,10 @@ import type { Channel, Unavailable } from '../types.js';
  * `collectChannels`'s return, plus the one fact `Channel` itself cannot carry: a stable unique
  * key per site, threaded to `buildAnatomyFragment` only (mirrors how `workflowRulesFor` is
  * threaded past the published shape in `src/map/fragment.ts`'s `FragmentInput`). `Channel` is
- * frozen as part of `anatomy.json` (`type`, `name`, `status`), so a `SiteName` column added here
- * must never join that shape or it moves the golden.
+ * frozen at three fields (`type`, `name`, `status`) as part of the artifact `sf intel anatomy
+ * --json` emits and `test/unit/anatomy/golden.test.ts` byte-freezes, so a `SiteName` column added
+ * here must never join that shape or it moves the golden. (The freeze outlived `anatomy.json`:
+ * 1.0 retired the file, not the shape it carried.)
  *
  * `channelKeys[i]` names `channels[i]`, in the same order -- both are sorted together below,
  * never independently. `Site.Name` (the label surfaced as `Channel.name`) cannot serve as this
