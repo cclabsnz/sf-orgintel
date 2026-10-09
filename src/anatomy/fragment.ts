@@ -58,7 +58,7 @@ import type {
  * as part of the artifact `--json` emits and `golden.test.ts` byte-freezes -- a freeze that
  * outlived `anatomy.json`, since 1.0 retired the file and not the shape -- so the unique key each
  * needs to build a collision-safe node id
- * (`Site.SiteName`, `SamlSsoConfig.DeveloperName`) travels here directly from the collector
+ * (`Site.Name`, `SamlSsoConfig.DeveloperName`) travels here directly from the collector
  * instead, the way `workflowRulesFor` is threaded past `map/fragment.ts`'s published shapes.
  * `channelKeys[i]` names `channels[i]`; `ssoConfigKeys[i]` names `identity.ssoConfigs[i]`. Both
  * are the same length as the array they key, in the same order, because their collectors sort
@@ -165,10 +165,10 @@ export function buildAnatomyFragment(input: AnatomyFragmentInput): CanonicalGrap
     detail: u.detail,
   }));
 
-  // channels (type 'site') -> site.<SiteName> nodes, metadata provenance. Keyed on
-  // `channelKeys` (`Site.SiteName`, the site's unique technical name), not on `channel.name`
-  // (`Site.Name`, the label): the label is user-editable, not guaranteed unique, and two unnamed
-  // sites both default to the identical literal 'unknown' -- either would put a duplicate id in
+  // channels (type 'site') -> site.<Name> nodes, metadata provenance. Keyed on
+  // `channelKeys` (`Site.Name`, the site's unique technical name), not on `channel.name`
+  // (`Site.MasterLabel`, the label): the label is user-editable, not guaranteed unique, and two
+  // unlabelled sites both default to the identical literal 'unknown' -- either would put a duplicate id in
   // the same graph `mergeGraphs` refuses whole (`MERGE_ID_COLLISION`, `graph: null`), which loses
   // every node in every fragment being merged, not just the duplicate. Falls back to the label
   // only if the key itself is unavailable. The other three Channel variants (app/console/api) are
@@ -186,7 +186,7 @@ export function buildAnatomyFragment(input: AnatomyFragmentInput): CanonicalGrap
     }
     const key = input.channelKeys[i] || channel.name;
     const id = `site.${key}`;
-    // Never two nodes sharing an id: if the key still collides (an empty `SiteName` on more than
+    // Never two nodes sharing an id: if the key still collides (an empty `Site.Name` on more than
     // one row, or a genuine duplicate), the second site is collapsed into the first node rather
     // than emitted as a second one, and the collapse is recorded below, not silently dropped.
     if (seenSiteIds.has(id)) {
@@ -421,7 +421,7 @@ export function buildAnatomyFragment(input: AnatomyFragmentInput): CanonicalGrap
     unavailable.push({
       scope: 'anatomy.channels.idCollision',
       reason: 'deferred',
-      detail: `${siteIdCollisions} site(s) resolved to an id already used by another site (an empty or duplicate SiteName) and were collapsed into one node rather than emitted as a second node sharing that id.`,
+      detail: `${siteIdCollisions} site(s) resolved to an id already used by another site (an empty or duplicate Site Name) and were collapsed into one node rather than emitted as a second node sharing that id.`,
     });
   }
   if (ssoConfigIdCollisions > 0) {

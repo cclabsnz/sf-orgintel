@@ -14,10 +14,12 @@ Current published version: **1.0.0**. Everything on `main` is released; see
   (`intel map` parses Active flows only and can lose `ApexClass` access entirely). A graph-derived
   count understates rather than restates. What was missing is the reconciliation: the tool knows
   both numbers and reported one.
-- **View A hardening on more orgs.** Three of View A's paths are still exercised only by
-  fixtures, because neither verification org triggered them: the empty band, the
-  not-collected band, and the hatched not-read tile. They need an org that is missing a
-  feature before they can be trusted.
+- **View A hardening on more orgs.** The empty band and the partly-collected caveat (from both a
+  failed read and a deferral) are verified against a live org. Two paths are not: the
+  not-collected band, whose one live reach turned out to be caused by the `SiteName` defect
+  (`ANATOMY_SPEC.md` 9b), and the hatched not-read tile, which needs a capability count the org
+  refuses. Both need an org, or a user, that is denied a read; a Developer Edition admin is
+  denied nothing that matters here.
 
 ## Next
 

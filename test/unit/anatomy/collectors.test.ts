@@ -117,39 +117,63 @@ describe('collectChannels', () => {
     const notes: string[] = [];
     const unavailable: Unavailable[] = [];
     const { channels } = await collectChannels(
-      ctx({ soql: mockSoql([{ test: (s) => s.includes('FROM Site'), records: [{ Name: 'Portal', Status: 'Active' }] }]) }),
+      ctx({ soql: mockSoql([{ test: (s) => s.includes('FROM Site'), records: [{ Name: 'Portal', MasterLabel: 'Portal', Status: 'Active' }] }]) }),
       notes,
       unavailable,
     );
     expect(channels).toContainEqual({ type: 'site', name: 'Portal', status: 'Active' });
   });
 
-  it('threads SiteName as channelKeys, aligned with channels, without it appearing on Channel itself', async () => {
-    // The bug this guards against: an id built from `Name` alone (the label) collapses two
-    // unnamed sites onto the identical id `site.unknown`, and `mergeGraphs` returns
-    // `graph: null` for the whole merged graph on that collision, not just the duplicate.
-    const notes: string[] = [];
+  it('reads only columns Site actually has, so the read is not refused on every org', async () => {
+    // Site has no `SiteName` column -- that field belongs to RemoteProxy. Querying it was refused
+    // with INVALID_FIELD on every org from 0.3.0 to 1.0.0, so the channels band reported a failed
+    // read for orgs that had sites. The fixture invented the column, which is how it shipped
+    // green. This mock rejects any column the real describe does not list, as the org does.
+    const SITE_COLUMNS = new Set(['Id', 'Name', 'MasterLabel', 'Status', 'SiteType', 'Subdomain', 'UrlPathPrefix']);
+    const soql = mockSoql([
+      {
+        test: (s) => {
+          const cols = /^SELECT (.+) FROM Site$/.exec(s)?.[1].split(',').map((c) => c.trim()) ?? [];
+          return cols.some((c) => !SITE_COLUMNS.has(c));
+        },
+        error: new Error("No such column on entity 'Site'"),
+      },
+      {
+        test: (s) => s.includes('FROM Site'),
+        records: [{ Name: 'Customer_Portal', MasterLabel: 'Customer Portal', Status: 'Active' }],
+      },
+    ]);
     const unavailable: Unavailable[] = [];
+
+    const { channels } = await collectChannels(ctx({ soql }), [], unavailable);
+
+    expect(unavailable.filter((u) => u.scope === 'channels')).toEqual([]);
+    expect(channels).toEqual([{ type: 'site', name: 'Customer Portal', status: 'Active' }]);
+  });
+
+  it('keys each site on its unique Name and labels it with MasterLabel, keeping the key off Channel', async () => {
+    // `Name` is the site's unique, required technical name; `MasterLabel` is the editable display
+    // label, and two sites can share one. The fragment builds `site.<key>` ids from the key, and
+    // `mergeGraphs` refuses the whole merged graph on an id collision, so the key must be Name.
     const { channels, channelKeys } = await collectChannels(
       ctx({
         soql: mockSoql([
           {
             test: (s) => s.includes('FROM Site'),
             records: [
-              { SiteName: 'First_Unnamed_Site', Status: 'Active' },
-              { SiteName: 'Second_Unnamed_Site', Status: 'Active' },
+              { Name: 'Second_Portal', MasterLabel: 'Portal', Status: 'Active' },
+              { Name: 'First_Portal', MasterLabel: 'Portal', Status: 'Active' },
             ],
           },
         ]),
       }),
-      notes,
-      unavailable,
+      [],
+      [],
     );
-    expect(channels.every((c) => c.name === 'unknown')).toBe(true);
-    expect(channels.every((c) => !('SiteName' in c))).toBe(true);
-    expect(channelKeys).toHaveLength(2);
-    expect(new Set(channelKeys).size).toBe(2);
-    expect(channelKeys.sort()).toEqual(['First_Unnamed_Site', 'Second_Unnamed_Site']);
+
+    expect(channels.map((c) => c.name)).toEqual(['Portal', 'Portal']);
+    expect(channelKeys).toEqual(['First_Portal', 'Second_Portal']);
+    expect(channels.every((c) => Object.keys(c).sort().join() === 'name,status,type')).toBe(true);
   });
 
   it('records a note that app, console and api channels and the Network join are not yet collected', async () => {
