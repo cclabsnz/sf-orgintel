@@ -12,6 +12,14 @@ canonical published note and carries the provenance attestation and CycloneDX SB
 
 ### Fixed
 
+- **`intel anatomy` reads Sites again.** From `0.3.0` the channels collector queried
+  `SELECT Name, SiteName, Status FROM Site`. `Site` has no `SiteName` column (the field belongs to
+  `RemoteProxy`), so the read was refused with `INVALID_FIELD` on every org, and the channels band
+  reported a failed read even where the org had sites. It now reads `Name`, `MasterLabel` and
+  `Status`: `MasterLabel` is the label shown as the channel name, and `Name`, the site's unique
+  technical name, keys the `site.*` node. The unit fixture had invented the missing column, which
+  is how this shipped green; the new test's mock refuses any column `Site` does not have, as the
+  org does. Found by running View A against a live org.
 - **`graph-fragment.json` now marks what `intel map` dropped.** The fragment hardcoded an empty
   `coverage`, so every drop the run detected reached the terminal and the HTML report and stopped
   there. Merged with `intel anatomy`'s census, a refused `FlowDefinitionView` read looked the same

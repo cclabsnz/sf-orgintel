@@ -7,16 +7,18 @@ import type { Channel, Unavailable } from '../types.js';
  * key per site, threaded to `buildAnatomyFragment` only (mirrors how `workflowRulesFor` is
  * threaded past the published shape in `src/map/fragment.ts`'s `FragmentInput`). `Channel` is
  * frozen at three fields (`type`, `name`, `status`) as part of the artifact `sf intel anatomy
- * --json` emits and `test/unit/anatomy/golden.test.ts` byte-freezes, so a `SiteName` column added
- * here must never join that shape or it moves the golden. (The freeze outlived `anatomy.json`:
+ * --json` emits and `test/unit/anatomy/golden.test.ts` byte-freezes, so the key read here must
+ * never join that shape or it moves the golden. (The freeze outlived `anatomy.json`:
  * 1.0 retired the file, not the shape it carried.)
  *
  * `channelKeys[i]` names `channels[i]`, in the same order -- both are sorted together below,
- * never independently. `Site.Name` (the label surfaced as `Channel.name`) cannot serve as this
- * key: it is user-editable, not guaranteed unique, and defaults to the same literal `'unknown'`
- * for every site missing one. `Site.SiteName` is the site's unique, required technical name --
- * the string Force.com Sites URLs are actually built from -- so it is the field that stays
- * distinct even when two sites both go unnamed. Empty for the non-site `Channel` variants (`app`
+ * never independently. `Site.MasterLabel` (the label surfaced as `Channel.name`) cannot serve as
+ * this key: it is user-editable and not guaranteed unique. `Site.Name` is the site's unique,
+ * required technical name, so it is the field that stays distinct when two sites share a label.
+ *
+ * `Site` has no `SiteName` column. 0.3.0 and 1.0.0 queried one -- the field belongs to
+ * `RemoteProxy` -- and the read was refused with INVALID_FIELD on every org, so the channels band
+ * reported a failed read even for orgs that had sites. Empty for the non-site `Channel` variants (`app`
  * /`console`/`api`), which the collector does not populate today and which never reach the
  * fragment as nodes regardless.
  */
@@ -53,12 +55,12 @@ export async function collectChannels(
   const out: Channel[] = [];
   const keys: string[] = [];
   try {
-    const sites = await ctx.soql.queryAll<{ Name: string; SiteName?: string; Status: string }>(
-      'SELECT Name, SiteName, Status FROM Site',
+    const sites = await ctx.soql.queryAll<{ Name?: string; MasterLabel?: string; Status?: string }>(
+      'SELECT Name, MasterLabel, Status FROM Site',
     );
     for (const s of sites) {
-      out.push({ type: 'site', name: s.Name ?? 'unknown', status: s.Status ?? 'unknown' });
-      keys.push(s.SiteName ?? '');
+      out.push({ type: 'site', name: s.MasterLabel ?? s.Name ?? 'unknown', status: s.Status ?? 'unknown' });
+      keys.push(s.Name ?? '');
     }
   } catch (e) {
     const detail = `Sites could not be read: ${e instanceof Error ? e.message : String(e)}`;

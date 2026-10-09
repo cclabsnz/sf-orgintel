@@ -543,6 +543,27 @@ The caveat path had only ever been reached by a *deferral* before this, where th
 sentence this project wrote. Reaching it by a *failure* put a platform error on a band for the
 first time and exposed a rendering defect described in section 6.1.
 
+**Correction, re-measured on the same org after 1.0.** The not-collected result above was
+produced by a defect, not by a thin org. From 0.3.0 the channels collector queried
+`SELECT Name, SiteName, Status FROM Site`, and `Site` has no `SiteName` column (that field belongs
+to `RemoteProxy`), so the read was refused with `INVALID_FIELD` on every org. The channels band
+had no tiles and a failed scope, which is what "Not collected" means, but the org has two sites.
+With the query fixed to `Name, MasterLabel, Status`, the same org draws two site tiles under
+"Partly collected" (the app/console/api and Network deferrals). Both sites share the label
+`E0 Probe` and differ in `Name`, and they became two distinct `site.*` nodes, which is the
+duplicate-label case `Site.Name` is used as the key to survive.
+
+| Path | Re-measured |
+| --- | --- |
+| Empty band | yes, `products`, unchanged |
+| Not-collected band | **no longer reached.** It did run once against a real platform refusal, but that refusal was this project's own query |
+| Partly-collected caveat, from a failed read | yes, `integration` and `external` (`OmniProcessElement` not supported) |
+| Partly-collected caveat, from deferrals only | yes, `channels` |
+| Hatched not-read tile | no |
+
+Both fragments and the HTML are byte-identical across two consecutive runs apart from the capture
+and generated timestamps.
+
 **The hatched not-read tile remains unverified against a live org.** It has unit tests and
 fixture renders behind it and nothing else. Reaching it needs an org where a capability count is
 refused rather than absent, which none of the three orgs measured so far provides. This is

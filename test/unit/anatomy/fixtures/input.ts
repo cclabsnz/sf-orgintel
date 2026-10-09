@@ -130,13 +130,12 @@ function ctx() {
           { profileName: 'Acme Support Agent', licenceName: 'Salesforce Platform', userCount: 42 },
           { profileName: 'Community User', licenceName: 'Customer Community Plus', userCount: 120 },
         ] },
-      // -- channels.ts -- SiteName is fixture-only: it never joins the published Channel shape
-      // (see channels.ts's CollectedChannels doc), so it does not appear in the artifact the golden
-      // freezes.
-      { test: (s) => s === 'SELECT Name, SiteName, Status FROM Site',
+      // -- channels.ts -- Name is the key and never joins the published Channel shape (see
+      // channels.ts's CollectedChannels doc); MasterLabel is what the golden freezes as the name.
+      { test: (s) => s === 'SELECT Name, MasterLabel, Status FROM Site',
         records: [
-          { Name: 'Acme Customer Portal', SiteName: 'Acme_Customer_Portal', Status: 'Active' },
-          { Name: 'Acme Partner Portal', SiteName: 'Acme_Partner_Portal', Status: 'Inactive' },
+          { Name: 'Acme_Customer_Portal', MasterLabel: 'Acme Customer Portal', Status: 'Active' },
+          { Name: 'Acme_Partner_Portal', MasterLabel: 'Acme Partner Portal', Status: 'Inactive' },
         ] },
       // -- capabilities.ts --
       { test: (s) => s === 'SELECT Id FROM EventRelayConfig LIMIT 1',
@@ -215,7 +214,7 @@ export async function artifacts(): Promise<AnatomyArtifact> {
  * NamedCredential hop to name the destination (`anatomy.edges.unresolvedTarget`), a RemoteProxy
  * destination with no owned kind yet (`anatomy.edges.remoteProxy`), and a fully unattributed
  * chain with no endpoint at all (`anatomy.edges.unattributed`). `channelKeys`/`ssoConfigKeys`
- * (`Site.SiteName`/`SamlSsoConfig.DeveloperName`, see fragment.ts's `AnatomyFragmentInput` doc)
+ * (`Site.Name`/`SamlSsoConfig.DeveloperName`, see fragment.ts's `AnatomyFragmentInput` doc)
  * are distinct per entry here precisely because they never join `channels`/`identity.ssoConfigs`
  * -- the collision path itself is exercised separately, in fragment.test.ts, with its own
  * minimal literals. Does not touch `ctx()`, `PROVENANCE` or `artifacts()` -- none of the golden's
@@ -240,7 +239,7 @@ export function input(): AnatomyFragmentInput {
       // `channelKeys` the same length and order as `channels`.
       { type: 'app', name: 'Acme_Mobile', status: 'Active' },
     ],
-    // `Site.SiteName`, aligned by position with `channels` -- see the module doc above.
+    // `Site.Name`, aligned by position with `channels` -- see the module doc above.
     channelKeys: ['Acme_Customer_Portal', 'Acme_Partner_Portal', ''],
     capabilities: {
       apexClasses: 9,
