@@ -18,6 +18,7 @@ import {
   type GraphNode,
   type GraphEdge,
   type GraphProvenance,
+  type GraphUnavailable,
   type AttributeContribution,
   type CouplingGraphEdge,
 } from '@cclabsnz/sf-core';
@@ -56,6 +57,15 @@ export interface FragmentInput {
     apexClasses: number;
     apexTriggers: number;
   };
+  /**
+   * What this run listed but could not read, or chose not to measure: a refused listing, a flow
+   * whose metadata would not come back, an Apex class with neither body nor SymbolTable, a capped
+   * record-count sweep. Every one of these already reaches the terminal and the HTML report as a
+   * note; without this list it reached the fragment as nothing at all, and `analysed.flows: 0`
+   * beside a census of 340 read as an org with no active flows rather than one whose flows were
+   * refused. The same wiring `anatomy-fragment.json` has (see `AnatomyFragmentInput.unavailable`).
+   */
+  unavailable: GraphUnavailable[];
 }
 
 const PRODUCER = 'orgintel' as const;
@@ -237,6 +247,11 @@ export function buildMapFragment(input: FragmentInput): CanonicalGraph {
 
   nodes.sort((a, b) => compare(a.id, b.id));
   edges.sort((a, b) => compare(a.from, b.from) || compare(a.to, b.to) || compare(a.kind, b.kind));
+  // Scope, then reason, then detail -- the anatomy fragment's order. Flow metadata is fetched
+  // concurrently, so drops arrive in completion order, which must not reach the bytes.
+  const unavailable = input.unavailable
+    .map((u) => ({ scope: u.scope, reason: u.reason, detail: u.detail }))
+    .sort((a, b) => compare(a.scope, b.scope) || compare(a.reason, b.reason) || compare(a.detail, b.detail));
 
   return {
     schemaVersion: SUPPORTED_GRAPH_SCHEMA_VERSION,
@@ -244,7 +259,7 @@ export function buildMapFragment(input: FragmentInput): CanonicalGraph {
     orgId: input.orgId,
     nodes,
     edges,
-    coverage: { notes: [], unavailable: [] },
+    coverage: { notes: [], unavailable },
     producer: PRODUCER,
     contributions,
   };

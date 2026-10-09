@@ -1,4 +1,4 @@
-import type { CouplingGraphEdge } from '@cclabsnz/sf-core';
+import type { CouplingGraphEdge, GraphUnavailable } from '@cclabsnz/sf-core';
 import type { FlowSummary } from './flow/flowTypes.js';
 import type { ApexClassInput, ApexTriggerInput } from './apex/apexTypes.js';
 import { deriveFlowEdges } from './flow/flowEdges.js';
@@ -34,15 +34,23 @@ export interface MapArtifacts {
   /** Per-object save sequences, ordered by Salesforce's documented order of execution. */
   timelines: ObjectTimeline[];
   notes: string[];
+  /** The drops this assembly itself detected, for the fragment's `coverage.unavailable`. */
+  unavailable: GraphUnavailable[];
 }
 
 /** Pure assembly: flow + apex edges -> merged couplings, clusters, layout, and timelines. */
 export function assembleCouplingArtifacts(input: AssembleInput): MapArtifacts {
   const notes = [...(input.notes ?? [])];
+  const unavailable: GraphUnavailable[] = [];
 
   const flow = deriveFlowEdges(input.flowSummaries);
   if (flow.missingSubflows.length > 0) {
-    notes.push(`Subflows referenced but not retrieved (touches not inherited): ${flow.missingSubflows.join(', ')}.`);
+    const detail = `Subflows referenced but not retrieved (touches not inherited): ${flow.missingSubflows.join(', ')}.`;
+    notes.push(detail);
+    // Deferred, not failed: the inheritance was never attempted, because the subflow was never
+    // among the summaries. A subflow whose fetch was refused is already marked failed under
+    // `map.flows.metadata`; this entry adds that its parent's couplings understate what it reaches.
+    unavailable.push({ scope: 'map.flows.subflows', reason: 'deferred', detail });
   }
   const apexEdges = deriveApexEdges(input.apexClasses, input.apexTriggers, input.knownObjects);
 
@@ -92,5 +100,5 @@ export function assembleCouplingArtifacts(input: AssembleInput): MapArtifacts {
     );
   }
 
-  return { edges, clusters, layout, timelines, notes };
+  return { edges, clusters, layout, timelines, notes, unavailable };
 }

@@ -8,6 +8,40 @@ From `0.2.0` onward each entry mirrors the
 [GitHub Release](https://github.com/cclabsnz/sf-orgintel/releases) for that tag, which is the
 canonical published note and carries the provenance attestation and CycloneDX SBOM for the build.
 
+## [Unreleased]
+
+### Fixed
+
+- **`graph-fragment.json` now marks what `intel map` dropped.** The fragment hardcoded an empty
+  `coverage`, so every drop the run detected reached the terminal and the HTML report and stopped
+  there. Merged with `intel anatomy`'s census, a refused `FlowDefinitionView` read looked the same
+  as an org with no active flows: `analysed.flows: 0` and nothing to explain it. Each drop is now
+  also a `coverage.unavailable` entry, the same wiring `anatomy-fragment.json` already had.
+  `failed` means the read was tried and refused. `deferred` means it was never tried.
+
+  | Scope | Reason | When |
+  | --- | --- | --- |
+  | `map.flows` | failed | the flow listing was refused |
+  | `map.flows.managed` | deferred | managed-package flows, whose metadata is never requested |
+  | `map.flows.metadata` | failed | one entry per flow whose metadata was refused, empty or unparseable |
+  | `map.flows.subflows` | deferred | referenced subflows that were never retrieved, so their touches are not inherited |
+  | `map.apexClasses` | failed | the class listing was refused |
+  | `map.apexClasses.unreadable` | failed | classes with neither a readable body nor a `SymbolTable` |
+  | `map.apexTriggers` | failed | the trigger listing was refused |
+  | `map.apexTriggers.unresolvedObject` | failed | one entry per trigger whose object could not be resolved |
+  | `map.automationCounts.<field>` | failed | a refused automation query, so that count is an unmeasured `0` on every object |
+  | `map.recordCounts` | deferred | the sweep was capped by `--max-node-counts` |
+  | `map.recordCounts` | failed | 90-day counts that were refused and fell back to `0` |
+  | `map.objects` | failed | the sObject catalog was refused |
+
+  Entries are sorted by scope, then reason, then detail, so the bytes stay stable across runs
+  even though flow metadata is fetched concurrently. A run that drops nothing still writes an
+  empty `coverage`.
+- **Two silent fallbacks in `intel map` are now reported.** A refused 90-day record count was
+  stored as `0` with no note anywhere. A refused sObject catalog read meant running with no
+  known-object set, which pushes every Apex class onto the regex fallback, also without a note.
+  Both now appear in the run's notes and in the fragment's coverage.
+
 ## [1.0.0]
 
 Both analysis commands now state **what they analysed against what they listed**, rather than a
@@ -323,7 +357,8 @@ Apex, with a branded HTML report behind `--html`.
 publishing was configured for this package. Every release from `0.2.0` onward carries one
 automatically. See [SECURITY.md](SECURITY.md).
 
-[1.0.0]: https://github.com/cclabsnz/sf-orgintel/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/cclabsnz/sf-orgintel/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/cclabsnz/sf-orgintel/releases/tag/v1.0.0
 [0.3.0]: https://github.com/cclabsnz/sf-orgintel/releases/tag/v0.3.0
 [0.2.0]: https://github.com/cclabsnz/sf-orgintel/releases/tag/v0.2.0
 [0.1.0]: https://github.com/cclabsnz/sf-orgintel/releases/tag/v0.1.0

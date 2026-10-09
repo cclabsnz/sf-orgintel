@@ -392,3 +392,142 @@ describe('retrieveApex caching', () => {
     expect(cache.get('apex', contentHash('different body'))).toBeNull();
   });
 });
+
+/**
+ * Every drop the retrieval notes, it must also record as a structured `unavailable` entry, so the
+ * fragment can carry it. A note is prose for a person; a consumer of the merged graph cannot key
+ * off prose, and before this a refused FlowDefinitionView read reached `graph-fragment.json` as
+ * `analysed.flows: 0` with nothing beside it saying the read was refused.
+ *
+ * Reasons follow the schema's own definition: `failed` was attempted and did not come back,
+ * `deferred` was never attempted.
+ */
+describe('retrieval records each drop as a structured unavailable entry', () => {
+  const resolver = resolverFromEntities([
+    { QualifiedApiName: 'Account', DurableId: 'Account', KeyPrefix: '001' },
+  ]);
+  const META = { processType: 'AutoLaunchedFlow', status: 'Active', start: {}, recordUpdates: [] };
+  const definitions = (rows: Array<[string, string]>) =>
+    mockSoql([
+      {
+        test: (q) => q.includes('FROM FlowDefinitionView'),
+        records: rows.map(([apiName, versionId]) => ({
+          ApiName: apiName,
+          IsActive: true,
+          ActiveVersionId: versionId,
+          LatestVersionId: versionId,
+        })),
+      },
+    ]);
+
+  it('marks a refused flow listing as the whole flow population failing', async () => {
+    const soql = mockSoql([
+      { test: (q) => q.includes('FROM FlowDefinitionView'), error: new Error('INSUFFICIENT_ACCESS') },
+    ]);
+
+    const { unavailable } = await retrieveFlows(ctxOf(soql, toolingRejectingStandardObjects([])), {}, []);
+
+    expect(unavailable).toHaveLength(1);
+    expect(unavailable[0]).toMatchObject({ scope: 'map.flows', reason: 'failed' });
+    expect(unavailable[0].detail).toContain('INSUFFICIENT_ACCESS');
+  });
+
+  it('marks managed flows as deferred, in one entry, since their metadata is never requested', async () => {
+    const soql = definitions([
+      ['Case_Router', '30109000000AbCdEAA'],
+      ['CaseContact', 'service_email__CaseContact-1'],
+      ['DraftServiceEmail', 'service_email__DraftServiceEmail-1'],
+    ]);
+    const tooling = toolingRejectingStandardObjects([
+      { test: (q) => /FROM Flow\b/.test(q), records: [{ Id: '30109000000AbCdEAA', Metadata: META }] },
+    ]);
+
+    const { unavailable } = await retrieveFlows(ctxOf(soql, tooling), {}, []);
+
+    expect(unavailable).toHaveLength(1);
+    expect(unavailable[0]).toMatchObject({ scope: 'map.flows.managed', reason: 'deferred' });
+    expect(unavailable[0].detail).toContain('2 managed-package flow(s)');
+  });
+
+  it('marks each flow whose metadata did not come back, by name', async () => {
+    const soql = definitions([
+      ['Case_Router', '30109000000AbCdEAA'],
+      ['Empty_Flow', '30109000000YyYyYAA'],
+      ['Refused_Flow', '30109000000ZzZzZAA'],
+    ]);
+    const tooling = toolingRejectingStandardObjects([
+      {
+        test: (q) => /FROM Flow\b/.test(q) && q.includes('30109000000AbCdEAA'),
+        records: [{ Id: '30109000000AbCdEAA', Metadata: META }],
+      },
+      { test: (q) => /FROM Flow\b/.test(q) && q.includes('30109000000ZzZzZAA'), error: new Error('INVALID_TYPE') },
+      { test: (q) => /FROM Flow\b/.test(q), records: [] },
+    ]);
+
+    const { unavailable } = await retrieveFlows(ctxOf(soql, tooling), {}, []);
+
+    expect(unavailable.map((u) => [u.scope, u.reason])).toEqual([
+      ['map.flows.metadata', 'failed'],
+      ['map.flows.metadata', 'failed'],
+    ]);
+    const details = unavailable.map((u) => u.detail).join(' | ');
+    expect(details).toContain('Empty_Flow');
+    expect(details).toContain('Refused_Flow');
+    expect(details).toContain('INVALID_TYPE');
+  });
+
+  it('records nothing for a flow retrieval that dropped nothing', async () => {
+    const soql = definitions([['Case_Router', '30109000000AbCdEAA']]);
+    const tooling = toolingRejectingStandardObjects([
+      { test: (q) => /FROM Flow\b/.test(q), records: [{ Id: '30109000000AbCdEAA', Metadata: META }] },
+    ]);
+
+    const { unavailable } = await retrieveFlows(ctxOf(soql, tooling), {}, []);
+
+    expect(unavailable).toEqual([]);
+  });
+
+  it('marks refused class and trigger listings as their whole populations failing', async () => {
+    const tooling = mockTooling([
+      { test: (q) => q.includes('FROM ApexClass'), error: new Error('INSUFFICIENT_ACCESS') },
+      { test: (q) => q.includes('FROM ApexTrigger'), error: new Error('INSUFFICIENT_ACCESS') },
+    ]);
+
+    const { unavailable } = await retrieveApex(ctxOf(mockSoql([]), tooling), resolver, []);
+
+    expect(unavailable.map((u) => [u.scope, u.reason])).toEqual([
+      ['map.apexClasses', 'failed'],
+      ['map.apexTriggers', 'failed'],
+    ]);
+    expect(unavailable.every((u) => u.detail.includes('INSUFFICIENT_ACCESS'))).toBe(true);
+  });
+
+  it('marks unreadable classes in one entry, and each unresolvable trigger by name', async () => {
+    const tooling = mockTooling([
+      {
+        test: (q) => q.includes('FROM ApexClass'),
+        records: [
+          { Name: 'Svc', NamespacePrefix: null, Body: 'class Svc {}', SymbolTable: null },
+          { Name: 'Sealed', NamespacePrefix: 'mp', Body: '(hidden)', SymbolTable: null },
+          { Name: 'AlsoSealed', NamespacePrefix: 'mp', Body: '(hidden)', SymbolTable: null },
+        ],
+      },
+      {
+        test: (q) => q.includes('FROM ApexTrigger'),
+        records: [
+          { Name: 'GoodTrigger', NamespacePrefix: null, TableEnumOrId: 'Account', Body: 'trigger t {}' },
+          { Name: 'OrphanTrigger', NamespacePrefix: null, TableEnumOrId: '', Body: 'trigger t {}' },
+        ],
+      },
+    ]);
+
+    const { unavailable } = await retrieveApex(ctxOf(mockSoql([]), tooling), resolver, []);
+
+    expect(unavailable.map((u) => [u.scope, u.reason])).toEqual([
+      ['map.apexClasses.unreadable', 'failed'],
+      ['map.apexTriggers.unresolvedObject', 'failed'],
+    ]);
+    expect(unavailable[0].detail).toContain('2 Apex class(es)');
+    expect(unavailable[1].detail).toContain('OrphanTrigger');
+  });
+});
