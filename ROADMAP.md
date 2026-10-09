@@ -18,14 +18,6 @@ Current published version: **1.0.0**. Everything on `main` is released; see
   fixtures, because neither verification org triggered them: the empty band, the
   not-collected band, and the hatched not-read tile. They need an org that is missing a
   feature before they can be trusted.
-- **`graph-fragment.json` does not yet mark map-side drops.** `src/map/fragment.ts` still
-  hardcodes `coverage: { notes: [], unavailable: [] }` on the fragment it builds, so a flow that
-  could not be retrieved, an Apex class whose body and `SymbolTable` are both withheld, or a
-  capped record-count sweep — every drop `intel map` already detects and reports in its terminal
-  notes and HTML report — reaches the fragment unmarked. `anatomy-fragment.json` gets this right:
-  the anatomy collectors' refusals travel into the fragment's own `coverage.unavailable`. The map
-  side needs the same wiring, from the notes `assembleCouplingArtifacts` and its collectors already
-  produce.
 
 ## Next
 

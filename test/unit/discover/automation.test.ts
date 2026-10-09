@@ -74,3 +74,29 @@ describe('buildAutomationIndex', () => {
     expect(idx.notes.some((n) => n.includes('Apex triggers'))).toBe(true);
   });
 });
+
+describe('buildAutomationIndex: which counts were refused', () => {
+  // A refused query degrades its count to 0 on every object, and `intel map` contributes those
+  // counts to the graph. A 0 that was never measured must be distinguishable from a measured 0,
+  // so the index names exactly which of the four counts it could not read.
+  it('names each refused count by its AutomationCounts field', async () => {
+    const brokenTooling = mockTooling([
+      { test: (q) => q.includes('FROM ApexTrigger'), error: new Error('boom') },
+      { test: (q) => q.includes('FROM WorkflowRule'), records: [] },
+    ]);
+    const brokenSoql = mockSoql([
+      { test: (q) => q.includes('FROM ProcessDefinition'), error: new Error('boom') },
+      { test: (q) => q.includes('FROM FlowDefinitionView'), records: [] },
+    ]);
+
+    const idx = await buildAutomationIndex(brokenSoql, brokenTooling, resolver, catalog);
+
+    expect(idx.refused.map((r) => r.field)).toEqual(['triggers', 'approvals']);
+    expect(idx.refused[0].detail).toContain('Apex triggers');
+  });
+
+  it('names nothing when every count was read', async () => {
+    const idx = await buildAutomationIndex(soql, tooling, resolver, catalog);
+    expect(idx.refused).toEqual([]);
+  });
+});

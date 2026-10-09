@@ -14,7 +14,15 @@ export interface AutomationIndex {
   /** Objects that have any automation — used to prioritise which objects to deep-probe. */
   automatedObjects(): Set<string>;
   notes: string[];
+  /**
+   * Which counts could not be read, in query order. A refused query reads as 0 on every object
+   * through `countsFor`, so this is the only thing that tells a measured zero from an unmeasured
+   * one. `detail` is the note recorded for the same refusal.
+   */
+  refused: Array<{ field: RefusableCount; detail: string }>;
 }
+
+type RefusableCount = 'triggers' | 'workflowRules' | 'approvals' | 'flows';
 
 interface ApexTriggerRow {
   TableEnumOrId: string;
@@ -41,9 +49,19 @@ export async function buildAutomationIndex(
   const approvals = new Map<string, number>();
   const flows = new Map<string, number>();
   const notes: string[] = [];
+  const refused: AutomationIndex['refused'] = [];
+  const safe = async (field: RefusableCount, what: string, fn: () => Promise<void>): Promise<void> => {
+    try {
+      await fn();
+    } catch {
+      const detail = `${what} could not be queried; counted as 0.`;
+      notes.push(detail);
+      refused.push({ field, detail });
+    }
+  };
 
   // Apex triggers (active) — Tooling
-  await safe(notes, 'Apex triggers', async () => {
+  await safe('triggers', 'Apex triggers', async () => {
     const rows = await tooling.query<ApexTriggerRow>('SELECT TableEnumOrId, Status FROM ApexTrigger');
     for (const r of rows) {
       if (r.Status && r.Status !== 'Active') continue;
@@ -52,13 +70,13 @@ export async function buildAutomationIndex(
   });
 
   // Workflow rules — Tooling
-  await safe(notes, 'Workflow rules', async () => {
+  await safe('workflowRules', 'Workflow rules', async () => {
     const rows = await tooling.query<WorkflowRuleRow>('SELECT TableEnumOrId FROM WorkflowRule');
     for (const r of rows) bump(workflows, resolver.resolve(r.TableEnumOrId));
   });
 
   // Approval processes — ProcessDefinition (SOQL)
-  await safe(notes, 'Approval processes', async () => {
+  await safe('approvals', 'Approval processes', async () => {
     const result = await soql.queryAll<ProcessDefinitionRow>(
       "SELECT TableEnumOrId, Type, State FROM ProcessDefinition WHERE Type = 'Approval'",
     );
@@ -70,7 +88,7 @@ export async function buildAutomationIndex(
 
   // Record-triggered flows — routed through the core FlowRepository, which owns the fact
   // that FlowDefinitionView is a standard object and not a Tooling one.
-  await safe(notes, 'Record-triggered flows', async () => {
+  await safe('flows', 'Record-triggered flows', async () => {
     const labelToApi = buildLabelIndex(catalog);
     const rows = await new FlowRepository(soql, tooling).listTriggerViews();
     for (const r of rows) {
@@ -99,6 +117,7 @@ export async function buildAutomationIndex(
     },
     automatedObjects: () => automatedObjects,
     notes,
+    refused,
   };
 }
 
@@ -111,12 +130,4 @@ function buildLabelIndex(catalog: SObjectCatalog): Map<string, string> {
   const idx = new Map<string, string>();
   for (const s of catalog.all()) idx.set(s.label.toLowerCase(), s.name);
   return idx;
-}
-
-async function safe(notes: string[], what: string, fn: () => Promise<void>): Promise<void> {
-  try {
-    await fn();
-  } catch {
-    notes.push(`${what} could not be queried; counted as 0.`);
-  }
 }

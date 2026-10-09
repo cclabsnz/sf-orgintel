@@ -247,3 +247,45 @@ describe('buildMapFragment: ordering is codepoint, not locale', () => {
     expect(iA).toBeLessThan(iB);
   });
 });
+
+describe('buildMapFragment: coverage marks what the run dropped', () => {
+  // Every drop `intel map` detects -- a refused listing, a flow whose metadata would not come
+  // back, a class nobody could read, a capped record-count sweep -- used to reach the terminal
+  // and the HTML report and stop there: the fragment hardcoded an empty `coverage`. A consumer of
+  // the merged graph then read `analysed.flows: 0` beside a census of 340 with nothing saying
+  // the read was refused. anatomy-fragment.json already carries its refusals; this is the map's
+  // half of the same wiring.
+  it('carries the drops it is given into coverage.unavailable', () => {
+    const g = buildMapFragment({
+      ...input(),
+      unavailable: [{ scope: 'map.flows', reason: 'failed', detail: 'FlowDefinitionView was refused.' }],
+    });
+
+    expect(g.coverage.unavailable).toEqual([
+      { scope: 'map.flows', reason: 'failed', detail: 'FlowDefinitionView was refused.' },
+    ]);
+  });
+
+  it('orders them by scope, reason, then detail, whatever order they arrive in', () => {
+    // Flow metadata is fetched concurrently, so drops arrive in completion order. The fragment
+    // must not inherit that order, or two runs over one org would differ byte for byte.
+    const g = buildMapFragment({
+      ...input(),
+      unavailable: [
+        { scope: 'map.recordCounts', reason: 'deferred', detail: 'b' },
+        { scope: 'map.flows', reason: 'failed', detail: 'z' },
+        { scope: 'map.flows', reason: 'failed', detail: 'a' },
+      ],
+    });
+
+    expect(g.coverage.unavailable.map((u) => `${u.scope}/${u.detail}`)).toEqual([
+      'map.flows/a',
+      'map.flows/z',
+      'map.recordCounts/b',
+    ]);
+  });
+
+  it('leaves coverage empty for a run that dropped nothing', () => {
+    expect(fragment().coverage).toEqual({ notes: [], unavailable: [] });
+  });
+});

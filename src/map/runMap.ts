@@ -1,4 +1,4 @@
-import type { CanonicalGraph } from '@cclabsnz/sf-core';
+import { describeSalesforceError, type CanonicalGraph, type GraphUnavailable } from '@cclabsnz/sf-core';
 import type { IntelContext } from '../lib/wire.js';
 import type { OrgIntelCache } from '../lib/cache.js';
 import type { Cluster } from './graph/clusters.js';
@@ -78,12 +78,21 @@ export async function runMap(
   opts: MapOptions = {},
 ): Promise<MapRunResult> {
   const notes: string[] = [];
+  // Everything this run lists but cannot read, or chooses not to measure, for the fragment's
+  // `coverage.unavailable`. Each entry repeats a note; see `FragmentInput.unavailable`.
+  const unavailable: GraphUnavailable[] = [];
   const maxNodeCounts = opts.maxNodeCounts ?? 100;
 
   let catalog: SObjectCatalog;
   try {
     catalog = await fetchSObjectCatalog(ctx.rest);
-  } catch {
+  } catch (e) {
+    // Without the catalog there is no known-object set: every Apex class drops to the regex
+    // fallback, and the fragment contributes to no `obj.*` node at all. That used to happen with
+    // no note anywhere.
+    const detail = `The sObject catalog could not be read; object resolution ran without it. (${describeSalesforceError(e)})`;
+    notes.push(detail);
+    unavailable.push({ scope: 'map.objects', reason: 'failed', detail });
     catalog = buildCatalog([]);
   }
   const known = new Set(catalog.all().map((s) => s.name));
@@ -91,14 +100,23 @@ export async function runMap(
   const resolver = await buildObjectResolver(ctx.tooling);
   const automation = await buildAutomationIndex(ctx.soql, ctx.tooling, resolver, catalog);
   notes.push(...automation.notes);
+  for (const r of automation.refused) {
+    unavailable.push({ scope: `map.automationCounts.${r.field}`, reason: 'failed', detail: r.detail });
+  }
 
-  const { summaries: flows, census: flowCensus } = await retrieveFlows(
+  const { summaries: flows, census: flowCensus, unavailable: flowDrops } = await retrieveFlows(
     ctx,
     { includeInactive: opts.includeInactive },
     notes,
     opts.cache,
   );
-  const { classes, triggers, classCensus, triggerCensus } = await retrieveApex(ctx, resolver, notes, opts.cache);
+  const { classes, triggers, classCensus, triggerCensus, unavailable: apexDrops } = await retrieveApex(
+    ctx,
+    resolver,
+    notes,
+    opts.cache,
+  );
+  unavailable.push(...flowDrops, ...apexDrops);
 
   // One derivation of "how much did this run analyse", used by both the fragment contribution
   // and the returned result. See the comment at its use site below.
@@ -118,7 +136,7 @@ export async function runMap(
     objectSet.add(e.from);
     objectSet.add(e.to);
   }
-  const recordCounts = await fetchRecordCounts(ctx, [...objectSet], maxNodeCounts, notes);
+  const recordCounts = await fetchRecordCounts(ctx, [...objectSet], maxNodeCounts, notes, unavailable);
 
   const nodeInfo = (object: string): NodeInfo => {
     const c = automation.countsFor(object);
@@ -163,6 +181,7 @@ export async function runMap(
     // and the HTML numerator and the graph's `analysed` contribution would describe one run
     // differently.
     analysed: analysed,
+    unavailable: [...unavailable, ...artifacts.unavailable],
   });
 
   return {
@@ -185,19 +204,31 @@ async function fetchRecordCounts(
   objects: string[],
   cap: number,
   notes: string[],
+  unavailable: GraphUnavailable[],
 ): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
   const sorted = [...objects].sort();
   const take = sorted.slice(0, cap);
   if (sorted.length > take.length) {
-    notes.push(`Record counts computed for ${cap} of ${sorted.length} graph objects.`);
+    const detail = `Record counts computed for ${cap} of ${sorted.length} graph objects.`;
+    notes.push(detail);
+    unavailable.push({ scope: 'map.recordCounts', reason: 'deferred', detail });
   }
+  const refused: string[] = [];
   for (const o of take) {
     try {
       counts.set(o, await countRows(ctx.soql, o, 'CreatedDate = LAST_N_DAYS:90'));
     } catch {
+      // Still 0 in the contribution, because `recordCount90d` is a number in a published shape.
+      // What changes is that the 0 is now marked as unmeasured rather than passing as a count.
       counts.set(o, 0);
+      refused.push(o);
     }
+  }
+  if (refused.length > 0) {
+    const detail = `90-day record counts could not be read for ${refused.length} object(s); counted as 0: ${refused.join(', ')}.`;
+    notes.push(detail);
+    unavailable.push({ scope: 'map.recordCounts', reason: 'failed', detail });
   }
   return counts;
 }

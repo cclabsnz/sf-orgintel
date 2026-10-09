@@ -210,6 +210,23 @@ describe('a run whose listing reads are all refused', () => {
     expect(result.notes.some((n) => n.includes('ApexTrigger is not queryable'))).toBe(true);
   });
 
+  it('marks every refusal in the fragment, so a merged graph does not read them as an empty org', async () => {
+    // The fragment is the only thing that leaves this run as data. Before this it carried
+    // `analysed.flows: 0` and an empty coverage block, which a consumer reconciling against
+    // `intel anatomy`'s census could not tell apart from an org with no active flows.
+    const { fragment } = await runRefused();
+
+    expect(fragment.coverage.unavailable.map((u) => `${u.scope}:${u.reason}`)).toEqual([
+      'map.apexClasses:failed',
+      'map.apexTriggers:failed',
+      // The automation index reads ApexTrigger and FlowDefinitionView too, and is refused too:
+      // every object's automationCounts.triggers and .flows is an unmeasured 0.
+      'map.automationCounts.flows:failed',
+      'map.automationCounts.triggers:failed',
+      'map.flows:failed',
+    ]);
+  });
+
   it('omits the listed fields from --json entirely, rather than serialising them as 0', async () => {
     const commandResult = buildMapCommandResult(await runRefused());
     const json = JSON.parse(JSON.stringify(commandResult)) as Record<string, unknown>;

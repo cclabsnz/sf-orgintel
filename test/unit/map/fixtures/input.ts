@@ -82,5 +82,6 @@ export function input(): FragmentInput {
     capturedAt: PROVENANCE.generatedAt,
     orgId: PROVENANCE.orgId,
     analysed: { flows: 2, apexClasses: 1, apexTriggers: 0 },
+    unavailable: [],
   };
 }

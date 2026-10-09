@@ -1,4 +1,10 @@
-import { ApexRepository, FlowRepository, describeSalesforceError, mapWithConcurrency } from '@cclabsnz/sf-core';
+import {
+  ApexRepository,
+  FlowRepository,
+  describeSalesforceError,
+  mapWithConcurrency,
+  type GraphUnavailable,
+} from '@cclabsnz/sf-core';
 import type { IntelContext } from '../lib/wire.js';
 import type { OrgIntelCache } from '../lib/cache.js';
 import { contentHash } from '../lib/cache.js';
@@ -53,6 +59,14 @@ export interface RetrievalCensus {
 export interface FlowRetrieval {
   summaries: FlowSummary[];
   census: RetrievalCensus;
+  /**
+   * Each drop the notes describe, as a structured entry the graph fragment can carry. A note is
+   * prose for whoever reads the report; a consumer of the merged graph cannot key off prose. One
+   * entry per note, at the same granularity: per flow where the note is per flow, aggregated where
+   * the note is aggregated. `failed` was attempted and did not come back; `deferred` was never
+   * attempted -- the schema's own definitions.
+   */
+  unavailable: GraphUnavailable[];
 }
 
 export interface ApexRetrieval {
@@ -60,6 +74,8 @@ export interface ApexRetrieval {
   triggers: ApexTriggerInput[];
   classCensus: RetrievalCensus;
   triggerCensus: RetrievalCensus;
+  /** As `FlowRetrieval.unavailable`, for classes and triggers. */
+  unavailable: GraphUnavailable[];
 }
 
 /** Concurrent Tooling requests in flight while fetching flow metadata. */
@@ -77,21 +93,30 @@ export async function retrieveFlows(
   cache?: OrgIntelCache,
 ): Promise<FlowRetrieval> {
   const flows = new FlowRepository(ctx.soql, ctx.tooling);
+  const unavailable: GraphUnavailable[] = [];
+  const drop = (scope: string, reason: GraphUnavailable['reason'], detail: string): void => {
+    notes.push(detail);
+    unavailable.push({ scope, reason, detail });
+  };
 
   let definitions;
   try {
     definitions = await flows.listDefinitions();
   } catch (e) {
-    notes.push(`FlowDefinitionView is not queryable; flow coupling skipped. (${describeSalesforceError(e)})`);
+    drop('map.flows', 'failed', `FlowDefinitionView is not queryable; flow coupling skipped. (${describeSalesforceError(e)})`);
     // No `listed`. The read was refused, so nothing was counted; reporting 0 here would
     // render as "0 of 0" -- the org has no flows, and we analysed all of them -- which is a
     // stronger and more wrong claim than the bare, uninformative 0 that `analysed` alone gives.
-    return { summaries: [], census: { analysed: 0 } };
+    return { summaries: [], census: { analysed: 0 }, unavailable };
   }
 
   const { versions, managedSkipped } = FlowRepository.selectVersions(definitions, opts);
   if (managedSkipped > 0) {
-    notes.push(`${managedSkipped} managed-package flow(s) skipped: metadata is not readable for managed flows.`);
+    drop(
+      'map.flows.managed',
+      'deferred',
+      `${managedSkipped} managed-package flow(s) skipped: metadata is not readable for managed flows.`,
+    );
   }
 
   // Serve cache hits first, then fetch only the misses. `Flow.Metadata` cannot be batched,
@@ -108,11 +133,11 @@ export async function retrieveFlows(
     try {
       metadata = await flows.fetchMetadata(v.id);
     } catch (e) {
-      notes.push(`Flow ${v.apiName} metadata was unavailable; skipped. (${describeSalesforceError(e)})`);
+      drop('map.flows.metadata', 'failed', `Flow ${v.apiName} metadata was unavailable; skipped. (${describeSalesforceError(e)})`);
       return;
     }
     if (!metadata) {
-      notes.push(`Flow ${v.apiName} returned no metadata; skipped.`);
+      drop('map.flows.metadata', 'failed', `Flow ${v.apiName} returned no metadata; skipped.`);
       return;
     }
     try {
@@ -120,14 +145,15 @@ export async function retrieveFlows(
       summaries.push(summary);
       cache?.set('flow', contentHash(v.id), summary);
     } catch (e) {
-      notes.push(`Flow ${v.apiName} could not be parsed; skipped. (${describeSalesforceError(e)})`);
+      drop('map.flows.metadata', 'failed', `Flow ${v.apiName} could not be parsed; skipped. (${describeSalesforceError(e)})`);
     }
   });
 
   // Deterministic regardless of cache-hit and completion ordering.
   notes.sort();
+  unavailable.sort((a, b) => (a.detail < b.detail ? -1 : a.detail > b.detail ? 1 : 0));
   summaries.sort((a, b) => a.apiName.localeCompare(b.apiName));
-  return { summaries, census: { listed: definitions.length, analysed: summaries.length } };
+  return { summaries, census: { listed: definitions.length, analysed: summaries.length }, unavailable };
 }
 
 /**
@@ -146,6 +172,11 @@ export async function retrieveApex(
   // Undefined, not 0: an unset denominator on the catch paths below. See `RetrievalCensus.listed`.
   let classesListed: number | undefined;
   let triggersListed: number | undefined;
+  const unavailable: GraphUnavailable[] = [];
+  const drop = (scope: string, detail: string): void => {
+    notes.push(detail);
+    unavailable.push({ scope, reason: 'failed', detail });
+  };
 
   try {
     // Bodies are cheap to fetch but not to analyse, so the derived shape is memoised by a
@@ -179,14 +210,15 @@ export async function retrieveApex(
     // drown the very report this is meant to qualify (same rule as the managed-flow note above).
     const unreadable = resolved.filter((c) => !c.body && !c.symbolTable);
     if (unreadable.length > 0) {
-      notes.push(
+      drop(
+        'map.apexClasses.unreadable',
         `${unreadable.length} Apex class(es) have neither a readable body nor a SymbolTable ` +
           '(typically managed-package code); excluded from coupling.',
       );
     }
     classes = resolved.filter((c) => !!c.body || !!c.symbolTable);
   } catch (e) {
-    notes.push(`ApexClass is not queryable; class coupling skipped. (${describeSalesforceError(e)})`);
+    drop('map.apexClasses', `ApexClass is not queryable; class coupling skipped. (${describeSalesforceError(e)})`);
   }
 
   try {
@@ -208,12 +240,12 @@ export async function retrieveApex(
     // is why that, and only that, is the drop.
     for (const t of resolved) {
       if (!t.object) {
-        notes.push(`Trigger ${t.name} has no resolvable object; excluded from coupling.`);
+        drop('map.apexTriggers.unresolvedObject', `Trigger ${t.name} has no resolvable object; excluded from coupling.`);
       }
     }
     triggers = resolved.filter((t) => !!t.object);
   } catch (e) {
-    notes.push(`ApexTrigger is not queryable; trigger coupling skipped. (${describeSalesforceError(e)})`);
+    drop('map.apexTriggers', `ApexTrigger is not queryable; trigger coupling skipped. (${describeSalesforceError(e)})`);
   }
 
   return {
@@ -221,5 +253,6 @@ export async function retrieveApex(
     triggers,
     classCensus: { listed: classesListed, analysed: classes.length },
     triggerCensus: { listed: triggersListed, analysed: triggers.length },
+    unavailable,
   };
 }
