@@ -1,6 +1,6 @@
 # Design: object roles from platform evidence
 
-Status: proposed, 2026-10-11. Touches `@cclabsnz/sf-core` (the classifier), `sf-orgintel`
+Status: 2.1 implemented; 2.2 and 2.3 proposed. 2026-10-11. Touches `@cclabsnz/sf-core` (the classifier), `sf-orgintel`
 (`intel map`) and `sf-orgviz` (`extract`, the coupling view).
 
 ## 1. The problem
@@ -15,8 +15,8 @@ real Health Cloud sandbox this produced a picture a Salesforce architect would r
 - `AccountShare` and other `Share`, `History` and `Feed` objects appeared as objects in their own
   right, instead of as parts of the object they belong to.
 - Reference data (`CodeSet`, `CodeSetBundle`) ranked above `Case`.
-- **Apex test classes were analysed as production automation.** 357 of 578 Apex classes with
-  object references were tests. A test class inserts fixture data for many objects at once, so each
+- **Apex test classes were analysed as production automation.** 445 Apex classes were tests,
+  identified by their `IsTest` annotation. A test class inserts fixture data for many objects at once, so each
   one adds a burst of couplings that do not exist in the running org. Every `create` of `CodeSet`
   in that org came from a test class.
 
@@ -108,7 +108,9 @@ Aggregate numbers only. This repository holds no client data.
 | Most-coupled objects | User, Account, CodeSet, CodeSetBundle, Case, HealthcareFacility, RecordType | Account, Case, Contact, ContactPointAddress, ClinicalEncounter, CarePlanDetail, HealthCondition, CarePlan |
 | Roles assigned (212 objects) | 7 layers by name | 109 entity, 38 setup, 37 configuration, 13 companion, 12 event, 2 actor, 1 qualifier |
 
-The prototype approximated test detection by class name; the implementation uses the annotation.
+The prototype approximated test detection by class name. The shipped annotation check (2.1) found
+445 test classes, more than the name found, and on its own took the map from 2,171 coupled pairs to
+1,231, from 212 objects to 174, and from 57 domains to 49.
 
 ## 5. Open questions
 
