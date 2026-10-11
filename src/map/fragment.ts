@@ -21,12 +21,14 @@ import {
   type GraphUnavailable,
   type AttributeContribution,
   type CouplingGraphEdge,
+  type ObjectRoleDecision,
 } from '@cclabsnz/sf-core';
 import type { FlowSummary } from './flow/flowTypes.js';
 import type { ApexClassInput, ApexTriggerInput } from './apex/apexTypes.js';
 import type { NodeInfo } from './graph/couplingGraph.js';
 import type { CouplingOperation } from './types.js';
 import { analyzeApex } from './apex/apexEdges.js';
+import type { ContextEdge } from './graph/roles.js';
 
 export interface FragmentInput {
   /** The merged, already-aggregated object-pair edges (`mergeEdges`'s output). */
@@ -66,12 +68,25 @@ export interface FragmentInput {
    * refused. The same wiring `anatomy-fragment.json` has (see `AnatomyFragmentInput.unavailable`).
    */
   unavailable: GraphUnavailable[];
+  /**
+   * Pairs where one side is not business data (OBJECT_ROLES_SPEC 2.3), written as `uses` edges so
+   * `couples` carries business couplings only. Absent or empty when no roles were decided.
+   */
+  context?: ContextEdge[];
+  /**
+   * The role decided for each object this run touched, with its evidence, contributed under
+   * orgintel's namespace. Absent when no roles were decided.
+   */
+  objectRoles?: ReadonlyMap<string, ObjectRoleDecision>;
 }
 
 const PRODUCER = 'orgintel' as const;
 
 /** Names the inference `couples` edges encode, for their required `derived.rule`. */
 const COUPLES_RULE = 'map.coupling.pairwise-co-reference';
+
+/** The same co-reference, between a business object and one that is not (OBJECT_ROLES_SPEC 2.3). */
+const USES_RULE = 'map.coupling.context-by-object-role';
 
 /** object -> operations a single component touches directly (no subflow/pairwise inference). */
 type TouchMap = Map<string, Set<CouplingOperation>>;
@@ -87,7 +102,7 @@ function upsert(map: TouchMap, object: string, op: CouplingOperation): void {
  * Deliberately not the recursive subflow resolution `deriveFlowEdges` uses for coupling: this is
  * what the flow's own node touches, not what its process eventually reaches.
  */
-function directFlowTouches(flow: FlowSummary): TouchMap {
+export function directFlowTouches(flow: FlowSummary): TouchMap {
   const map: TouchMap = new Map();
   for (const r of flow.recordLookups) upsert(map, r.object, 'read');
   for (const r of flow.recordCreates) upsert(map, r.object, 'create');
@@ -215,11 +230,30 @@ export function buildMapFragment(input: FragmentInput): CanonicalGraph {
     });
   }
 
+  const usesProvenance: GraphProvenance = { source: 'derived', rule: USES_RULE, capturedAt: input.capturedAt };
+  for (const e of input.context ?? []) {
+    edges.push({
+      from: `obj.${e.from}`,
+      to: `obj.${e.to}`,
+      kind: 'uses',
+      attrs: {
+        weight: e.weight,
+        operations: e.operations,
+        components: e.components,
+        roles: { from: e.roles[0], to: e.roles[1] },
+        ...(e.direction ? { direction: e.direction } : {}),
+      },
+      provenance: usesProvenance,
+    });
+  }
+
   const contributions: AttributeContribution[] = [...known].sort(compare).map((object) => {
     const info = input.nodeInfo(object);
+    const role = input.objectRoles?.get(object);
     return {
       nodeId: `obj.${object}`,
       attrs: {
+        ...(role ? { objectRole: { role: role.role, evidence: role.evidence, ...(role.parent ? { parent: role.parent } : {}) } } : {}),
         recordCount90d: info.recordCount90d,
         // automationCounts travels as a contribution in its entirety -- all four of flows,
         // triggers, approvals and workflowRules -- even though NodeInfo/CouplingGraphNode only

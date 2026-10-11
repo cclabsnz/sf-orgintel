@@ -2,6 +2,7 @@ import { esc, type Branding } from '@cclabsnz/sf-core';
 import type { Cluster } from '../map/graph/clusters.js';
 import type { CouplingView, CouplingViewEdge } from './couplingView.js';
 import { summariseLayers, crossLayerCoupling, LAYER_DESCRIPTIONS } from '../map/graph/layers.js';
+import type { ContextRow } from './contextSummary.js';
 import { extractProcessChains } from '../map/graph/chains.js';
 import { summariseCoverage, coverageHeadline, edgeConfidence } from '../map/graph/coverage.js';
 import { computeStrataLayout } from '../map/graph/strata.js';
@@ -54,6 +55,11 @@ export interface MapReportInput {
   apexTriggersListed?: number;
   generatedAt: string;
   branding: Branding;
+  /**
+   * What the business objects depend on, by role (OBJECT_ROLES_SPEC 2.3): the pairs that stopped
+   * being couplings. Absent or empty when no roles were decided; the section is then omitted.
+   */
+  context?: readonly ContextRow[];
 }
 
 const CLUSTER_COLORS = ['#3a5a82', '#7a5c3e', '#4f7a52', '#82406a', '#5a6b8a', '#8a6d1e', '#4a7d7d', '#6a4a8a'];
@@ -67,6 +73,9 @@ export function renderMapHtml(input: MapReportInput): string {
     processSection(input.couplingGraph),
     timelineSection(input.timelines ?? []),
     layerSection(input.couplingGraph),
+    // Only when there is context: an empty section would still add a line to the join, and the
+    // report of a run with no roles must stay byte-identical to what it was before roles.
+    ...((input.context ?? []).length > 0 ? [contextSection(input.context ?? [])] : []),
     couplingTableSection(input.couplingGraph.edges),
     anchorSection(input.anchors),
     clusterSection(input.clusters, input.couplingGraph),
@@ -326,6 +335,34 @@ business process but reveal how the business model is wired to identity, logging
 <h3 style="font-size:15px;margin-top:22px">Cross-layer coupling</h3>
 <table><thead><tr><th>Relationship</th><th class="num">Pairs</th><th class="num">Weight</th><th></th></tr></thead>
 <tbody>${pairRows}</tbody></table>`;
+}
+
+const ROLE_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  actor: 'who owns, creates or changes records',
+  qualifier: 'which variant of an object a record is (record types)',
+  setup: 'platform setup: no page layout, no triggers',
+  configuration: 'custom metadata and custom settings',
+  event: 'platform events',
+  external: 'external objects',
+  reference: 'data production automation only reads',
+};
+
+function contextSection(rows: readonly ContextRow[]): string {
+  if (rows.length === 0) return '';
+  const body = rows
+    .map(
+      (r) =>
+        `<tr><td><strong>${esc(r.role)}</strong></td><td class="num">${r.pairs}</td><td class="num">${r.weight}</td>` +
+        `<td>${esc(r.objects.slice(0, 5).join(', '))}${r.objects.length > 5 ? ` <span class="muted">+${r.objects.length - 5}</span>` : ''}</td>` +
+        `<td class="muted">${esc(ROLE_DESCRIPTIONS[r.role] ?? '')}</td></tr>`,
+    )
+    .join('');
+  return `<h2>What the business objects depend on</h2>
+<p class="muted">Pairs with an object that is not business data are not counted as couplings above.
+They are how the business model depends on identity, record types, setup and configuration,
+classified from what the platform reports about each object, not from its name.</p>
+<table><thead><tr><th>Role</th><th class="num">Pairs</th><th class="num">Weight</th><th>Objects</th><th>What it is</th></tr></thead>
+<tbody>${body}</tbody></table>`;
 }
 
 function couplingTableSection(edges: CouplingViewEdge[]): string {

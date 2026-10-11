@@ -8,6 +8,7 @@ import { clusterByLayer, type LayerCluster } from './graph/clusters.js';
 import { roleOf } from './graph/layers.js';
 import { computeLayout, type Point } from './graph/layout.js';
 import { objectTimelines, type ObjectTimeline } from './graph/timeline.js';
+import { NO_ROLES, foldCompanions, splitCouplings, type ContextEdge, type ObjectRoles } from './graph/roles.js';
 
 export interface AssembleInput {
   flowSummaries: FlowSummary[];
@@ -20,6 +21,11 @@ export interface AssembleInput {
   /** Largest domain to hand a consultant; clustering resolution tunes to fit (default 25). */
   targetDomainSize?: number;
   notes?: string[];
+  /**
+   * Object roles from platform evidence (OBJECT_ROLES_SPEC). Absent means none were read: every
+   * object is unclassified, nothing folds, and every pair stays a coupling, as before roles.
+   */
+  roles?: ObjectRoles;
 }
 
 export interface MapArtifacts {
@@ -33,6 +39,12 @@ export interface MapArtifacts {
   layout: Map<string, Point>;
   /** Per-object save sequences, ordered by Salesforce's documented order of execution. */
   timelines: ObjectTimeline[];
+  /**
+   * Pairs where at least one side is known not to be business data -- an actor, a record type,
+   * setup, configuration, an event, reference data. Not couplings, and kept out of clustering and
+   * layout, but returned so the report can still state how the business model depends on them.
+   */
+  context: ContextEdge[];
   notes: string[];
   /** The drops this assembly itself detected, for the fragment's `coverage.unavailable`. */
   unavailable: GraphUnavailable[];
@@ -54,7 +66,13 @@ export function assembleCouplingArtifacts(input: AssembleInput): MapArtifacts {
   }
   const apexEdges = deriveApexEdges(input.apexClasses, input.apexTriggers, input.knownObjects);
 
-  const edges = mergeEdges([...flow.edges, ...apexEdges]);
+  const roles = input.roles ?? NO_ROLES;
+  // Companions fold into their parent before pairs merge, so AccountShare's references count as
+  // Account's; then only business pairs stay couplings.
+  const { couplings: edges, context } = splitCouplings(
+    mergeEdges(foldCompanions([...flow.edges, ...apexEdges], roles)),
+    roles,
+  );
   const nodeNames = edgeObjects(edges);
 
   // Weighted-degree + automation score, for cluster anchors and layout ranking.
@@ -100,5 +118,5 @@ export function assembleCouplingArtifacts(input: AssembleInput): MapArtifacts {
     );
   }
 
-  return { edges, clusters, layout, timelines, notes, unavailable };
+  return { edges, clusters, layout, timelines, context, notes, unavailable };
 }

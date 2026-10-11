@@ -12,7 +12,10 @@ import { deriveFlowEdges } from './flow/flowEdges.js';
 import { deriveApexEdges } from './apex/apexEdges.js';
 import { mergeEdges, type NodeInfo } from './graph/couplingGraph.js';
 import { assembleCouplingArtifacts } from './assemble.js';
-import { buildMapFragment } from './fragment.js';
+import { buildMapFragment, directFlowTouches } from './fragment.js';
+import { analyzeApex } from './apex/apexEdges.js';
+import { collectObjectFacts } from './objectFacts.js';
+import { buildObjectRoles, foldCompanions, operationsByObject } from './graph/roles.js';
 import type { ObjectTimeline } from './graph/timeline.js';
 
 /**
@@ -126,11 +129,36 @@ export async function runMap(
     apexTriggers: triggerCensus.analysed,
   };
 
-  // Determine the object set that will appear in the graph, then fetch 90-day counts for it.
-  const preEdges = mergeEdges([
-    ...deriveFlowEdges(flows).edges,
-    ...deriveApexEdges(classes, triggers, known),
+  // Object roles from platform evidence (OBJECT_ROLES_SPEC). What production automation does to
+  // each object feeds the read-only fact; a trigger's own object is excluded from that, as it is
+  // from the trigger's touches, because the DML that fires a trigger is not something it states.
+  const productionOps = operationsByObject([
+    ...flows.map(directFlowTouches),
+    ...classes.map((c) => analyzeApex(c, known).objects),
+    ...triggers.map((t) => {
+      const touches = new Map(analyzeApex(t, known).objects);
+      touches.delete(t.object);
+      return touches;
+    }),
   ]);
+  const touched = new Set([...productionOps.keys(), ...triggers.map((t) => t.object)]);
+  // A companion's parent is classified too, so the folded pair lands on a decided object.
+  const parents = new Set<string>();
+  for (const o of touched) {
+    const parent = catalog.get(o)?.associateParentEntity;
+    if (parent) parents.add(parent);
+  }
+  for (const p of parents) touched.add(p);
+  const objectFacts =
+    touched.size > 0
+      ? await collectObjectFacts(ctx, catalog, [...touched], productionOps, notes, unavailable)
+      : { facts: new Map(), targets: { actors: new Set<string>(), qualifiers: new Set<string>() } };
+  const roles = buildObjectRoles(objectFacts.facts, objectFacts.targets);
+
+  // Determine the object set that will appear in the graph, then fetch 90-day counts for it.
+  const preEdges = mergeEdges(
+    foldCompanions([...deriveFlowEdges(flows).edges, ...deriveApexEdges(classes, triggers, known)], roles),
+  );
   const objectSet = new Set<string>();
   for (const e of preEdges) {
     objectSet.add(e.from);
@@ -155,6 +183,7 @@ export async function runMap(
     topLayout: opts.topLayout,
     targetDomainSize: opts.targetDomainSize,
     notes,
+    roles,
   });
 
   // Built from the merged edges `assembleCouplingArtifacts` just produced, plus the same raw
@@ -182,6 +211,8 @@ export async function runMap(
     // differently.
     analysed: analysed,
     unavailable: [...unavailable, ...artifacts.unavailable],
+    context: artifacts.context,
+    objectRoles: new Map([...touched].sort().map((o) => [o, roles.decide(o)])),
   });
 
   return {
