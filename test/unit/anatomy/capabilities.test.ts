@@ -178,3 +178,63 @@ describe('collectCapabilities', () => {
     expect(notes.some((n) => n.toLowerCase().includes('eventrelay'))).toBe(true);
   });
 });
+
+/**
+ * A user without View Setup and Configuration cannot read Organization (`ctx.orgInfo` is null),
+ * and for that user two platform answers stop meaning what they usually mean. Measured on the
+ * Developer Edition org as a restricted user (ANATOMY_SPEC 9b):
+ *   - "sObject type 'X' is not supported" is how setup objects refuse it, ApexClass included,
+ *     which exists in every org. It no longer means the feature is absent.
+ *   - COUNT(Id) FROM FlowDefinition succeeded and returned 0 where an admin counted 4: setup
+ *     rows are filtered, not refused, so a 0 is not a measurement.
+ * Both must reach View A as not read, never as a measured zero.
+ */
+describe('collectCapabilities: a user who cannot see setup', () => {
+  const NOT_SUPPORTED = (o: string) => new Error(`sObject type '${o}' is not supported.`);
+
+  async function run(opts: { setupHidden: boolean; flows?: number }) {
+    const notes: string[] = [];
+    const unavailable: Unavailable[] = [];
+    const out = await collectCapabilities(
+      mockIntelContext({
+        ...(opts.setupHidden ? { orgInfo: null } : {}),
+        soql: mockSoql([{ test: (s) => s.includes('EventRelayConfig'), error: NOT_SUPPORTED('EventRelayConfig') }]),
+        tooling: mockTooling([
+          { test: (s) => s.includes('PlatformEventChannelMember'), error: NOT_SUPPORTED('PlatformEventChannelMember') },
+          { test: (s) => s.includes('FROM FlowDefinition'), records: [{ expr0: opts.flows ?? 0 }] },
+          { test: (s) => s.includes('FROM ApexClass'), error: NOT_SUPPORTED('ApexClass') },
+          { test: () => true, records: [{ expr0: 2 }] },
+        ]),
+        rest: mockRest([{ name: 'Account' }]),
+      }),
+      notes,
+      unavailable,
+    );
+    return { out, scopes: unavailable.map((u) => u.scope).sort(), unavailable };
+  }
+
+  it('treats "not supported" as refused, not absent, for change data capture and event relay', async () => {
+    const { scopes } = await run({ setupHidden: true });
+    expect(scopes).toContain('capabilities.changeDataCapture');
+    expect(scopes).toContain('capabilities.eventRelayConfigured');
+  });
+
+  it('marks a zero setup count as not read, but keeps a non-zero one as a lower bound', async () => {
+    expect((await run({ setupHidden: true, flows: 0 })).scopes).toContain('capabilities.flows');
+    const kept = await run({ setupHidden: true, flows: 7 });
+    expect(kept.scopes).not.toContain('capabilities.flows');
+    expect(kept.out.flows).toBe(7);
+  });
+
+  it('treats an empty platform-event list as unread, since the object list itself is filtered', async () => {
+    expect((await run({ setupHidden: true })).scopes).toContain('capabilities.platformEvents');
+  });
+
+  it('keeps the old meaning for a user who can see setup', async () => {
+    const { scopes } = await run({ setupHidden: false });
+    expect(scopes).not.toContain('capabilities.changeDataCapture');
+    expect(scopes).not.toContain('capabilities.eventRelayConfigured');
+    expect(scopes).not.toContain('capabilities.flows');
+    expect(scopes).not.toContain('capabilities.platformEvents');
+  });
+});
