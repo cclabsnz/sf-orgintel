@@ -1,7 +1,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { DEFAULT_BRANDING } from '@cclabsnz/sf-core';
 import type { QueryResult, SoqlClient, ToolingClient } from '@cclabsnz/sf-core';
-import { buildMapReportInput, buildMapCommandResult } from '../../../src/commands/intel/map.js';
+import { buildMapReportInput, buildMapCommandResult, topBackbones } from '../../../src/commands/intel/map.js';
 import { renderMapHtml } from '../../../src/report/mapReport.js';
 import { runMap } from '../../../src/map/runMap.js';
 import type { MapRunResult } from '../../../src/map/runMap.js';
@@ -253,5 +253,16 @@ describe('a run whose listing reads are all refused', () => {
     expect(html).toContain('Flows analysed');
     // The refusals are surfaced to whoever reads the report later, not only to the terminal.
     expect(html).toContain('FlowDefinitionView is not queryable');
+  });
+});
+
+describe('topBackbones', () => {
+  // The terminal summary printed the first eight edges in id order and called them the top
+  // backbones, so on a real org it listed weight-1 pairs whose names sorted first.
+  it('lists the heaviest couplings first, not the first in id order', () => {
+    const e = (from: string, to: string, weight: number) => ({ from, to, weight, operations: ['read'] }) as never;
+    const top = topBackbones([e('A', 'B', 1), e('C', 'D', 5), e('E', 'F', 3), e('G', 'H', 5)], 3);
+
+    expect(top.map((x: { from: string }) => x.from)).toEqual(['C', 'G', 'E']);
   });
 });
