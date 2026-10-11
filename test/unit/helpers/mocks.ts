@@ -196,7 +196,8 @@ export function mockIntelContext(parts: Partial<IntelContext> = {}): IntelContex
     tooling: parts.tooling ?? unconfiguredTooling(),
     rest: parts.rest ?? unconfiguredRest(),
     metadata: parts.metadata ?? unconfiguredMetadata(),
-    orgInfo: parts.orgInfo ?? unconfiguredOrgInfo,
+    // `in`, not `??`: an explicit null is a user who cannot read Organization, not a missing part.
+    orgInfo: 'orgInfo' in parts ? (parts.orgInfo ?? null) : unconfiguredOrgInfo,
     apiVersion: parts.apiVersion ?? '62.0',
     namespace: parts.namespace === undefined ? null : parts.namespace,
   };

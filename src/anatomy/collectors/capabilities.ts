@@ -21,6 +21,21 @@ function isAbsentSObjectError(message: string): boolean {
   return /INVALID_TYPE/i.test(message) || /sObject type '[^']*' is not supported/i.test(message);
 }
 
+/**
+ * Whether the running user cannot see setup. Reading Organization needs View Setup and
+ * Configuration, so a null `orgInfo` (`resolveOrgIdentity`) is the platform telling us so. For
+ * that user, setup objects answer "not supported" when they exist, and setup counts come back
+ * filtered rather than refused: on the Developer Edition org, COUNT(Id) FROM FlowDefinition
+ * returned 0 where an admin counted 4. ANATOMY_SPEC 9b.
+ */
+function setupHidden(ctx: IntelContext): boolean {
+  return ctx.orgInfo === null;
+}
+
+const SETUP_HIDDEN =
+  'this user cannot see setup (the Organization record was refused), so the platform filters ' +
+  'setup records rather than refusing them';
+
 async function count(
   ctx: IntelContext,
   notes: string[],
@@ -31,7 +46,14 @@ async function count(
 ): Promise<number> {
   try {
     const rows = await ctx.tooling.query<{ expr0?: number }>(soql);
-    return Number(rows[0]?.expr0 ?? 0);
+    const n = Number(rows[0]?.expr0 ?? 0);
+    // A non-zero count is a real lower bound. A zero, for this user, is not a measurement.
+    if (n === 0 && setupHidden(ctx)) {
+      const detail = `${label} count read 0, but ${SETUP_HIDDEN}; 0 is not a measurement.`;
+      notes.push(detail);
+      unavailable.push({ scope, reason: 'failed', detail });
+    }
+    return n;
   } catch (e) {
     const detail = `${label} count unavailable: ${e instanceof Error ? e.message : String(e)}`;
     notes.push(detail);
@@ -76,8 +98,8 @@ async function collectChangeDataCapture(
     // is genuinely not on this org, and absence is the finding, so no note and no unavailable
     // entry. Anything else is a refused read, which must not be allowed to render as a
     // confident "no entity has CDC enabled".
-    if (!isAbsentSObjectError(message)) {
-      const detail = `Change Data Capture channel membership unavailable: ${message}`;
+    if (!isAbsentSObjectError(message) || setupHidden(ctx)) {
+      const detail = `Change Data Capture channel membership unavailable: ${message}${setupHidden(ctx) ? ` (${SETUP_HIDDEN}; this is not evidence the feature is absent)` : ''}`;
       notes.push(detail);
       unavailable.push({ scope: 'capabilities.changeDataCapture', reason: 'failed', detail });
     }
@@ -103,6 +125,14 @@ export async function collectCapabilities(
     unavailable.push({ scope: 'capabilities.platformEvents', reason: 'failed', detail });
   }
 
+  // The object list is filtered for a user who cannot see setup too, so finding no platform
+  // events there is not evidence there are none.
+  if (platformEvents.length === 0 && setupHidden(ctx) && !unavailable.some((u) => u.scope === 'capabilities.platformEvents')) {
+    const detail = `No platform events were listed, but ${SETUP_HIDDEN}; none is not a measurement.`;
+    notes.push(detail);
+    unavailable.push({ scope: 'capabilities.platformEvents', reason: 'failed', detail });
+  }
+
   const changeDataCapture = await collectChangeDataCapture(ctx, notes, unavailable);
 
   let eventRelayConfigured = false;
@@ -118,8 +148,8 @@ export async function collectCapabilities(
     // none" in the artifact. Matched narrowly against the two shapes the platform actually
     // uses for a genuinely missing sObject: the INVALID_TYPE error code, or a message of
     // the form "sObject type '...' is not supported".
-    if (!isAbsentSObjectError(message)) {
-      const detail = `EventRelayConfig read unavailable: ${message}`;
+    if (!isAbsentSObjectError(message) || setupHidden(ctx)) {
+      const detail = `EventRelayConfig read unavailable: ${message}${setupHidden(ctx) ? ` (${SETUP_HIDDEN}; this is not evidence the feature is absent)` : ''}`;
       notes.push(detail);
       unavailable.push({ scope: 'capabilities.eventRelayConfigured', reason: 'failed', detail });
     }
