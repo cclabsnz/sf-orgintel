@@ -12,6 +12,16 @@ canonical published note and carries the provenance attestation and CycloneDX SB
 
 ### Fixed
 
+- **Apex test classes are no longer analysed as production automation.** A test class inserts
+  fixture data for many objects at once, so its object references are not couplings in the running
+  org. On a real Health Cloud sandbox 445 classes were tests, and excluding them took the map from
+  2,171 coupled pairs to 1,231. A class is a test when the platform marks it so (the SymbolTable's
+  `IsTest` annotation or `testMethod` modifier, or an `@isTest` class declaration in the body),
+  never by name. Test classes are listed but not analysed, and reported once in the notes and as a
+  `map.apexClasses.tests` coverage entry. **Expect `apexClassesAnalyzed` and every coupling count
+  to drop** for an unchanged org.
+- **"Top process backbones" in the terminal summary lists the heaviest couplings.** It printed the
+  first eight edges in id order, which on a real org meant weight-1 pairs whose names sorted first.
 - **`intel map` and `intel anatomy` run for a user without View Setup and Configuration.** Every
   command read `Organization` first, and the platform refuses that object to such a user, so the
   tool stopped before reading anything. That ruled out running it as the restricted users whose
