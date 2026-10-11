@@ -12,7 +12,7 @@ canonical published note and carries the provenance attestation and CycloneDX SB
 
 Nothing yet.
 
-## [2.0.0] — 2026-10-11
+## [2.0.0] — 2026-10-12
 
 `intel map` now describes the org a Salesforce architect would recognise. It used to count every
 pair of objects any Apex class or flow touched, test classes included, and to treat `User`,
