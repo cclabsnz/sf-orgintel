@@ -10,6 +10,26 @@ canonical published note and carries the provenance attestation and CycloneDX SB
 
 ## [Unreleased]
 
+### Changed
+
+- **`anatomy-fragment.json` carries most of the org's integrations, not 4 of 59.** An integration
+  edge used to need both a product and a Named Credential hop, so on a real Health Cloud sandbox 55
+  of 59 were dropped. What changed:
+  - **The source** is now the product the call was traced to; otherwise the Apex class making it
+    (`apexClass.*`, the node `intel map` emits); otherwise, for a destination configured but never
+    found being called, `org.root`.
+  - **The destination** is a Named Credential (`ncred.*`) or a Remote Site Setting, emitted as a
+    new `integration.<SiteName>` node. sf-core 0.9.0 gives sf-orgintel that kind.
+  - **Destinations are keyed by metadata names,** never endpoint strings, so no external hostname
+    enters the graph.
+
+  On the sandbox: 32 integration links instead of 4, and 20 integration nodes. What's still left
+  out is counted precisely.
+
+  **This changes `anatomy-fragment.json`'s shape:** new node kind, new edge sources, and the
+  `anatomy.edges.remoteProxy` coverage entry is gone. It also requires `@cclabsnz/sf-core`
+  0.9.0.
+
 ### Fixed
 
 - **A refusal no longer reads as a measured zero for a user who cannot see setup.** Such a user
