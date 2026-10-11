@@ -62,14 +62,17 @@ describe('buildAnatomyFragment', () => {
   it('never targets an integration edge at an id no producer emits', () => {
     // sf-orgviz writes named credentials as `ncred.<DeveloperName>` (src/extract/landscape.ts),
     // not `namedCredential.<endpoint>` -- `endpoint` is frequently a URL, not the DeveloperName
-    // the owning producer keys on. An edge built on the wrong id/prefix never resolves, on every
-    // real run, which is a permanently broken graph rather than the designed "unresolved until
-    // merged" state.
+    // the owning producer keys on. A Remote Site destination is an `integration.<SiteName>` node
+    // this fragment emits itself (sf-core 0.9.0 gave sf-orgintel that kind). Sources are a
+    // product, the Apex class making the call, or the org itself for a configured destination
+    // nobody calls. An edge on any other id never resolves, on every real run.
     const f = fragment();
+    const own = new Set(f.nodes.map((n) => n.id));
     expect(f.edges.length).toBeGreaterThan(0);
     for (const e of f.edges) {
-      expect(e.from.startsWith('product.')).toBe(true);
-      expect(e.to.startsWith('ncred.')).toBe(true);
+      expect(/^(product|apexClass)\.|^org\.root$/.test(e.from)).toBe(true);
+      expect(/^(ncred|integration)\./.test(e.to)).toBe(true);
+      if (e.to.startsWith('integration.')) expect(own.has(e.to)).toBe(true);
     }
   });
 
@@ -79,8 +82,9 @@ describe('buildAnatomyFragment', () => {
     const unavailable = fragment().coverage.unavailable;
     const scopes = unavailable.map((u) => u.scope);
     expect(scopes).toContain('anatomy.edges.unattributed');
-    expect(scopes).toContain('anatomy.edges.remoteProxy');
     expect(scopes).toContain('anatomy.edges.unresolvedTarget');
+    // A Remote Site destination is no longer declined: it has an owned kind now.
+    expect(scopes).not.toContain('anatomy.edges.remoteProxy');
     // This assembly's own declines only. `deferred` is right for them -- they are populations
     // this schema does not express yet, never attempted. The collectors' entries share the list
     // but not that reason: a read the org refused is `failed`, and flattening the two would
@@ -267,3 +271,42 @@ describe('buildAnatomyFragment', () => {
     });
   });
 });
+
+describe('buildAnatomyFragment: the integration map', () => {
+  // On a real Health Cloud sandbox 55 of 59 integration edges were dropped: no product to anchor
+  // them on, or a destination that was not a Named Credential. None carried a URL; destinations
+  // are named by metadata (Remote Site Setting, Named Credential), so that is what keys them.
+  const edgeOnly = (edge: Parameters<typeof buildAnatomyFragment>[0]['edges'][number]) =>
+    buildAnatomyFragment({ ...input(), edges: [edge] });
+
+  it('targets a Remote Site Setting at an integration node it emits, named by the setting', () => {
+    const f = fragment();
+    const node = f.nodes.find((n) => n.id === 'integration.Old_Partner_Site');
+    expect(node).toMatchObject({ kind: 'integration', label: 'Old_Partner_Site' });
+    expect(f.edges.some((e) => e.from === 'product.ops-portal' && e.to === 'integration.Old_Partner_Site')).toBe(true);
+  });
+
+  it('anchors an unattributed call on the Apex class that makes it', () => {
+    const f = edgeOnly({
+      endpoint: null,
+      from: null,
+      via: [{ type: 'ApexClass', name: 'PaymentGateway' }, { type: 'NamedCredential', name: 'Stripe_Cred' }],
+      detection: 'apexCallout',
+      attribution: 'unattributed',
+    });
+    expect(f.edges.map((e) => `${e.from}->${e.to}`)).toEqual(['apexClass.PaymentGateway->ncred.Stripe_Cred']);
+  });
+
+  it('links a configured destination nobody was found calling from the org itself', () => {
+    const f = edgeOnly({
+      endpoint: null,
+      from: null,
+      via: [{ type: 'RemoteProxy', name: 'Legacy_Feed' }],
+      detection: 'endpointOnly',
+      attribution: 'unattributed',
+    });
+    expect(f.edges.map((e) => `${e.from}->${e.to}`)).toEqual(['org.root->integration.Legacy_Feed']);
+    expect(f.coverage.unavailable.map((u) => u.scope)).not.toContain('anatomy.edges.unattributed');
+  });
+});
+
