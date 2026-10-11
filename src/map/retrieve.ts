@@ -11,6 +11,7 @@ import { contentHash } from '../lib/cache.js';
 import type { FlowSummary } from './flow/flowTypes.js';
 import type { ApexClassInput, ApexTriggerInput, SymbolTableLike } from './apex/apexTypes.js';
 import { summarizeFlow } from './flow/parseFlow.js';
+import { isTestClass } from './apex/testClass.js';
 import type { XmlObject } from './flow/xml.js';
 import type { ObjectResolver } from '../discover/objectResolver.js';
 
@@ -216,7 +217,21 @@ export async function retrieveApex(
           '(typically managed-package code); excluded from coupling.',
       );
     }
-    classes = resolved.filter((c) => !!c.body || !!c.symbolTable);
+    const readable = resolved.filter((c) => !!c.body || !!c.symbolTable);
+    // A test class inserts fixture data for many objects at once, so its references are not
+    // couplings in the running org; on a real sandbox they were most of the classes analysed.
+    // Listed but not analysed, like an unreadable class, and reported once, not per class.
+    // Deferred, not failed: the class was readable, and analysing it was declined by design.
+    // OBJECT_ROLES_SPEC 2.1.
+    const tests = readable.filter(isTestClass);
+    if (tests.length > 0) {
+      const detail =
+        `${tests.length} Apex test class(es) excluded from coupling: test code inserts fixture ` +
+        'data, so its object references are not couplings in the running org.';
+      notes.push(detail);
+      unavailable.push({ scope: 'map.apexClasses.tests', reason: 'deferred', detail });
+    }
+    classes = readable.filter((c) => !isTestClass(c));
   } catch (e) {
     drop('map.apexClasses', `ApexClass is not queryable; class coupling skipped. (${describeSalesforceError(e)})`);
   }
