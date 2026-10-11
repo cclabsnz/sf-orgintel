@@ -5,6 +5,14 @@ export interface SObjectDescribeLite {
   label: string;
   custom: boolean;
   queryable: boolean;
+  /**
+   * Carried from the same global describe for object-role classification (OBJECT_ROLES_SPEC).
+   * Optional: absent means the response did not say, never false.
+   */
+  associateParentEntity?: string | null;
+  layoutable?: boolean;
+  triggerable?: boolean;
+  customSetting?: boolean;
 }
 
 export interface SObjectCatalog {
@@ -15,7 +23,16 @@ export interface SObjectCatalog {
 }
 
 interface DescribeGlobalResponse {
-  sobjects?: Array<{ name: string; label: string; custom: boolean; queryable: boolean }>;
+  sobjects?: Array<{
+    name: string;
+    label: string;
+    custom: boolean;
+    queryable: boolean;
+    associateParentEntity?: string | null;
+    layoutable?: boolean;
+    triggerable?: boolean;
+    customSetting?: boolean;
+  }>;
 }
 
 /** Build a catalog from a plain list — the pure core, used directly in tests. */
@@ -39,6 +56,10 @@ export async function fetchSObjectCatalog(rest: RestClient): Promise<SObjectCata
       label: s.label,
       custom: s.custom,
       queryable: s.queryable,
+      associateParentEntity: s.associateParentEntity,
+      layoutable: s.layoutable,
+      triggerable: s.triggerable,
+      customSetting: s.customSetting,
     })),
   );
 }
