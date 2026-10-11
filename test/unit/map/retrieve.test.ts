@@ -531,3 +531,40 @@ describe('retrieval records each drop as a structured unavailable entry', () => 
     expect(unavailable[1].detail).toContain('OrphanTrigger');
   });
 });
+
+describe('retrieveApex: test classes are listed, not analysed', () => {
+  // OBJECT_ROLES_SPEC 2.1. A test class inserts fixture data, so its object references are not
+  // couplings in the running org. It is treated like a class nobody could read: listed, excluded
+  // from the analysed population, and reported once rather than per class.
+  const resolver = resolverFromEntities([{ QualifiedApiName: 'Account', DurableId: 'Account', KeyPrefix: '001' }]);
+
+  it('drops annotated test classes from the analysed set, and says how many', async () => {
+    const tooling = mockTooling([
+      {
+        test: (q) => q.includes('FROM ApexClass'),
+        records: [
+          { Name: 'Svc', NamespacePrefix: null, Body: 'public class Svc {}', SymbolTable: null },
+          { Name: 'SvcTest', NamespacePrefix: null, Body: '@isTest\nprivate class SvcTest {}', SymbolTable: null },
+          {
+            Name: 'Fixtures',
+            NamespacePrefix: null,
+            Body: null,
+            SymbolTable: { tableDeclaration: { annotations: [{ name: 'IsTest' }], modifiers: ['private'] } },
+          },
+        ],
+      },
+      { test: (q) => q.includes('FROM ApexTrigger'), records: [] },
+    ]);
+    const notes: string[] = [];
+
+    const { classes, classCensus, unavailable } = await retrieveApex(ctxOf(mockSoql([]), tooling), resolver, notes);
+
+    expect(classes.map((c) => c.name)).toEqual(['Svc']);
+    expect(classCensus).toEqual({ listed: 3, analysed: 1 });
+    expect(unavailable).toContainEqual(
+      expect.objectContaining({ scope: 'map.apexClasses.tests', reason: 'deferred' }),
+    );
+    expect(notes.filter((n) => /test class/.test(n))).toHaveLength(1);
+    expect(notes.find((n) => /test class/.test(n))).toContain('2 Apex test class');
+  });
+});
