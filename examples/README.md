@@ -73,3 +73,16 @@ per object in the org's sObject catalog, whether or not anything was found for i
 objects in this org have a non-zero record count or automation count. That is why this file is
 400 KB when its nodes and edges together are 13 KB. It is a real characteristic of the 1.0
 emission, not an artifact of how the example was captured, and it is worth revisiting.
+
+## What has changed since this was captured
+
+These files are pinned to `1.0.0` and are not regenerated per commit. Two things in them differ
+from what the current `main` emits:
+
+- **`anatomy-fragment.example.json` records `channels` as a failed read.** The error it carries,
+  `No such column 'SiteName' on entity 'Site'`, came from a defect in `0.3.0` and `1.0.0`: the
+  collector queried a column `Site` does not have, so every org refused the read. It has since been
+  fixed, and the same org now reports two sites. See the `[Unreleased]` changelog entry.
+- **`graph-fragment.example.json` has an empty `coverage`.** In `1.0.0` the map fragment never
+  recorded its drops. It now does, so a current capture of this org would list its skipped
+  managed-package flows and unreadable Apex classes under `coverage.unavailable`.
