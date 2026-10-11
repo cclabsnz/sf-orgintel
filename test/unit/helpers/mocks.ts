@@ -34,6 +34,11 @@ export interface SObjectEntry {
   label?: string;
   custom?: boolean;
   queryable?: boolean;
+  /** Passed through as the global describe returns them, for the object-role facts. */
+  associateParentEntity?: string | null;
+  layoutable?: boolean;
+  triggerable?: boolean;
+  customSetting?: boolean;
 }
 
 /**
@@ -62,6 +67,7 @@ export function mockRest(
     };
   }
   const full = sobjects.map((s) => ({
+    ...s,
     name: s.name,
     label: s.label ?? s.name,
     custom: s.custom ?? /__c$/i.test(s.name),
