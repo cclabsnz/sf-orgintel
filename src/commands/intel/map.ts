@@ -7,6 +7,7 @@ import { resolveOrgIdentity, buildIntelContext } from '../../lib/wire.js';
 import { runMap, type MapRunResult } from '../../map/runMap.js';
 import { renderMapHtml, type MapAnchorRow, type MapReportInput } from '../../report/mapReport.js';
 import { couplingViewOf, type CouplingView } from '../../report/couplingView.js';
+import { contextRowsOf } from '../../report/contextSummary.js';
 import { OrgIntelCache } from '../../lib/cache.js';
 import { resolveEvidence } from '../../map/evidence.js';
 import { API_VERSION } from '../../version.js';
@@ -59,6 +60,7 @@ export function buildMapReportInput(params: {
     // one model that survives rather than a second field kept alongside it.
     generatedAt: result.fragment.capturedAt,
     branding,
+    context: contextRowsOf(result.fragment),
   };
 }
 

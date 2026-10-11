@@ -289,3 +289,45 @@ describe('buildMapFragment: coverage marks what the run dropped', () => {
     expect(fragment().coverage).toEqual({ notes: [], unavailable: [] });
   });
 });
+
+describe('buildMapFragment: object roles', () => {
+  // OBJECT_ROLES_SPEC 2.3. Context pairs are written as `uses` edges, so a consumer reading
+  // `couples` gets business couplings only and the dependence on actors, record types and setup
+  // survives as its own edge kind. Each coupled object's role and the evidence for it are
+  // contributed under orgintel's namespace: the role includes how this run's automation uses the
+  // object, which only orgintel measured.
+  const contextEdge = {
+    from: 'Account',
+    to: 'RecordType',
+    weight: 2,
+    operations: ['read' as const],
+    components: [],
+    roles: ['entity', 'qualifier'] as ['entity', 'qualifier'],
+  };
+
+  it('writes context pairs as uses edges carrying both roles', () => {
+    const g = buildMapFragment({ ...input(), context: [contextEdge] });
+    const uses = g.edges.filter((e) => e.kind === 'uses');
+
+    expect(uses).toHaveLength(1);
+    expect(uses[0]).toMatchObject({ from: 'obj.Account', to: 'obj.RecordType' });
+    expect(uses[0].attrs).toMatchObject({ weight: 2, roles: { from: 'entity', to: 'qualifier' } });
+    expect(uses[0].provenance.source).toBe('derived');
+  });
+
+  it('contributes each coupled object’s role and evidence', () => {
+    const g = buildMapFragment({
+      ...input(),
+      objectRoles: new Map([['Account', { role: 'entity' as const, evidence: 'business data' }]]),
+    });
+    const account = g.contributions?.find((c) => c.nodeId === 'obj.Account');
+
+    expect(account?.attrs.objectRole).toEqual({ role: 'entity', evidence: 'business data' });
+  });
+
+  it('adds nothing when no roles were decided', () => {
+    const g = fragment();
+    expect(g.edges.some((e) => e.kind === 'uses')).toBe(false);
+    expect(g.contributions?.some((c) => 'objectRole' in c.attrs)).toBe(false);
+  });
+});

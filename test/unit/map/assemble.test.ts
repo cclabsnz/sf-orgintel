@@ -59,3 +59,40 @@ describe('assembleCouplingArtifacts: a subflow nobody retrieved', () => {
     expect(artifacts().unavailable).toEqual([]);
   });
 });
+
+describe('assembleCouplingArtifacts: object roles', () => {
+  // OBJECT_ROLES_SPEC 2.3. With roles supplied, a pair whose other side is not business data is
+  // context, not a coupling: it leaves the edges clustering and layout use, and is returned
+  // separately so it can still be reported.
+  it('moves pairs with a non-business object into context, and keeps business pairs', async () => {
+    const { buildObjectRoles } = await import('../../../src/map/graph/roles.js');
+    const business = { layoutable: true, triggerable: true };
+    const roles = buildObjectRoles(
+      new Map([
+        ['Account', business],
+        ['Case', business],
+        ['WorkOrder', business],
+        ['Contact', { layoutable: false, triggerable: false }],
+      ]),
+      { actors: new Set(), qualifiers: new Set() },
+    );
+    const withRoles = assembleCouplingArtifacts({
+      flowSummaries: flowSummaries(),
+      apexClasses: apexClasses(),
+      apexTriggers: apexTriggers(),
+      knownObjects: knownObjects(),
+      nodeInfo,
+      roles,
+    });
+
+    const touchesContact = (e: { from: string; to: string }) => e.from === 'Contact' || e.to === 'Contact';
+    expect(withRoles.edges.some(touchesContact)).toBe(false);
+    expect(withRoles.context.length).toBeGreaterThan(0);
+    expect(withRoles.context.every(touchesContact)).toBe(true);
+    expect(withRoles.context[0].roles).toContain('setup');
+  });
+
+  it('changes nothing when no roles are known', () => {
+    expect(artifacts().context).toEqual([]);
+  });
+});

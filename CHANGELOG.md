@@ -10,6 +10,30 @@ canonical published note and carries the provenance attestation and CycloneDX SB
 
 ## [Unreleased]
 
+### Changed
+
+- **`intel map` classifies objects from platform evidence, and only business pairs are
+  couplings.** Each object this run touches gets a role from sf-core's `classifyObject`, decided
+  from what the platform reports, never from its name:
+  - `describeGlobal`'s parent entity, plus layout and trigger capability;
+  - the `EntityDefinition` sharing model;
+  - what the `OwnerId`, `CreatedById` and `RecordTypeId` fields point at;
+  - whether production automation only reads the object.
+
+  What that changes:
+  - **Companions fold into their parent.** `AccountShare` counts as `Account`.
+  - **Pairs with an actor, a record type, setup, configuration, an event or reference data** are
+    written as `uses` edges instead of `couples`, and the report states them in a new "What the
+    business objects depend on" section.
+  - **Each object's role and its evidence** are contributed as `attrs.orgintel.objectRole`.
+  - **A refused fact read degrades to `unclassified`,** recorded under `map.objectRoles.*`. An
+    unclassified object stays among the couplings.
+
+  On a real Health Cloud sandbox, together with the test-class fix below, the map went from 212
+  objects and 2,171 coupled pairs in 57 domains to 95 objects and 620 pairs in 17 domains, with
+  `User` and `RecordType` out of the backbones. **Expect `couples` counts, domains and backbones to
+  change for an unchanged org.** Specified in `docs/OBJECT_ROLES_SPEC.md`.
+
 ### Fixed
 
 - **Apex test classes are no longer analysed as production automation.** A test class inserts

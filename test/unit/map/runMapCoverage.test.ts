@@ -45,7 +45,14 @@ function org(opts: { refuseCountsOn?: string[]; refuseCatalog?: boolean }): Inte
   return {
     soql,
     tooling,
-    rest: opts.refuseCatalog ? mockRest(REFUSED) : mockRest([{ name: 'Account' }, { name: 'Case' }, { name: 'Contact' }]),
+    // As a real org's global describe reports them: business objects with layouts and triggers,
+    // and a describe naming what the system fields point at (OBJECT_ROLES_SPEC 3).
+    rest: opts.refuseCatalog
+      ? mockRest(REFUSED)
+      : mockRest(
+          ['Account', 'Case', 'Contact'].map((name) => ({ name, layoutable: true, triggerable: true })),
+          { Account: { fields: [{ name: 'OwnerId', referenceTo: ['User'] }, { name: 'RecordTypeId', referenceTo: ['RecordType'] }] } },
+        ),
     metadata: noopMetadata,
     orgInfo: { id: '00D', name: 'T', type: 'Enterprise', isSandbox: true, instance: 'NA1', instanceUrl: 'https://x' },
     apiVersion: '62.0',
