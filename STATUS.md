@@ -1,6 +1,6 @@
 # OrgIntel M5 hardening status
 
-Working repo: `cclabsnz/sf-orgintel`. Depends on `@cclabsnz/sf-core` from npm (^0.6.0).
+Working repo: `cclabsnz/sf-orgintel`. Depends on `@cclabsnz/sf-core` from npm (^0.8.0).
 
 **M5 is complete and this page is history.** The work that followed it is the three-plan
 convergence onto one canonical org graph, shipped in `0.3.0`: `intel map` and `intel anatomy`
