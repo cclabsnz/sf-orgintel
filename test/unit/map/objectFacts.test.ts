@@ -100,4 +100,19 @@ describe('collectObjectFacts', () => {
     expect(targets.qualifiers.size).toBe(0);
     expect(unavailable.map((u) => `${u.scope}:${u.reason}`)).toEqual(['map.objectRoles.systemFields:failed']);
   });
+
+  it('puts only valid API names into the EntityDefinition query, never escaped text', async () => {
+    // An API name is letters, digits and underscores. Anything else is refused outright rather
+    // than escaped, so no quoting rule has to be complete for the query to be safe.
+    const seen: string[] = [];
+    const recording = mockTooling([{ test: (q) => { seen.push(q); return sharing(q); }, records: [] }]);
+    const catalog = await fetchSObjectCatalog(mockRest(GLOBAL));
+    await collectObjectFacts(ctx(mockRest(GLOBAL, DESCRIBES), recording), catalog, ['Account', "Bad'Name", 'Back\\slash'], new Map(), [], []);
+
+    const q = seen.find(sharing)!;
+    expect(q).toContain("'Account'");
+    expect(q).not.toContain('Bad');
+    expect(q).not.toContain('slash');
+  });
 });
+

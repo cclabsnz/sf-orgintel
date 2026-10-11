@@ -15,6 +15,13 @@ import {
 import type { IntelContext } from '../lib/wire.js';
 import type { SObjectCatalog } from '../probe/sobjectCatalog.js';
 
+/**
+ * An API name is letters, digits and underscores (a namespace and the __c-style suffixes included).
+ * Names are matched against this instead of being escaped into the query: nothing that fails it can
+ * be a real object, and refusing it means no quoting rule has to be complete for the query to be safe.
+ */
+const API_NAME = /^[A-Za-z][A-Za-z0-9_]*$/;
+
 /** EntityDefinition rejects very long IN lists; this keeps each query comfortably short. */
 const SHARING_BATCH = 100;
 
@@ -67,11 +74,12 @@ async function collectSharingModels(
   notes: string[],
   unavailable: GraphUnavailable[],
 ): Promise<void> {
+  const queryable = objects.filter((o) => API_NAME.test(o));
   try {
-    for (let i = 0; i < objects.length; i += SHARING_BATCH) {
-      const names = objects
+    for (let i = 0; i < queryable.length; i += SHARING_BATCH) {
+      const names = queryable
         .slice(i, i + SHARING_BATCH)
-        .map((o) => `'${o.replace(/'/g, "\\'")}'`)
+        .map((o) => `'${o}'`)
         .join(',');
       const rows = await ctx.tooling.query<{ QualifiedApiName: string; InternalSharingModel?: string | null }>(
         `SELECT QualifiedApiName, InternalSharingModel FROM EntityDefinition WHERE QualifiedApiName IN (${names})`,
