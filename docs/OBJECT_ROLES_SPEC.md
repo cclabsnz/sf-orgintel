@@ -1,7 +1,9 @@
 # Design: object roles from platform evidence
 
-Status: 2.1, 2.2 and 2.3 implemented in `intel map` (sf-core 0.8.0 `classifyObject`). The sf-orgviz
-side of section 3, recording `objectRole` at extraction, is still to do. 2026-10-11. Touches `@cclabsnz/sf-core` (the classifier), `sf-orgintel`
+Status: implemented. Sections 2.1 to 2.3 shipped in sf-orgintel 2.0.0 on sf-core 0.8.0's
+`classifyObject`. The sf-orgviz side of section 3 (`attrs.objectRole` at extraction) landed in
+cclabsnz/sf-orgviz#11. Its roles are structural, because extract measures no automation; the
+behavioural `reference` role comes from sf-orgintel's contribution. 2026-10-12. Touches `@cclabsnz/sf-core` (the classifier), `sf-orgintel`
 (`intel map`) and `sf-orgviz` (`extract`, the coupling view).
 
 ## 1. The problem
