@@ -10,7 +10,21 @@ canonical published note and carries the provenance attestation and CycloneDX SB
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **A refusal no longer reads as a measured zero for a user who cannot see setup.** Such a user
+  cannot read `Organization`. For them:
+  - "sObject type 'X' is not supported" is a failed read, not an absent feature;
+  - a zero setup count is marked not read, while a non-zero count stands as a lower bound;
+  - an empty platform-event list is marked not read.
+
+  View A now draws those tiles hatched "not read" instead of a confident 0. Measured as a
+  restricted user: the eight capability tiles and three ops tiles. Users who can see setup are
+  unaffected.
+- **90-day record counts are taken for business objects only.** Counting a custom metadata type by
+  `CreatedDate` always fails, so every run that touched configuration reported false
+  `map.recordCounts` failures (20 on a real sandbox). Configuration, events and setup objects are
+  no longer counted.
 
 ## [2.0.0] — 2026-10-12
 

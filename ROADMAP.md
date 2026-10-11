@@ -14,7 +14,8 @@ Current published version: **2.0.0**. Everything on `main` is released; see
   (`intel map` parses Active flows only and can lose `ApexClass` access entirely). A graph-derived
   count understates rather than restates. What was missing is the reconciliation: the tool knows
   both numbers and reported one.
-- **A refusal can still read as a measurement.** Every View A path is now verified against a
+- ~~**A refusal can still read as a measurement.**~~ Fixed after 2.0.0, using the refused
+  `Organization` read as the signal that the user cannot see setup. Original note: Every View A path is now verified against a
   live org, but the restricted-user run that verified them (`ANATOMY_SPEC.md` 9b) found two gaps.
   `isAbsentSObjectError` takes "sObject type 'X' is not supported" to mean the feature is absent,
   yet the platform says exactly that to a user without View Setup, so Change Data Capture and Event
