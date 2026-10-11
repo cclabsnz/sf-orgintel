@@ -98,3 +98,49 @@ describe('runMap: a refused object catalog reaches the fragment', () => {
     expect(result.notes.some((n) => n.includes('INSUFFICIENT_ACCESS'))).toBe(true);
   });
 });
+
+describe('runMap: record counts are taken for business objects only', () => {
+  // On a real sandbox 20 custom metadata types were reported as "90-day record counts could not
+  // be read", because a custom metadata type cannot be counted by CreatedDate at all. Record
+  // volume is a fact about business data; configuration, events and setup objects are not
+  // counted, so they are neither attempted nor reported as failures.
+  it('does not attempt, or report failing, a count for a custom metadata type', async () => {
+    const attempted: string[] = [];
+    const base = org({});
+    const ctx: IntelContext = {
+      ...base,
+      soql: {
+        async query<T>(q: string): Promise<QueryResult<T>> {
+          const counted = /SELECT COUNT\(\) FROM (\w+)/.exec(q)?.[1];
+          if (counted) attempted.push(counted);
+          if (counted?.endsWith('__mdt')) throw new Error('INVALID_FIELD: CreatedDate');
+          return { totalSize: counted ? 7 : 0, done: true, records: [] as T[] };
+        },
+        async queryAll<T>(): Promise<T[]> {
+          return [] as T[];
+        },
+      },
+      tooling: {
+        async query<T>(q: string): Promise<T[]> {
+          if (/FROM ApexClass\b/.test(q)) {
+            return [{ Name: 'Svc', NamespacePrefix: null, Body: null, SymbolTable: { externalReferences: [{ name: 'Account' }, { name: 'Case' }, { name: 'Rule__mdt' }] } }] as T[];
+          }
+          return [] as T[];
+        },
+        async getRecord<T>(): Promise<T> {
+          throw new Error('not implemented');
+        },
+      },
+      rest: mockRest(
+        [...['Account', 'Case'].map((name) => ({ name, layoutable: true, triggerable: true })), { name: 'Rule__mdt', layoutable: false, triggerable: false }],
+        { Account: { fields: [{ name: 'OwnerId', referenceTo: ['User'] }] } },
+      ),
+    };
+
+    const result = await runMap(ctx, { generatedAt: '2026-01-01T00:00:00.000Z', orgId: '00D' });
+
+    expect(attempted).not.toContain('Rule__mdt');
+    expect(attempted.sort()).toEqual(['Account', 'Case']);
+    expect(result.fragment.coverage.unavailable.filter((u) => u.scope === 'map.recordCounts')).toEqual([]);
+  });
+});
