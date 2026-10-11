@@ -12,6 +12,14 @@ canonical published note and carries the provenance attestation and CycloneDX SB
 
 ### Fixed
 
+- **`intel map` and `intel anatomy` run for a user without View Setup and Configuration.** Every
+  command read `Organization` first, and the platform refuses that object to such a user, so the
+  tool stopped before reading anything. That ruled out running it as the restricted users whose
+  view of an org it exists to describe. Both commands now take the org id from the connection's
+  auth info, name the org by its id, and say why in the run's notes. `intel probe` and
+  `intel discover` report edition and sandbox status, which cannot be guessed, so they still
+  stop, now naming the missing permission instead of printing the platform's bare
+  `sObject type 'Organization' is not supported`. `IntelContext.orgInfo` is now `OrgInfo | null`.
 - **`intel anatomy` reads Sites again.** From `0.3.0` the channels collector queried
   `SELECT Name, SiteName, Status FROM Site`. `Site` has no `SiteName` column (the field belongs to
   `RemoteProxy`), so the read was refused with `INVALID_FIELD` on every org, and the channels band
