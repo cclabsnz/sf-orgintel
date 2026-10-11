@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { resolveBranding, type BrandingOverrides, type CanonicalGraph } from '@cclabsnz/sf-core';
-import { resolveOrgInfo, buildIntelContext } from '../../lib/wire.js';
+import { resolveOrgIdentity, buildIntelContext } from '../../lib/wire.js';
 import { runAnatomy } from '../../anatomy/runAnatomy.js';
 import { renderAnatomyHtml } from '../../report/anatomyReport.js';
 import type { AnatomyArtifact } from '../../anatomy/types.js';
@@ -72,19 +72,22 @@ export default class IntelAnatomyCommand extends SfCommand<AnatomyArtifact> {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const conn = flags['target-org'].getConnection(API_VERSION) as any;
-    const { orgInfo, namespace } = await resolveOrgInfo(conn);
-    const ctx = buildIntelContext(conn, orgInfo, namespace, API_VERSION);
+    const org = await resolveOrgIdentity(conn);
+    const ctx = buildIntelContext(conn, org.orgInfo, org.namespace, API_VERSION);
 
-    this.log(`Mapping org anatomy for org: ${orgInfo.name} (${orgInfo.id})`);
+    this.log(`Mapping org anatomy for org: ${org.name} (${org.id})`);
     // One timestamp for the run, reused by the artifact, the report and the report's filename,
     // so the three never disagree about when this was collected.
     const startedAt = new Date();
     const { artifact, fragment } = await runAnatomy(ctx, {
       generatedAt: startedAt.toISOString(),
-      orgId: orgInfo.id,
+      orgId: org.id,
       toolVersion: TOOL_VERSION,
       apiVersion: API_VERSION,
     });
+
+    // Said in the run's own notes, so the report explains why the org is named by its id.
+    if (org.note) artifact.coverage.notes.unshift(org.note);
 
     const fragmentPath = writeFragment(flags.output, fragment);
     this.log(`IR written: ${fragmentPath}`);
@@ -94,12 +97,12 @@ export default class IntelAnatomyCommand extends SfCommand<AnatomyArtifact> {
         ? (JSON.parse(fs.readFileSync(flags.branding, 'utf-8')) as BrandingOverrides)
         : undefined;
       const html = renderAnatomyHtml({
-        orgName: orgInfo.name,
+        orgName: org.name,
         artifact,
         generatedAt: artifact.provenance.generatedAt,
         branding: resolveBranding(overrides, flags['prepared-for']),
       });
-      const reportPath = writeReport(flags.output, html, orgInfo.id, startedAt.getTime());
+      const reportPath = writeReport(flags.output, html, org.id, startedAt.getTime());
       this.log(`Report written: ${reportPath}`);
     }
 

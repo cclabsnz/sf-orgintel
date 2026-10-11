@@ -14,12 +14,14 @@ Current published version: **1.0.0**. Everything on `main` is released; see
   (`intel map` parses Active flows only and can lose `ApexClass` access entirely). A graph-derived
   count understates rather than restates. What was missing is the reconciliation: the tool knows
   both numbers and reported one.
-- **View A hardening on more orgs.** The empty band and the partly-collected caveat (from both a
-  failed read and a deferral) are verified against a live org. Two paths are not: the
-  not-collected band, whose one live reach turned out to be caused by the `SiteName` defect
-  (`ANATOMY_SPEC.md` 9b), and the hatched not-read tile, which needs a capability count the org
-  refuses. Both need an org, or a user, that is denied a read; a Developer Edition admin is
-  denied nothing that matters here.
+- **A refusal can still read as a measurement.** Every View A path is now verified against a
+  live org, but the restricted-user run that verified them (`ANATOMY_SPEC.md` 9b) found two gaps.
+  `isAbsentSObjectError` takes "sObject type 'X' is not supported" to mean the feature is absent,
+  yet the platform says exactly that to a user without View Setup, so Change Data Capture and Event
+  Relay can draw a confident `0` that was never measured. And `FlowDefinition` is filtered rather
+  than refused for such a user: the count succeeds, returns 0 against an admin's 4, and draws as a
+  measured zero. The first needs a signal that separates the two meanings of one message; the
+  second needs the collector to know the user's visibility is partial at all.
 
 ## Next
 

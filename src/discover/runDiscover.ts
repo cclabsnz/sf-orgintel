@@ -1,4 +1,4 @@
-import type { IntelContext } from '../lib/wire.js';
+import { requireOrgInfo, type IntelContext } from '../lib/wire.js';
 import type { DiscoverData, AnchorSignals, StatusPicklistRef } from './types.js';
 import { DEFAULT_WEIGHTS, type DiscoverWeights } from './scoringConfig.js';
 import {
@@ -101,7 +101,7 @@ export async function runDiscover(ctx: IntelContext, opts: DiscoverOptions = {})
   const fingerprint = await buildFingerprint(ctx, catalog, statusPicklists);
 
   return {
-    org: { orgId: ctx.orgInfo.id, name: ctx.orgInfo.name },
+    org: { orgId: requireOrgInfo(ctx).id, name: requireOrgInfo(ctx).name },
     anchors,
     totalObjectsAnalyzed: targets.list.length,
     droppedObjects,

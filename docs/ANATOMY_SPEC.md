@@ -564,12 +564,32 @@ duplicate-label case `Site.Name` is used as the key to survive.
 Both fragments and the HTML are byte-identical across two consecutive runs apart from the capture
 and generated timestamps.
 
-**The hatched not-read tile remains unverified against a live org.** It has unit tests and
-fixture renders behind it and nothing else. Reaching it needs an org where a capability count is
-refused rather than absent, which none of the three orgs measured so far provides. This is
-stated rather than left implied, because a path that has never run against a real refusal is
-exactly the kind of thing a reader would otherwise assume was covered by "verified on three
-orgs".
+**Measured as a restricted user, same org.** A second user was given a Salesforce Platform
+licence and a profile with API access but without View Setup and Configuration. That user could
+not run any command at first, because every command read `Organization` before anything else and
+the platform refuses it without that permission. `map` and `anatomy` now take the org id from the
+connection and carry on (`resolveOrgIdentity`); `probe` and `discover` still stop, naming the
+missing permission. With that fixed, both remaining paths rendered against real refusals:
+
+| Path | Reached | What rendered |
+| --- | --- | --- |
+| Not-collected band | yes: `users`, `channels`, `products`, `integration`, `external` | "Not collected." plus the platform's reason |
+| Hatched not-read tile | yes: 7 of 8 capability tiles | hatched, labelled "not read" |
+
+Two consecutive runs are byte-identical apart from the capture timestamp.
+
+The same run exposed two ways a refusal still reads as a measurement. Neither is fixed here:
+
+- **"Not supported" is ambiguous.** `isAbsentSObjectError` treats `sObject type 'X' is not
+  supported` as the feature being absent from the org, so Change Data Capture and Event Relay
+  record no note and draw a measured `0`. The platform returns exactly that message to this user
+  for `ApexClass`, which exists in every org. For a user without View Setup, it is a refusal.
+- **Some reads are filtered, not refused.** `SELECT COUNT(Id) FROM FlowDefinition` succeeds for
+  this user and returns 0, where an admin on the same org counts 4. The Flows tile draws a
+  measured `0`. There is no error to catch.
+
+Until this run the hatched not-read tile had unit tests and fixture renders behind it and
+nothing else, because no admin user is refused a capability count. It took a user who is.
 
 ## 10. Open questions
 

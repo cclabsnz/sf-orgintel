@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import type { CanonicalGraph, EvidenceTier, Branding } from '@cclabsnz/sf-core';
 import { resolveBranding, type BrandingOverrides } from '@cclabsnz/sf-core';
-import { resolveOrgInfo, buildIntelContext } from '../../lib/wire.js';
+import { resolveOrgIdentity, buildIntelContext } from '../../lib/wire.js';
 import { runMap, type MapRunResult } from '../../map/runMap.js';
 import { renderMapHtml, type MapAnchorRow, type MapReportInput } from '../../report/mapReport.js';
 import { couplingViewOf, type CouplingView } from '../../report/couplingView.js';
@@ -142,18 +142,18 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const conn = flags['target-org'].getConnection(API_VERSION) as any;
-    const { orgInfo, namespace } = await resolveOrgInfo(conn);
-    const ctx = buildIntelContext(conn, orgInfo, namespace, API_VERSION);
-    const cache = new OrgIntelCache(orgInfo.id, undefined, { refresh: flags.refresh });
+    const org = await resolveOrgIdentity(conn);
+    const ctx = buildIntelContext(conn, org.orgInfo, org.namespace, API_VERSION);
+    const cache = new OrgIntelCache(org.id, undefined, { refresh: flags.refresh });
 
     const evidence = resolveEvidence(cache);
     const { evidenceTier, anchors } = evidence;
     if (!evidence.measured) this.warn(evidence.note!);
 
-    this.log(`Mapping cross-object couplings for org: ${orgInfo.name} (${orgInfo.id})`);
+    this.log(`Mapping cross-object couplings for org: ${org.name} (${org.id})`);
     const result = await runMap(
       ctx,
-      { generatedAt: new Date().toISOString(), orgId: orgInfo.id },
+      { generatedAt: new Date().toISOString(), orgId: org.id },
       {
         includeInactive: flags['include-inactive'],
         cache,
@@ -162,6 +162,9 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
         maxNodeCounts: flags['max-node-counts'],
       },
     );
+
+    // Said in the run's own notes, so the report explains why the org is named by its id.
+    if (org.note) result.notes.unshift(org.note);
 
     // One adaptation of the fragment for this run, shared by the HTML report and the terminal
     // summary below. Both used to read the separate CouplingGraph; deriving the view twice would
@@ -179,9 +182,9 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
         : undefined;
       const branding = resolveBranding(overrides, flags['prepared-for']);
       const html = renderMapHtml(
-        buildMapReportInput({ orgName: orgInfo.name, result, anchors, evidenceTier, branding, view }),
+        buildMapReportInput({ orgName: org.name, result, anchors, evidenceTier, branding, view }),
       );
-      const htmlPath = path.join(flags.output, `orgintel-map-${orgInfo.id}-${Date.now()}.html`);
+      const htmlPath = path.join(flags.output, `orgintel-map-${org.id}-${Date.now()}.html`);
       fs.writeFileSync(htmlPath, html, 'utf-8');
       this.log(`Report written: ${htmlPath}`);
     }
