@@ -10,6 +10,20 @@ canonical published note and carries the provenance attestation and CycloneDX SB
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [3.0.0] — 2026-10-12
+
+`intel anatomy` now maps an org's integrations. On a real Health Cloud sandbox,
+`anatomy-fragment.json` carried 4 of 59 integration edges; it now carries 32, with the external
+systems they reach as nodes. View A also stops drawing a refused read as a measured zero for a
+user who cannot see setup.
+
+**This is a major because `anatomy-fragment.json` changes shape** (`docs/RELEASE.md`): a new
+`integration` node kind, integration edges from `apexClass.*` and `org.root` as well as products,
+and no more `anatomy.edges.remoteProxy` coverage entry. It requires `@cclabsnz/sf-core` 0.9.0 or
+later on whichever side merges the fragments, since the `integration` kind changed owner there.
+
 ### Changed
 
 - **`anatomy-fragment.json` carries most of the org's integrations, not 4 of 59.** An integration
@@ -464,7 +478,8 @@ Apex, with a branded HTML report behind `--html`.
 publishing was configured for this package. Every release from `0.2.0` onward carries one
 automatically. See [SECURITY.md](SECURITY.md).
 
-[Unreleased]: https://github.com/cclabsnz/sf-orgintel/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/cclabsnz/sf-orgintel/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/cclabsnz/sf-orgintel/releases/tag/v3.0.0
 [2.0.0]: https://github.com/cclabsnz/sf-orgintel/releases/tag/v2.0.0
 [1.0.0]: https://github.com/cclabsnz/sf-orgintel/releases/tag/v1.0.0
 [0.3.0]: https://github.com/cclabsnz/sf-orgintel/releases/tag/v0.3.0
