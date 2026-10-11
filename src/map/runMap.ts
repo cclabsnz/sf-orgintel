@@ -15,7 +15,7 @@ import { assembleCouplingArtifacts } from './assemble.js';
 import { buildMapFragment, directFlowTouches } from './fragment.js';
 import { analyzeApex } from './apex/apexEdges.js';
 import { collectObjectFacts } from './objectFacts.js';
-import { buildObjectRoles, foldCompanions, operationsByObject } from './graph/roles.js';
+import { buildObjectRoles, foldCompanions, isCouplingRole, operationsByObject } from './graph/roles.js';
 import type { ObjectTimeline } from './graph/timeline.js';
 
 /**
@@ -159,10 +159,12 @@ export async function runMap(
   const preEdges = mergeEdges(
     foldCompanions([...deriveFlowEdges(flows).edges, ...deriveApexEdges(classes, triggers, known)], roles),
   );
+  // Record volume is a fact about business data, so only objects that can be business data are
+  // counted. A custom metadata type cannot be counted by CreatedDate at all, and counting one
+  // used to surface as a failed read on every run that touched configuration.
   const objectSet = new Set<string>();
   for (const e of preEdges) {
-    objectSet.add(e.from);
-    objectSet.add(e.to);
+    for (const o of [e.from, e.to]) if (isCouplingRole(roles.decide(o).role)) objectSet.add(o);
   }
   const recordCounts = await fetchRecordCounts(ctx, [...objectSet], maxNodeCounts, notes, unavailable);
 
