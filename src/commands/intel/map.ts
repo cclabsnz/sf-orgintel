@@ -69,6 +69,17 @@ export function buildMapReportInput(params: {
  * the HTML and JSON outputs describe the same run, and a name drift between them is how one path
  * quietly stops telling the truth the other one does.
  */
+/**
+ * The heaviest couplings, for the terminal summary. Weight first, then the pair, so the list is
+ * deterministic. It used to take the first edges in id order, which on a real org printed weight-1
+ * pairs whose names happened to sort first and labelled them the top backbones.
+ */
+export function topBackbones<E extends { from: string; to: string; weight: number }>(edges: readonly E[], n: number): E[] {
+  return [...edges]
+    .sort((a, b) => b.weight - a.weight || (a.from < b.from ? -1 : a.from > b.from ? 1 : 0) || (a.to < b.to ? -1 : a.to > b.to ? 1 : 0))
+    .slice(0, n);
+}
+
 export function buildMapCommandResult(result: MapRunResult): MapCommandResult {
   return {
     fragment: result.fragment,
@@ -203,7 +214,7 @@ export default class IntelMapCommand extends SfCommand<MapCommandResult> {
     this.log(`  Objects: ${g.nodes.length}   Coupled pairs: ${g.edges.length}   Domains: ${domains}`);
     this.log('─────────────────────────────────────────');
     this.log('  Top process backbones:');
-    for (const e of g.edges.slice(0, 8)) {
+    for (const e of topBackbones(g.edges, 8)) {
       this.log(`   ${e.from} ↔ ${e.to}  (weight ${e.weight}, ${e.operations.join('/')})`);
     }
     this.log('─────────────────────────────────────────');
