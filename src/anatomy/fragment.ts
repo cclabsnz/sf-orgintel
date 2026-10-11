@@ -325,15 +325,14 @@ export function buildAnatomyFragment(input: AnatomyFragmentInput): CanonicalGrap
   // carried in attrs (CONVERGENCE_SPEC.md 4.2, 3.1). An edge is only emitted when both ends are
   // expressible under a kind some producer owns, and each exclusion is counted, not silently
   // dropped (spec section 3.2 -- absence is data):
-  //   - `from`, once attributed, is a product key -- exactly the node this fragment already
-  //     emits as `product.<key>`. An edge with no attribution (`from === null`) has no node to
-  //     anchor it on this side.
-  //   - A via chain naming a RemoteProxy has no owned kind at all, and an edge with no
-  //     NamedCredential hop has no id to name its target with -- neither is something this schema
-  //     can resolve today (CONVERGENCE_SPEC.md 4.2, "Integration edges join nodes that already
-  //     exist, when the destination resolves to one"; carrying these through is what the
-  //     end-state projection that section describes would still need).
-  //   - The target id must come from a `NamedCredential` hop's `name` -- the DeveloperName
+  //   - The source is the product the call was traced to (`product.<key>`); failing that, the
+  //     Apex class in the chain (`apexClass.<Name>`, which intel map emits); failing that, for a
+  //     destination configured but never found being called (`endpointOnly`), `org.root`. An
+  //     edge with none of these, an OmniStudio-only chain, has no node to anchor it on this side.
+  //   - The destination is a Named Credential hop (`ncred.<DeveloperName>`) or a Remote Site
+  //     Setting hop, emitted here as `integration.<SiteName>` since sf-core 0.9.0 gave sf-orgintel
+  //     the integration kind. An edge naming neither has no id to name its target with.
+  //   - A Named Credential target id must come from the hop's `name` -- the DeveloperName
   //     sf-orgviz keys its `ncred.<DeveloperName>` nodes on (src/extract/landscape.ts). It must
   //     NOT come from `edge.endpoint`: that field carries whatever string was found at the call
   //     site (frequently a URL for `apexCallout`/`remoteActionChain` detections), which is real
@@ -365,24 +364,38 @@ export function buildAnatomyFragment(input: AnatomyFragmentInput): CanonicalGrap
   }
   const edgeGroups = new Map<string, EdgeEvidenceGroup>();
   let unattributedEdges = 0;
-  let remoteProxyEdges = 0;
   let unresolvedTargetEdges = 0;
+  // Remote Site Settings named as destinations, emitted below as `integration.<SiteName>` nodes.
+  // sf-core 0.9.0 gave sf-orgintel the integration kind; before it these edges had nowhere to land.
+  const remoteSites = new Set<string>();
   for (const edge of input.edges) {
-    if (edge.from === null) {
+    const ncredHop = edge.via.find((hop) => hop.type === 'NamedCredential');
+    const remoteHop = edge.via.find((hop) => hop.type === 'RemoteProxy');
+    const classHop = edge.via.find((hop) => hop.type === 'ApexClass');
+    // The caller: the product the call was traced to; failing that, the Apex class making it,
+    // whose node intel map emits; failing that, for a destination configured but never found
+    // being called, the org itself, because the org is what is set up to reach it.
+    const from =
+      edge.from !== null
+        ? `product.${edge.from}`
+        : classHop
+          ? `apexClass.${classHop.name}`
+          : edge.detection === 'endpointOnly'
+            ? 'org.root'
+            : null;
+    if (from === null) {
       unattributedEdges += 1;
       continue;
     }
-    if (edge.via.some((hop) => hop.type === 'RemoteProxy')) {
-      remoteProxyEdges += 1;
-      continue;
-    }
-    const ncredHop = edge.via.find((hop) => hop.type === 'NamedCredential');
-    if (!ncredHop) {
+    // The destination, by metadata name: a Named Credential (an sf-orgviz node) or a Remote Site
+    // Setting (an integration node emitted here). Never a URL, which is not an id any producer
+    // writes, and which would put an external hostname into the graph.
+    const to = ncredHop ? `ncred.${ncredHop.name}` : remoteHop ? `integration.${remoteHop.name}` : null;
+    if (to === null) {
       unresolvedTargetEdges += 1;
       continue;
     }
-    const from = `product.${edge.from}`;
-    const to = `ncred.${ncredHop.name}`;
+    if (!ncredHop && remoteHop) remoteSites.add(remoteHop.name);
     const groupKey = `${from}|${to}|integrates`;
     let group = edgeGroups.get(groupKey);
     if (!group) {
@@ -442,21 +455,27 @@ export function buildAnatomyFragment(input: AnatomyFragmentInput): CanonicalGrap
     unavailable.push({
       scope: 'anatomy.edges.unattributed',
       reason: 'deferred',
-      detail: `${unattributedEdges} integration edge(s) had no product attribution and were left out; there is no node to anchor them to.`,
-    });
-  }
-  if (remoteProxyEdges > 0) {
-    unavailable.push({
-      scope: 'anatomy.edges.remoteProxy',
-      reason: 'deferred',
-      detail: `${remoteProxyEdges} integration edge(s) named a RemoteProxy (Remote Site Setting) destination and were left out; that entity has no owned graph kind yet.`,
+      detail: `${unattributedEdges} integration edge(s) were traced neither to a product nor to the Apex class making the call, and were left out; there is no node to anchor them to.`,
     });
   }
   if (unresolvedTargetEdges > 0) {
     unavailable.push({
       scope: 'anatomy.edges.unresolvedTarget',
       reason: 'deferred',
-      detail: `${unresolvedTargetEdges} integration edge(s) were attributed to a product but named no NamedCredential hop, so no node id could be formed for the destination.`,
+      detail: `${unresolvedTargetEdges} integration edge(s) named no Named Credential or Remote Site Setting as their destination, so no node id could be formed for it.`,
+    });
+  }
+
+  for (const name of remoteSites) {
+    nodes.push({
+      id: `integration.${name}`,
+      kind: 'integration',
+      layer: layerOfKind('integration'),
+      level: levelOfKind('integration'),
+      parent: null,
+      label: name,
+      attrs: { remoteSite: name },
+      provenance: metadata,
     });
   }
 
