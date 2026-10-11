@@ -10,6 +10,29 @@ canonical published note and carries the provenance attestation and CycloneDX SB
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [2.0.0] — 2026-10-11
+
+`intel map` now describes the org a Salesforce architect would recognise. It used to count every
+pair of objects any Apex class or flow touched, test classes included, and to treat `User`,
+`RecordType` and `Share` objects as peers of the business model. On a real Health Cloud sandbox it
+reported 212 objects and 2,171 coupled pairs in 57 domains. This release reports 95 business
+objects and 620 couplings in 17 domains, and states the rest as what those objects depend on.
+
+**This is a major because `graph-fragment.json` changes shape and meaning** (`docs/RELEASE.md`).
+If you read it:
+
+- **`couples` edges join business objects only.** For an unchanged org, expect fewer pairs and
+  different endpoints.
+- **Pairs with an actor, record type, setup object, configuration, event or reference data** are
+  new `uses` edges, each carrying `attrs.roles`.
+- **Each touched object's role and its evidence** arrive as `attrs.orgintel.objectRole` once
+  merged, together with new `map.objectRoles.*` and `map.apexClasses.tests` coverage entries.
+
+If you import the package, `IntelContext.orgInfo` is now `OrgInfo | null`. The HTML report of a
+run with no roles decided is unchanged, byte for byte.
+
 ### Changed
 
 - **`intel map` classifies objects from platform evidence, and only business pairs are
@@ -407,7 +430,8 @@ Apex, with a branded HTML report behind `--html`.
 publishing was configured for this package. Every release from `0.2.0` onward carries one
 automatically. See [SECURITY.md](SECURITY.md).
 
-[Unreleased]: https://github.com/cclabsnz/sf-orgintel/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/cclabsnz/sf-orgintel/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/cclabsnz/sf-orgintel/releases/tag/v2.0.0
 [1.0.0]: https://github.com/cclabsnz/sf-orgintel/releases/tag/v1.0.0
 [0.3.0]: https://github.com/cclabsnz/sf-orgintel/releases/tag/v0.3.0
 [0.2.0]: https://github.com/cclabsnz/sf-orgintel/releases/tag/v0.2.0
