@@ -28,3 +28,6 @@ anatomy-fragment.json
 CLAUDE.md
 DESIGN_BRIEF.md
 /docs/superpowers/
+
+# IST: hidden tests live in the private <repo>-hidden repo; only the ist-runner ever places them here
+tests/hidden/
